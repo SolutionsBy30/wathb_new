@@ -1,0 +1,18 @@
+:root {
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  12px;
+  --space-lg:  20px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   20px;
+  --radius-xl:   28px;
+  --radius-pill: 999px;
+
+  --stroke-hairline: 0.5px;
+  --stroke-rule:     1px;
+  --stroke-spark:    2px;
+}
