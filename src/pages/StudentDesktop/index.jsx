@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StreakStrip } from '../../design-system/components/StreakStrip';
 import markOnIndigo from '../../design-system/assets/mark-on-indigo.svg';
+import './layout.css';
 import {
   TEST_BANKS,
   LS_KEY,
@@ -324,8 +325,8 @@ export default function StudentDesktop() {
 
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--indigo)', display: 'flex', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: '1120px', display: 'flex', gap: '32px', padding: '32px' }}>
-        <aside style={{ width: '280px', flex: 'none', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div className="sd-shell">
+        <aside className="sd-sidebar">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <img src={markOnIndigo} alt="وثب" style={{ width: '36px', height: '33px' }} />
             <span style={{ fontFamily: 'var(--font-arabic)', fontWeight: 600, fontSize: '18px', color: 'var(--sand)' }}>وثب</span>
@@ -368,7 +369,7 @@ export default function StudentDesktop() {
           </nav>
         </aside>
 
-        <main style={{ flex: 1, minWidth: 0, background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-lg)', padding: '36px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <main className="sd-main" style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-lg)' }}>
           {vm.showHome && (
             <Home vm={vm} goTestPicker={goTestPicker} resetProgress={resetProgress} />
           )}

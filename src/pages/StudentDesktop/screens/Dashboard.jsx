@@ -7,7 +7,7 @@ export default function Dashboard({ vm, backToDashboardList }) {
     <>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>لوحتي</h1>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+      <div className="sd-grid-2" style={{ gap: '20px' }}>
         {vm.testPerfRows.map((tp) => (
           <button
             key={tp.id}
@@ -114,7 +114,7 @@ export default function Dashboard({ vm, backToDashboardList }) {
 
           <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الدقة حسب المجال</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 28px' }}>
+            <div className="sd-grid-2" style={{ gap: '14px 28px' }}>
               {vm.labelStatRows.map((l) => (
                 <div key={l.id} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
@@ -127,7 +127,7 @@ export default function Dashboard({ vm, backToDashboardList }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="sd-grid-2" style={{ gap: '20px' }}>
             <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>اتجاه الأداء — 8 أسابيع</h2>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '80px' }}>
@@ -152,7 +152,7 @@ export default function Dashboard({ vm, backToDashboardList }) {
 
           <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>السرعة مقابل الهدف</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 28px' }}>
+            <div className="sd-grid-2" style={{ gap: '8px 28px' }}>
               {vm.labelStatRows.map((l) => (
                 <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '4px 0', ...lineStyle }}>
                   <span style={{ color: 'var(--sand)' }}>{l.name}</span>
@@ -173,7 +173,7 @@ export default function Dashboard({ vm, backToDashboardList }) {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '20px' }}>
+          <div className="sd-grid-6040">
             <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px' }}>
               <h2 style={{ margin: '0 0 10px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>تحليل الأداء</h2>
               <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)', lineHeight: 1.8 }}>{vm.analysisAdvice}</p>

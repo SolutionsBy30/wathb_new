@@ -25,7 +25,7 @@ export default function Home({ vm, goTestPicker, resetProgress }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         <Button variant="primary" onClick={goTestPicker}>{vm.startButtonLabel}</Button>
         <button onClick={resetProgress} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', fontFamily: 'var(--font-arabic)', fontSize: '12px', cursor: 'pointer' }}>إعادة تعيين النموذج</button>
       </div>

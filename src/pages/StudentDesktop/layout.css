@@ -1,0 +1,69 @@
+/* Structural layout for Student Desktop — the only parts that need to change
+   shape at narrow viewports. Colors, spacing scale, and typography stay in
+   the design system and inline styles; this file only ever touches
+   width / gap / padding / grid-template-columns. */
+
+.sd-shell {
+  width: 100%;
+  max-width: 1120px;
+  display: flex;
+  gap: 32px;
+  padding: 32px;
+  box-sizing: border-box;
+}
+
+.sd-sidebar {
+  width: 280px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sd-main {
+  flex: 1;
+  min-width: 0;
+  padding: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+.sd-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.sd-grid-6040 {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 860px) {
+  .sd-shell {
+    flex-direction: column;
+    gap: 20px;
+    padding: 16px;
+  }
+  .sd-sidebar {
+    width: 100%;
+  }
+  .sd-main {
+    padding: 20px;
+  }
+  .sd-grid-2,
+  .sd-grid-6040 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .sd-shell {
+    padding: 12px;
+  }
+  .sd-main {
+    padding: 16px;
+  }
+}
