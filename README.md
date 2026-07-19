@@ -5,13 +5,14 @@ questions to a student, weighted toward their measured weak areas, with
 progress reported to a parent/instructor. Full product spec:
 [`docs/product-spec.md`](./docs/product-spec.md).
 
-This repo currently implements **Phase 0–4** of the spec's build sequence
+This repo currently implements **Phase 0–5** of the spec's build sequence
 (§11): the taxonomy/question bank, the core Wathb loop (magic-link auth →
 timed questions → explanations → completion), the adaptive selection engine
 + student/supervisor reporting, WhatsApp delivery (reactive scheduler,
-webhook, delivery log) behind a channel adapter, and payments/subscriptions
+webhook, delivery log) behind a channel adapter, payments/subscriptions
 (checkout, VAT-inclusive pricing, subscription gating) behind a payment
-adapter. **Phase 6 (ops/analytics) is not built** — see
+adapter, and weekly WhatsApp reports for students and supervisors. **Phase 6
+(ops/analytics) is not built** — see
 [What's not built yet](#whats-not-built-yet).
 
 ## Architecture
@@ -153,13 +154,53 @@ landing page (spec S1 — this app's pricing screen is reachable only after
 login/goal-setup), and the subscription-expiring/payment-failed notification
 kinds mentioned above.
 
+### Phase 5 — Stakeholders (weekly reports)
+
+Most of Phase 5 (supervisor dashboard, shared student report, student-
+initiated invite) was already built in Phase 0–2 — this pass filled in the
+one real gap: the weekly WhatsApp report (spec §5.3/§6.5/§9.4's
+`weekly_report` job).
+
+- **Weekly report content** (`api/src/reports/weekly-report.util.ts`, 10 unit
+  tests): pure week-over-week composite delta, top strength/weakness gated
+  by `MIN_SAMPLE_FOR_REPORTING`, and an `AdviceRule` lookup for the weakest
+  label — reuses `ReportsService` rather than re-querying the DB.
+- **`WeeklyReportService`**: mints a fresh magic link per recipient
+  (`weekly_report` for the student, `supervisor_report` for the supervisor),
+  sends via the existing `NotificationChannel`, logs to `notifications`,
+  idempotent per `(user, week)`. Supervisor sends respect a mute flag and
+  skip supervisors with no linked students.
+- **Supervisor notification preferences** (spec V3): day-of-week + hour
+  picker and a mute toggle (`Supervisor.weeklyReportDay/Hour/Muted`),
+  `admin`-independent — the supervisor sets these themselves.
+- **Student S11 landing screen**: the weekly link lands on a dedicated
+  streak/Δ/strength/weakness screen, not Home — verified end-to-end
+  including the honest "not enough data yet" state for a fresh account.
+- Exposed as an admin-triggerable endpoint (`POST /api/admin/notifications/weekly-reports`),
+  same manual-trigger rationale as `plan_day`/`send_notification` — no
+  clock-driven cron in this sandbox to demonstrate against.
+
+**Bug found and fixed while building this**: the supervisor app never
+handled a `#magic=<token>` URL hash at all — only the student app did. Every
+WhatsApp-delivered supervisor link (invite *or* weekly report) was landing
+on the login screen instead of exchanging the token. Fixed in
+`supervisor/src/App.jsx`'s `bootstrap()`; verified with a real link exchange
+in a browser afterward.
+
+**Not implemented in Phase 5**: an instructor-specific weekly digest format
+(the supervisor message currently lists up to 4 linked students in one
+message regardless of `supervisor.type`), and the day/hour preference isn't
+yet read by anything — the manual trigger sends immediately regardless of a
+supervisor's chosen slot (there's no scheduler to honor it yet, same
+limitation as Phase 3's `plan_day`).
+
 ## What's not built yet
 
 Deliberately out of scope for this pass — each is a later phase in the
 spec's own build sequence (§11): geography/schools, cohort analytics,
 solution-performance analytics (p-value/discrimination), suspensions/audit
 log, advice-string library beyond a 2-row demo, spaced repetition (21-day
-review re-entry) — all Phase 5–6. Plus the Phase 3/4 gaps called out above.
+review re-entry) — all Phase 6. Plus the Phase 3/4/5 gaps called out above.
 
 ## Running it locally
 
@@ -243,7 +284,7 @@ no real Paymob account needed.
 ### 6. Tests
 
 ```bash
-cd api && npm test     # selection engine + reactive scheduler + subscription unit tests (27 total)
+cd api && npm test     # selection engine + reactive scheduler + subscription + weekly-report unit tests (37 total)
 ```
 
 ## API surface
@@ -273,11 +314,13 @@ POST /api/admin/questions/import       (multipart CSV)
 POST /api/admin/questions/import/:jobId/commit
 
 GET  /api/supervisors/me/dashboard
+GET|PATCH /api/supervisors/me/preferences           (weekly report day/hour/mute)
 POST /api/students/me/supervisors/invite
 
 GET  /api/admin/notifications                      (delivery log)
 POST /api/admin/notifications/plan-day[/:studentId]
 POST /api/admin/notifications/send-due | send/:studentId
+POST /api/admin/notifications/weekly-reports        (student + supervisor weekly reports)
 GET|POST /api/webhooks/whatsapp                     (Meta verification + inbound/status events)
 
 GET  /api/packages                                  (public pricing)
