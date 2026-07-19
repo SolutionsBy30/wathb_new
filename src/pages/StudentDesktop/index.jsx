@@ -11,6 +11,7 @@ import Explanations from './screens/Explanations';
 import Complete from './screens/Complete';
 import Performance from './screens/Performance';
 import Profile from './screens/Profile';
+import Pricing from './screens/Pricing';
 
 function navBtnStyle(active) {
   return {
@@ -38,6 +39,9 @@ export default function StudentDesktop() {
   const [supervisors, setSupervisors] = useState([]);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState(null);
+  const [subscription, setSubscription] = useState(null);
+  const [packages, setPackages] = useState([]);
+  const [pricingMessage, setPricingMessage] = useState(null);
 
   const timerRef = useRef(null);
   const submittingRef = useRef(false);
@@ -52,6 +56,14 @@ export default function StudentDesktop() {
       setReport(await api.report(userId));
     } catch {
       // report can genuinely be empty/inaccessible before the first Wathb — non-fatal.
+    }
+  }, []);
+
+  const loadSubscription = useCallback(async () => {
+    try {
+      setSubscription(await api.mySubscription());
+    } catch {
+      /* non-fatal */
     }
   }, []);
 
@@ -78,6 +90,13 @@ export default function StudentDesktop() {
     try {
       const me = await api.me();
       setStudent(me);
+      await loadSubscription();
+      if (window.location.hash === '#subscription=success') {
+        // Landed back from a checkout redirect (real Paymob or the dev
+        // stand-in) — the subscription is already confirmed server-side by
+        // the time this redirect happens.
+        window.history.replaceState(null, '', window.location.pathname);
+      }
       if (!me.targetTestId) {
         setTests(await api.listTests());
         setScreen('goal');
@@ -89,7 +108,7 @@ export default function StudentDesktop() {
       setToken(null);
       setScreen('login');
     }
-  }, [loadReport]);
+  }, [loadReport, loadSubscription]);
 
   useEffect(() => {
     bootstrap();
@@ -194,8 +213,27 @@ export default function StudentDesktop() {
       setScreen('question');
       startTimerFor(result.questions[pos].timeLimitS, () => submitAnswer(result.wathbId, pos, null, result.questions));
     } catch (e) {
-      setWathbError(e.message);
+      if (e.message.includes('subscription')) {
+        await goPricing('اشتراكك غير فعّال أو منتهٍ — اشترك في باقة لمتابعة وثبتك اليومية.');
+      } else {
+        setWathbError(e.message);
+      }
     }
+  };
+
+  const goPricing = async (message) => {
+    setPricingMessage(message ?? null);
+    try {
+      setPackages(await api.listPackages());
+    } catch {
+      /* non-fatal */
+    }
+    setScreen('pricing');
+  };
+
+  const subscribeToPackage = async (packageId) => {
+    const { checkoutUrl } = await api.startCheckout(packageId);
+    window.location.href = checkoutUrl;
   };
 
   const confirmAnswer = () => {
@@ -223,6 +261,7 @@ export default function StudentDesktop() {
     } catch {
       /* non-fatal */
     }
+    await loadSubscription();
     setScreen('profile');
   };
 
@@ -361,9 +400,14 @@ export default function StudentDesktop() {
             <Complete vm={completeVm} goDashboard={goPerformance} backHome={goHome} />
           )}
           {screen === 'performance' && <Performance report={report} />}
+          {screen === 'pricing' && (
+            <Pricing packages={packages} onSubscribe={subscribeToPackage} blockedMessage={pricingMessage} />
+          )}
           {screen === 'profile' && (
             <Profile
               student={student}
+              subscription={subscription}
+              onManageSubscription={() => goPricing()}
               supervisors={supervisors}
               onInvite={inviteSupervisor}
               onRevoke={revokeSupervisor}

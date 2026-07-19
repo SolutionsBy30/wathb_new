@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
 
-export default function Profile({ student, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
+function formatDate(d) {
+  return d ? new Date(d).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
+}
+
+const SUB_STATUS_LABEL = { active: 'نشط', pending: 'بانتظار الدفع', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
+const SUB_STATUS_COLOR = { active: 'var(--teal-ink)', pending: 'var(--mist)', expired: 'var(--coral)', cancelled: 'var(--coral)', refunded: 'var(--coral)' };
+
+export default function Profile({ student, subscription, onManageSubscription, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('+9665');
   const [type, setType] = useState('parent');
@@ -24,6 +31,31 @@ export default function Profile({ student, supervisors, onInvite, onRevoke, invi
         <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
           {student?.targetTest?.nameAr} · {student?.track === 'scientific' ? 'علمي' : 'أدبي'}
         </span>
+      </div>
+
+      <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '360px' }}>
+        <h2 style={{ margin: '0 0 4px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الاشتراك</h2>
+        {subscription ? (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+              <span style={{ color: 'var(--mist)' }}>الباقة</span>
+              <span style={{ color: 'var(--sand)', fontFamily: 'var(--font-arabic)' }}>{subscription.package?.nameAr}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+              <span style={{ color: 'var(--mist)' }}>الحالة</span>
+              <span style={{ color: SUB_STATUS_COLOR[subscription.status] }}>{SUB_STATUS_LABEL[subscription.status]}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+              <span style={{ color: 'var(--mist)' }}>ينتهي في</span>
+              <span style={{ color: 'var(--sand)', fontFamily: 'var(--font-latin)' }}>{formatDate(subscription.endsAt)}</span>
+            </div>
+          </>
+        ) : (
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--mist)' }}>لا يوجد اشتراك حالياً.</p>
+        )}
+        <Button variant="secondary" onClick={onManageSubscription}>
+          {subscription?.status === 'active' ? 'إدارة الاشتراك' : 'اشترك الآن'}
+        </Button>
       </div>
 
       <div className="sd-grid-2" style={{ gap: '20px' }}>
@@ -88,7 +120,7 @@ export default function Profile({ student, supervisors, onInvite, onRevoke, invi
       </div>
 
       <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
-        إعدادات الاشتراك وموعد إشعار واتساب اليومي جزء من المرحلتين 3 و4 من خارطة الطريق ولم تُبنَ بعد.
+        تخصيص موعد إشعار واتساب اليومي (الآن ثابت على {student?.notifSlotStartHour ?? 18}–{student?.notifSlotEndHour ?? 20}) لم يُبنَ كواجهة بعد.
       </p>
     </>
   );

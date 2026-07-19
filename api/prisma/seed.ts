@@ -180,7 +180,20 @@ async function seedQuestions(labels: Record<string, { id: string }>, items: Seed
   }
 }
 
-async function seedPeople(qudurat: { id: string }) {
+async function seedPackages(qudurat: { id: string }, tahsili: { id: string }) {
+  const monthly = await prisma.package.create({
+    data: { nameAr: 'شهر واحد', nameEn: '1 Month', testIds: [qudurat.id], durationMonths: 1, priceHalalas: 4500, questionsPerDay: 5 },
+  });
+  const sixMonth = await prisma.package.create({
+    data: { nameAr: '6 أشهر', nameEn: '6 Months', testIds: [qudurat.id], durationMonths: 6, priceHalalas: 14900, questionsPerDay: 5 },
+  });
+  const yearly = await prisma.package.create({
+    data: { nameAr: 'سنة كاملة', nameEn: '12 Months', testIds: [qudurat.id, tahsili.id], durationMonths: 12, priceHalalas: 19000, questionsPerDay: 5 },
+  });
+  return { monthly, sixMonth, yearly };
+}
+
+async function seedPeople(qudurat: { id: string }, yearlyPackage: { id: string; priceHalalas: number }) {
   const adminPassword = 'wathb-admin-2026';
   await prisma.user.create({
     data: {
@@ -221,6 +234,21 @@ async function seedPeople(qudurat: { id: string }) {
     data: { studentId: student.id, supervisorId: supervisor.id, acceptedAt: new Date() },
   });
 
+  const now = new Date();
+  const endsAt = new Date(now);
+  endsAt.setUTCFullYear(endsAt.getUTCFullYear() + 1);
+  await prisma.subscription.create({
+    data: {
+      studentId: student.id,
+      packageId: yearlyPackage.id,
+      priceSnapshotHalalas: yearlyPackage.priceHalalas,
+      status: 'active',
+      startsAt: now,
+      endsAt,
+      paymentRef: 'seed-demo',
+    },
+  });
+
   console.log('\nSeeded demo accounts:');
   console.log(`  Admin login:       admin@wathb.dev / ${adminPassword}`);
   console.log(`  Demo student mobile:    ${student.mobileE164}`);
@@ -241,11 +269,12 @@ async function seedAdvice(labels: Record<string, { id: string }>) {
 }
 
 async function main() {
-  const { qudurat, labels, tahsiliLabels } = await seedTaxonomy();
+  const { qudurat, tahsili, labels, tahsiliLabels } = await seedTaxonomy();
   await seedQuestions(labels, QUDURAT_QUESTIONS);
   await seedQuestions(tahsiliLabels, TAHSILI_QUESTIONS);
   await seedAdvice(labels);
-  await seedPeople(qudurat);
+  const { yearly } = await seedPackages(qudurat, tahsili);
+  await seedPeople(qudurat, yearly);
 }
 
 main()

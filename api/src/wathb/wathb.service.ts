@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WathbGenerationService } from './wathb-generation.service';
+import { anyActiveCovers } from '../payments/subscription.util';
 
 const DEFAULT_BUNDLE_SIZE = 5;
 const TIMEOUT_GRACE_MS = 3000;
@@ -46,6 +47,13 @@ export class WathbService {
     const student = await this.prisma.student.findUnique({ where: { userId: studentId } });
     if (!student) throw new NotFoundException('student not found');
     if (!student.targetTestId) throw new BadRequestException('goal setup not complete: no target test selected');
+
+    const subscriptions = await this.prisma.subscription.findMany({ where: { studentId, status: 'active' }, include: { package: true } });
+    if (!anyActiveCovers(subscriptions, student.targetTestId)) {
+      // S14 in the spec — Expired/paused state, renewal CTA. The frontend
+      // distinguishes this from other errors by status code.
+      throw new ForbiddenException('no active subscription covers this test');
+    }
 
     const todayDate = new Date();
     todayDate.setUTCHours(0, 0, 0, 0);

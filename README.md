@@ -5,12 +5,13 @@ questions to a student, weighted toward their measured weak areas, with
 progress reported to a parent/instructor. Full product spec:
 [`docs/product-spec.md`](./docs/product-spec.md).
 
-This repo currently implements **Phase 0–3** of the spec's build sequence
+This repo currently implements **Phase 0–4** of the spec's build sequence
 (§11): the taxonomy/question bank, the core Wathb loop (magic-link auth →
 timed questions → explanations → completion), the adaptive selection engine
-+ student/supervisor reporting, and WhatsApp delivery (reactive scheduler,
-webhook, delivery log) behind a channel adapter. **Phase 4 (payments) and
-Phase 6 (ops/analytics) are not built** — see
++ student/supervisor reporting, WhatsApp delivery (reactive scheduler,
+webhook, delivery log) behind a channel adapter, and payments/subscriptions
+(checkout, VAT-inclusive pricing, subscription gating) behind a payment
+adapter. **Phase 6 (ops/analytics) is not built** — see
 [What's not built yet](#whats-not-built-yet).
 
 ## Architecture
@@ -109,23 +110,56 @@ need to change, only how the frontend stores what it returns.
   `NotificationsService.sendDailyWathbNotification`.
 
 **Not implemented in Phase 3**: weekly-report notifications, streak
-milestones, subscription-expiring/payment-failed pushes (need Phase 4 first),
-template category/approval bookkeeping beyond the single `daily_wathb_reminder`
-name, and WABA quality-rating monitoring.
+milestones, subscription-expiring/payment-failed pushes (need Phase 4's
+`Subscription` model, now built — wiring those two notification kinds is a
+small follow-up), template category/approval bookkeeping beyond the single
+`daily_wathb_reminder` name, and WABA quality-rating monitoring.
+
+### Phase 4 — Payments
+
+- **`PaymentProvider` adapter** (`api/src/payments/payment-provider.interface.ts`):
+  same shape as `NotificationChannel`. `ConsolePaymentProvider` (default —
+  the "checkout URL" points at our own dev-complete endpoint, which instantly
+  marks the subscription paid and redirects onward) and `PaymobProvider`
+  (real Paymob Intention API call + hosted Unified Checkout redirect, per
+  [Paymob's no-code integration path](https://developers.paymob.com/paymob-docs/integration-paths/no-code)).
+  The dev-complete endpoint refuses to run at all once real Paymob
+  credentials are configured, so it can't leak into a real deployment.
+- **`Package` / `Subscription` models**: price stored VAT-inclusive
+  (15% KSA, spec §4.5); a purchase snapshots the package's price at checkout
+  time so a later price change never touches an active subscription.
+- **Checkout flow**: `POST /checkout/start` creates a `pending` subscription
+  and returns a checkout URL; a webhook (`POST /webhooks/paymob`, HMAC-verified
+  when `PAYMOB_HMAC_SECRET` is set) or the dev-complete redirect confirms it
+  to `active` and sets `startsAt`/`endsAt` from the package's duration.
+  Confirmation is idempotent — a webhook retry or a double-hit dev-complete
+  can't double-extend a subscription.
+- **Subscription gates the Wathb loop**: `WathbService.today()` now requires
+  an active, unexpired subscription whose package covers the student's
+  target test (`isSubscriptionCovering`, pure + unit tested, 8 tests) —
+  spec S14, "Expired/paused state — Renewal CTA." The student app catches
+  the 403 and routes straight to the pricing screen with the CTA message.
+- **Admin Packages screen** (`admin/src/pages/Packages.jsx`): create
+  packages (name, tests covered, duration, VAT-inclusive price), toggle
+  active/inactive.
+- **Student pricing/checkout screen** (`src/pages/StudentDesktop/screens/Pricing.jsx`):
+  package cards, VAT-inclusive price display, one-tap checkout; Profile shows
+  current subscription status and renewal date.
+
+**Not implemented in Phase 4**: discount codes (`DiscountCode`/`redemptions`
+tables), ZATCA e-invoicing (needs legal confirmation per spec §4.5 before
+building), proration on upgrade, auto-renewal, a public pre-login pricing
+landing page (spec S1 — this app's pricing screen is reachable only after
+login/goal-setup), and the subscription-expiring/payment-failed notification
+kinds mentioned above.
 
 ## What's not built yet
 
 Deliberately out of scope for this pass — each is a later phase in the
-spec's own build sequence (§11):
-
-- **Payments/packages** (Phase 4) — checkout, `Package`/`Subscription`
-  tables, VAT/ZATCA invoicing. Integration point is
-  [Paymob's no-code hosted checkout](https://developers.paymob.com/paymob-docs/integration-paths/no-code)
-  per the product owner's direction.
-- **Geography/schools, cohort analytics, solution-performance analytics
-  (p-value/discrimination), suspensions/audit log, advice-string library
-  beyond a 2-row demo, spaced repetition (21-day review re-entry)** (Phase
-  5–6).
+spec's own build sequence (§11): geography/schools, cohort analytics,
+solution-performance analytics (p-value/discrimination), suspensions/audit
+log, advice-string library beyond a 2-row demo, spaced repetition (21-day
+review re-entry) — all Phase 5–6. Plus the Phase 3/4 gaps called out above.
 
 ## Running it locally
 
@@ -153,7 +187,8 @@ npm run start:dev             # http://localhost:4000/api
 
 Seed prints the demo accounts on success:
 - **Admin:** `admin@wathb.dev` / `wathb-admin-2026`
-- **Demo student:** mobile `+966500000001`
+- **Demo student:** mobile `+966500000001` (pre-seeded with an active
+  12-month subscription, so the Wathb loop works immediately)
 - **Demo supervisor:** mobile `+966500000099` (pre-linked to the demo student)
 
 ### 3. Frontends (each is a separate Vite app)
@@ -176,7 +211,10 @@ production.
 To configure real WhatsApp delivery instead of the console fallback, set
 `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`,
 and `WHATSAPP_WEBHOOK_VERIFY_TOKEN` in `api/.env` (see `.env.example`) —
-these need a real Meta WhatsApp Business Platform app.
+these need a real Meta WhatsApp Business Platform app. Similarly, set
+`PAYMOB_SECRET_KEY`, `PAYMOB_PUBLIC_KEY`, `PAYMOB_INTEGRATION_ID`, and
+`PAYMOB_HMAC_SECRET` for real Paymob checkout instead of the console
+fallback — these need a real Paymob merchant account.
 
 ### 4. Trying the WhatsApp flow without real credentials
 
@@ -191,10 +229,21 @@ Copy the URL the API logs (`http://localhost:5173/wathb/#magic=...`) into a
 browser — it exchanges the token and lands you on the student Home screen,
 the same as a real WhatsApp tap would.
 
-### 5. Tests
+### 5. Trying checkout without real Paymob credentials
+
+Log into the student app with a mobile number that has no active
+subscription (the seed's demo student already has one — create another via
+`POST /api/admin/students` as admin, or just let `otp/request` create the
+account implicitly is not supported; use the admin endpoint). Tap "ابدأ
+الوثبة" with no subscription and the app routes straight to the pricing
+screen; tap "اشترك الآن" on any package and the console provider's checkout
+URL confirms the subscription and redirects straight back — no card details,
+no real Paymob account needed.
+
+### 6. Tests
 
 ```bash
-cd api && npm test     # selection engine + reactive scheduler unit tests (19 total)
+cd api && npm test     # selection engine + reactive scheduler + subscription unit tests (27 total)
 ```
 
 ## API surface
@@ -230,6 +279,13 @@ GET  /api/admin/notifications                      (delivery log)
 POST /api/admin/notifications/plan-day[/:studentId]
 POST /api/admin/notifications/send-due | send/:studentId
 GET|POST /api/webhooks/whatsapp                     (Meta verification + inbound/status events)
+
+GET  /api/packages                                  (public pricing)
+POST /api/admin/packages | PATCH /api/admin/packages/:id
+POST /api/checkout/start                            (student session)
+GET  /api/checkout/me                                (student's latest subscription)
+GET  /api/checkout/dev-complete                      (dev-only, self-disables with real Paymob creds)
+POST /api/webhooks/paymob                            (Paymob transaction callback, HMAC-verified)
 ```
 
 ## Known limitations of this pass
@@ -255,3 +311,15 @@ GET|POST /api/webhooks/whatsapp                     (Meta verification + inbound
   with two body variables (name, link) — real templates need Meta approval
   before they can be sent, and category can silently change on re-approval
   (spec §7.2 flags checking this after every approval, not just submission).
+- No proration, upgrade/downgrade, or auto-renewal — a subscription is a flat
+  purchase for its `durationMonths` and simply expires; spec §10 open
+  question #1 (auto-renew or manual) is still unanswered.
+- `PaymobProvider`'s request/webhook field names follow Paymob's published
+  Intention API docs but are unverified against a live account — re-check
+  field names and the HMAC field order at integration time, same discipline
+  the spec asks for on the WhatsApp pricing rules (§7.2).
+- `checkout/dev-complete` is a real, reachable endpoint whenever no Paymob
+  credentials are configured — that's correct for local dev but means a
+  staging environment without real Paymob keys can have subscriptions
+  "purchased" for free. Never deploy without Paymob credentials configured
+  once real users can reach the environment.

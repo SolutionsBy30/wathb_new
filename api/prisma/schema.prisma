@@ -121,6 +121,7 @@ model Student {
   answers             Answer[]
   labelStats          StudentLabelStat[]
   supervisorLinks     StudentSupervisor[]
+  subscriptions       Subscription[]
 
   @@map("students")
 }
@@ -461,4 +462,56 @@ model OtpCode {
 
   @@index([mobileE164, subjectType])
   @@map("otp_codes")
+}
+
+// §4.5 / §9.2 — Packages & Pricing, §4.5's checkout + subscription lifecycle.
+// Discount codes and ZATCA e-invoicing are explicitly out of scope for this
+// pass — see the root README.
+
+enum PackageVisibility {
+  public
+  link_only
+}
+
+model Package {
+  id              String            @id @default(uuid())
+  nameAr          String
+  nameEn          String
+  testIds         String[]
+  durationMonths  Int
+  priceHalalas    Int // VAT-inclusive, 15% KSA — spec §4.5
+  questionsPerDay Int               @default(5)
+  isActive        Boolean           @default(true)
+  visibility      PackageVisibility @default(public)
+  createdAt       DateTime          @default(now())
+
+  subscriptions Subscription[]
+
+  @@map("packages")
+}
+
+enum SubscriptionStatus {
+  pending
+  active
+  expired
+  cancelled
+  refunded
+}
+
+model Subscription {
+  id                  String             @id @default(uuid())
+  studentId           String
+  student             Student            @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  packageId           String
+  package             Package            @relation(fields: [packageId], references: [id])
+  // Snapshot at purchase time — spec §4.5: "changes [to package price] never
+  // touch active subs."
+  priceSnapshotHalalas Int
+  startsAt            DateTime?
+  endsAt               DateTime?
+  status               SubscriptionStatus @default(pending)
+  paymentRef           String?
+  createdAt            DateTime           @default(now())
+
+  @@map("subscriptions")
 }

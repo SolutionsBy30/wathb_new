@@ -9,6 +9,7 @@ import { WathbModule } from './wathb/wathb.module';
 import { ReportsModule } from './reports/reports.module';
 import { PeopleModule } from './people/people.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ReportsModule,
     PeopleModule,
     NotificationsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
 })

@@ -60,4 +60,8 @@ export const api = {
   inviteSupervisor: (mobile, name, type) =>
     request('/students/me/supervisors/invite', { method: 'POST', body: { mobile, name, type } }),
   revokeSupervisor: (id) => request(`/students/me/supervisors/${id}/revoke`, { method: 'POST' }),
+
+  listPackages: () => request('/packages', { auth: false }),
+  startCheckout: (packageId) => request('/checkout/start', { method: 'POST', body: { packageId } }),
+  mySubscription: () => request('/checkout/me'),
 };

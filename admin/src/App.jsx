@@ -6,12 +6,14 @@ import QuestionBank from './pages/QuestionBank';
 import QuestionEditor from './pages/QuestionEditor';
 import BulkImport from './pages/BulkImport';
 import DeliveryLog from './pages/DeliveryLog';
+import Packages from './pages/Packages';
 
 const NAV = [
   { id: 'taxonomy', label: 'الاختبارات والتصنيف' },
   { id: 'bank', label: 'بنك الأسئلة' },
   { id: 'import', label: 'استيراد جماعي' },
   { id: 'notifications', label: 'الإشعارات' },
+  { id: 'packages', label: 'الباقات والتسعير' },
 ];
 
 export default function App() {
@@ -74,6 +76,7 @@ export default function App() {
         )}
         {tab === 'import' && <BulkImport />}
         {tab === 'notifications' && <DeliveryLog />}
+        {tab === 'packages' && <Packages tests={tests} />}
       </main>
     </div>
   );
