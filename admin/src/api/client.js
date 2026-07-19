@@ -64,4 +64,8 @@ export const api = {
   },
   patchImportRow: (jobId, rowIndex, patch) => request(`/admin/questions/import/${jobId}/rows/${rowIndex}`, { method: 'PATCH', body: patch }),
   commitImport: (jobId) => request(`/admin/questions/import/${jobId}/commit`, { method: 'POST' }),
+
+  deliveryLog: () => request('/admin/notifications'),
+  planDayAll: () => request('/admin/notifications/plan-day', { method: 'POST', body: {} }),
+  sendDueAll: (forDate) => request(`/admin/notifications/send-due${forDate ? `?forDate=${forDate}` : ''}`, { method: 'POST' }),
 };

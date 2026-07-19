@@ -65,11 +65,14 @@ export class WathbService {
     }
 
     if (wathb.status === 'pending') {
-      wathb = await this.prisma.wathb.update({
-        where: { id: wathb.id },
-        data: { status: 'opened' },
-        include: { questions: WATHB_QUESTIONS_INCLUDE },
-      });
+      const first = wathb.questions.find((q) => q.position === 0);
+      await this.prisma.$transaction([
+        this.prisma.wathb.update({ where: { id: wathb.id }, data: { status: 'opened' } }),
+        ...(first && !first.servedAt
+          ? [this.prisma.wathbQuestion.update({ where: { id: first.id }, data: { servedAt: new Date() } })]
+          : []),
+      ]);
+      wathb = await this.prisma.wathb.findUniqueOrThrow({ where: { id: wathb.id }, include: { questions: WATHB_QUESTIONS_INCLUDE } });
     }
 
     const answered = await this.prisma.answer.findMany({ where: { wathbId: wathb.id }, select: { questionId: true } });

@@ -5,11 +5,13 @@ import Taxonomy from './pages/Taxonomy';
 import QuestionBank from './pages/QuestionBank';
 import QuestionEditor from './pages/QuestionEditor';
 import BulkImport from './pages/BulkImport';
+import DeliveryLog from './pages/DeliveryLog';
 
 const NAV = [
   { id: 'taxonomy', label: 'الاختبارات والتصنيف' },
   { id: 'bank', label: 'بنك الأسئلة' },
   { id: 'import', label: 'استيراد جماعي' },
+  { id: 'notifications', label: 'الإشعارات' },
 ];
 
 export default function App() {
@@ -71,6 +73,7 @@ export default function App() {
           />
         )}
         {tab === 'import' && <BulkImport />}
+        {tab === 'notifications' && <DeliveryLog />}
       </main>
     </div>
   );

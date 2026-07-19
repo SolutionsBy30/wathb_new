@@ -1,6 +1,6 @@
-// Wathb API — Prisma schema, Phase 0-2 scope (foundations, the loop, intelligence).
-// Packages/subscriptions/discount codes/notifications/payments/geography are later phases —
-// see /api/README.md for what's deliberately out of scope right now.
+// Wathb API — Prisma schema, Phase 0-3 scope (foundations, the loop, intelligence, delivery).
+// Packages/subscriptions/discount codes/payments/geography are later phases —
+// see the root README for what's deliberately out of scope right now.
 
 generator client {
   provider = "prisma-client-js"
@@ -97,6 +97,9 @@ model User {
   student    Student?
   supervisor Supervisor?
 
+  notifications Notification[]
+  waSession     WaSession?
+
   @@map("users")
 }
 
@@ -108,7 +111,9 @@ model Student {
   targetTest       Test?     @relation(fields: [targetTestId], references: [id])
   targetScore      Int?
   testDate         DateTime?
-  skipDays         Int[]     @default([])
+  skipDays         Int[]     @default([5]) // 0=Sunday..6=Saturday; default skips Friday (spec §6.2, KSA weekend)
+  notifSlotStartHour Int     @default(18)
+  notifSlotEndHour   Int     @default(20)
   currentStreak    Int       @default(0)
   lastCompletedOn  DateTime?
   placementDoneAt  DateTime?
@@ -369,4 +374,75 @@ model AdviceRule {
 
   @@unique([labelId, accuracyBand, speedBand])
   @@map("advice_rules")
+}
+
+// §7 — Notification & Magic Link Engine.
+
+enum NotificationKind {
+  daily_wathb
+  nudge
+  weekly_report_student
+  weekly_report_supervisor
+  streak_milestone
+  subscription_expiring
+  payment_failed
+  supervisor_invite
+  suspension
+}
+
+// "console" stands in for whatsapp_template/whatsapp_freeform when no WABA
+// credentials are configured — see NotificationChannel in src/notifications.
+enum NotifChannel {
+  whatsapp_template
+  whatsapp_freeform
+  console
+}
+
+enum NotificationCategory {
+  utility
+  marketing
+}
+
+enum NotificationStatus {
+  scheduled
+  sent
+  delivered
+  read
+  failed
+}
+
+model Notification {
+  id           String               @id @default(uuid())
+  userId       String
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind         NotificationKind
+  channel      NotifChannel
+  templateName String?
+  category     NotificationCategory
+  waMessageId  String?
+  scheduledFor DateTime             @db.Date
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  repliedAt    DateTime?
+  wasBillable  Boolean              @default(false)
+  costEstimate Float?
+  status       NotificationStatus   @default(scheduled)
+  error        String?
+  createdAt    DateTime             @default(now())
+
+  // Idempotency key (spec §7.3) — a duplicate daily message is a trust-destroying bug.
+  @@unique([userId, kind, scheduledFor])
+  @@map("notifications")
+}
+
+// One row per user — tracks Meta's 24h customer-service window (spec §7.2).
+model WaSession {
+  userId          String    @id
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  windowOpenedAt  DateTime?
+  windowExpiresAt DateTime?
+  lastInboundAt   DateTime?
+
+  @@map("wa_sessions")
 }

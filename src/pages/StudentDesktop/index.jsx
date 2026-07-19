@@ -56,6 +56,21 @@ export default function StudentDesktop() {
   }, []);
 
   const bootstrap = useCallback(async () => {
+    // A tap on a WhatsApp magic link lands here as #magic=<token> (see
+    // api/src/notifications/notifications.service.ts) — exchange it for a
+    // scoped session exactly like the dev-login flow does, then drop it from
+    // the URL so the raw token doesn't sit in browser history (spec §7.1).
+    const hashMatch = window.location.hash.match(/^#magic=(.+)$/);
+    if (hashMatch) {
+      try {
+        const { token: sessionToken } = await api.exchangeMagicLink(hashMatch[1]);
+        setToken(sessionToken);
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch {
+        setToken(null);
+      }
+    }
+
     if (!getToken()) {
       setScreen('login');
       return;
