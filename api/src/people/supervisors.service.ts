@@ -96,4 +96,16 @@ export class SupervisorsService {
 
     return { supervisorType: supervisor.type, viewMode: supervisor.type === 'parent' || cards.length <= 3 ? 'family_card' : 'instructor_table', students: cards };
   }
+
+  // V3 in the spec — supervisor sets the weekly report day/time, or mutes it.
+  getPreferences(supervisorId: string) {
+    return this.prisma.supervisor.findUniqueOrThrow({
+      where: { userId: supervisorId },
+      select: { weeklyReportDay: true, weeklyReportHour: true, weeklyReportMuted: true },
+    });
+  }
+
+  setPreferences(supervisorId: string, dto: { weeklyReportDay?: number; weeklyReportHour?: number; weeklyReportMuted?: boolean }) {
+    return this.prisma.supervisor.update({ where: { userId: supervisorId }, data: dto });
+  }
 }

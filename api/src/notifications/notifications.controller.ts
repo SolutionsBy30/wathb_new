@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
+import { WeeklyReportService } from './weekly-report.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { TriggerDateDto } from './dto/trigger.dto';
 
@@ -23,7 +24,10 @@ function resolveDate(forDate?: string, defaultOffsetDays = 0): Date {
 @RequireSession('admin')
 @Controller('admin/notifications')
 export class NotificationsController {
-  constructor(private notifications: NotificationsService) {}
+  constructor(
+    private notifications: NotificationsService,
+    private weeklyReports: WeeklyReportService,
+  ) {}
 
   @Get()
   deliveryLog() {
@@ -48,5 +52,12 @@ export class NotificationsController {
   @Post('send/:studentId')
   sendOne(@Param('studentId') studentId: string, @Query('forDate') forDate?: string) {
     return this.notifications.sendDailyWathbNotification(studentId, resolveDate(forDate));
+  }
+
+  // weekly_report job (spec §9.4) — student + supervisor, same manual-trigger
+  // rationale as plan_day/send_notification above.
+  @Post('weekly-reports')
+  sendWeeklyReports(@Body() dto: TriggerDateDto) {
+    return this.weeklyReports.sendAllDueWeeklyReports(resolveDate(dto.forDate));
   }
 }

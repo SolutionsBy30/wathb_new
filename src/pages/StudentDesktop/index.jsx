@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StreakStrip } from '../../design-system/components/StreakStrip';
 import markOnIndigo from '../../design-system/assets/mark-on-indigo.svg';
 import './layout.css';
-import { api, getToken, setToken } from '../../api/client';
+import { api, getToken, setToken, decodeSession } from '../../api/client';
 import Login from './screens/Login';
 import GoalSetup from './screens/GoalSetup';
 import Home from './screens/Home';
@@ -12,6 +12,7 @@ import Complete from './screens/Complete';
 import Performance from './screens/Performance';
 import Profile from './screens/Profile';
 import Pricing from './screens/Pricing';
+import WeeklyReport from './screens/WeeklyReport';
 
 function navBtnStyle(active) {
   return {
@@ -73,10 +74,12 @@ export default function StudentDesktop() {
     // scoped session exactly like the dev-login flow does, then drop it from
     // the URL so the raw token doesn't sit in browser history (spec §7.1).
     const hashMatch = window.location.hash.match(/^#magic=(.+)$/);
+    let magicPurpose = null;
     if (hashMatch) {
       try {
         const { token: sessionToken } = await api.exchangeMagicLink(hashMatch[1]);
         setToken(sessionToken);
+        magicPurpose = decodeSession(sessionToken)?.purpose ?? null;
         window.history.replaceState(null, '', window.location.pathname);
       } catch {
         setToken(null);
@@ -102,7 +105,8 @@ export default function StudentDesktop() {
         setScreen('goal');
       } else {
         await loadReport(me.userId);
-        setScreen('home');
+        // The weekly WhatsApp link (spec S11) lands here, not on Home.
+        setScreen(magicPurpose === 'weekly_report' ? 'weeklyReport' : 'home');
       }
     } catch {
       setToken(null);
@@ -400,6 +404,7 @@ export default function StudentDesktop() {
             <Complete vm={completeVm} goDashboard={goPerformance} backHome={goHome} />
           )}
           {screen === 'performance' && <Performance report={report} />}
+          {screen === 'weeklyReport' && <WeeklyReport report={report} onOpenPerformance={goPerformance} />}
           {screen === 'pricing' && (
             <Pricing packages={packages} onSubscribe={subscribeToPackage} blockedMessage={pricingMessage} />
           )}

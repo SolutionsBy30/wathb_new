@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import AcceptInvite from './pages/AcceptInvite';
 import Dashboard from './pages/Dashboard';
 import StudentReport from './pages/StudentReport';
+import Preferences from './pages/Preferences';
 
 export default function App() {
   const [screen, setScreen] = useState('loading');
@@ -20,6 +21,20 @@ export default function App() {
   };
 
   const bootstrap = async () => {
+    // A tap on a WhatsApp link (invite or weekly report) lands here as
+    // #magic=<token> — exchange it for a scoped session, same as the
+    // student app, then drop it from the URL (spec §7.1).
+    const hashMatch = window.location.hash.match(/^#magic=(.+)$/);
+    if (hashMatch) {
+      try {
+        const { token: sessionToken } = await api.exchangeMagicLink(hashMatch[1]);
+        setToken(sessionToken);
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch {
+        setToken(null);
+      }
+    }
+
     const token = getToken();
     if (!token) return setScreen('login');
     const session = decodeSession(token);
@@ -99,6 +114,18 @@ export default function App() {
       <header style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 24px', borderBottom: '0.5px solid var(--on-indigo-line)' }}>
         <span style={{ fontFamily: 'var(--font-arabic)', fontWeight: 600, fontSize: '17px', color: 'var(--sand)' }}>وثب · متابعة</span>
         <button
+          onClick={() => setScreen('dashboard')}
+          style={{ border: 'none', background: 'transparent', color: screen === 'dashboard' ? 'var(--sand)' : 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+        >
+          لوحتي
+        </button>
+        <button
+          onClick={() => setScreen('preferences')}
+          style={{ border: 'none', background: 'transparent', color: screen === 'preferences' ? 'var(--sand)' : 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+        >
+          إعدادات الإشعارات
+        </button>
+        <button
           onClick={() => { setToken(null); setScreen('login'); }}
           style={{ marginInlineStart: 'auto', border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
         >
@@ -108,6 +135,7 @@ export default function App() {
       <main style={{ padding: '24px', maxWidth: '760px', margin: '0 auto' }}>
         {screen === 'dashboard' && <Dashboard data={dashboard} onOpenStudent={openStudent} />}
         {screen === 'report' && <StudentReport report={report} onBack={() => setScreen('dashboard')} />}
+        {screen === 'preferences' && <Preferences />}
       </main>
     </div>
   );

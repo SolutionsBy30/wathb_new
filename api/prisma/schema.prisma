@@ -127,9 +127,13 @@ model Student {
 }
 
 model Supervisor {
-  userId String         @id
-  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type   SupervisorType
+  userId              String         @id
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                SupervisorType
+  // §5.3 — supervisor can set day/time for the weekly report and mute it.
+  weeklyReportDay     Int            @default(4) // 0=Sunday..6=Saturday; default Thursday
+  weeklyReportHour    Int            @default(20)
+  weeklyReportMuted   Boolean        @default(false)
 
   studentLinks StudentSupervisor[]
 

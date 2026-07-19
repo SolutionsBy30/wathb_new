@@ -9,6 +9,14 @@ export function setToken(token) {
   else localStorage.removeItem(SESSION_KEY);
 }
 
+export function decodeSession(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {
+    return null;
+  }
+}
+
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) {

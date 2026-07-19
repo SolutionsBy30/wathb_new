@@ -51,4 +51,7 @@ export const api = {
   dashboard: () => request('/supervisors/me/dashboard'),
   acceptInvite: (id) => request(`/supervisors/me/invites/${id}/accept`, { method: 'POST' }),
   report: (studentId) => request(`/report/student/${studentId}`),
+
+  getPreferences: () => request('/supervisors/me/preferences'),
+  setPreferences: (dto) => request('/supervisors/me/preferences', { method: 'PATCH', body: dto }),
 };

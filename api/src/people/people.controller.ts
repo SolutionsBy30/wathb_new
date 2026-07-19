@@ -4,7 +4,7 @@ import { SupervisorsService } from './supervisors.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
-import { CreateStudentDto, CreateSupervisorDto, GoalSetupDto, InviteSupervisorDto } from './dto/people.dto';
+import { CreateStudentDto, CreateSupervisorDto, GoalSetupDto, InviteSupervisorDto, SupervisorPreferencesDto } from './dto/people.dto';
 
 @UseGuards(SessionGuard)
 @Controller()
@@ -66,5 +66,17 @@ export class PeopleController {
   @Get('supervisors/me/dashboard')
   dashboard(@CurrentSession() session: SessionPayload) {
     return this.supervisors.dashboard(session.sub);
+  }
+
+  @RequireSession('supervisor')
+  @Get('supervisors/me/preferences')
+  getPreferences(@CurrentSession() session: SessionPayload) {
+    return this.supervisors.getPreferences(session.sub);
+  }
+
+  @RequireSession('supervisor')
+  @Patch('supervisors/me/preferences')
+  setPreferences(@Body() dto: SupervisorPreferencesDto, @CurrentSession() session: SessionPayload) {
+    return this.supervisors.setPreferences(session.sub, dto);
   }
 }

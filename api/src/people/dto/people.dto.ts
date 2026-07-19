@@ -1,4 +1,4 @@
-import { IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreateStudentDto {
   @IsString() mobile!: string;
@@ -22,4 +22,10 @@ export class InviteSupervisorDto {
   @IsString() mobile!: string;
   @IsString() name!: string;
   @IsIn(['parent', 'instructor']) type!: 'parent' | 'instructor';
+}
+
+export class SupervisorPreferencesDto {
+  @IsOptional() @IsInt() @Min(0) @Max(6) weeklyReportDay?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(23) weeklyReportHour?: number;
+  @IsOptional() @IsBoolean() weeklyReportMuted?: boolean;
 }
