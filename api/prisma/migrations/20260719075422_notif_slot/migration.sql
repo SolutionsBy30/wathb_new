@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "students" ADD COLUMN     "notifSlotEndHour" INTEGER NOT NULL DEFAULT 20,
-ADD COLUMN     "notifSlotStartHour" INTEGER NOT NULL DEFAULT 18,
-ALTER COLUMN "skipDays" SET DEFAULT ARRAY[5]::INTEGER[];

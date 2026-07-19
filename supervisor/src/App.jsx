@@ -37,16 +37,28 @@ export default function App() {
 
   useEffect(() => { bootstrap(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  const handleLogin = async (mobile) => {
+  const requestOtp = async (mobile) => {
     setLoginBusy(true);
     setLoginError(null);
     try {
-      const { token: magicToken } = await api.devRequestLink(mobile);
-      const { token: sessionToken } = await api.exchangeMagicLink(magicToken);
+      return await api.requestOtp(mobile);
+    } catch (e) {
+      setLoginError(e.message || 'تعذّر إرسال الرمز');
+      return null;
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const verifyOtp = async (mobile, code) => {
+    setLoginBusy(true);
+    setLoginError(null);
+    try {
+      const { token: sessionToken } = await api.verifyOtp(mobile, code);
       setToken(sessionToken);
       await bootstrap();
     } catch (e) {
-      setLoginError(e.message || 'تعذّر الدخول');
+      setLoginError(e.message || 'رمز غير صحيح');
     } finally {
       setLoginBusy(false);
     }
@@ -79,7 +91,7 @@ export default function App() {
     );
   }
 
-  if (screen === 'login') return <Login onSubmit={handleLogin} error={loginError} busy={loginBusy} />;
+  if (screen === 'login') return <Login onRequestCode={requestOtp} onVerifyCode={verifyOtp} error={loginError} busy={loginBusy} />;
   if (screen === 'accept') return <AcceptInvite onAccept={handleAccept} busy={acceptBusy} error={acceptError} />;
 
   return (

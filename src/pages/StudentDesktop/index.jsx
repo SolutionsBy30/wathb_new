@@ -97,16 +97,28 @@ export default function StudentDesktop() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLogin = async (mobile) => {
+  const requestOtp = async (mobile) => {
     setLoginBusy(true);
     setLoginError(null);
     try {
-      const { token: magicToken } = await api.devRequestLink(mobile, 'student');
-      const { token: sessionToken } = await api.exchangeMagicLink(magicToken);
+      return await api.requestOtp(mobile);
+    } catch (e) {
+      setLoginError(e.message || 'تعذّر إرسال الرمز');
+      return null;
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const verifyOtp = async (mobile, code) => {
+    setLoginBusy(true);
+    setLoginError(null);
+    try {
+      const { token: sessionToken } = await api.verifyOtp(mobile, code);
       setToken(sessionToken);
       await bootstrap();
     } catch (e) {
-      setLoginError(e.message || 'تعذّر الدخول');
+      setLoginError(e.message || 'رمز غير صحيح');
     } finally {
       setLoginBusy(false);
     }
@@ -289,7 +301,7 @@ export default function StudentDesktop() {
     return (
       <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '440px', padding: '32px' }}>
-          <Login onSubmit={handleLogin} error={loginError} busy={loginBusy} />
+          <Login onRequestCode={requestOtp} onVerifyCode={verifyOtp} error={loginError} busy={loginBusy} />
         </div>
       </div>
     );

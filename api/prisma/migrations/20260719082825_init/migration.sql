@@ -20,7 +20,7 @@ CREATE TYPE "BundleType" AS ENUM ('standard', 'passage', 'placement');
 CREATE TYPE "WathbStatus" AS ENUM ('pending', 'opened', 'completed', 'expired', 'partial');
 
 -- CreateEnum
-CREATE TYPE "MagicLinkPurpose" AS ENUM ('wathb', 'weekly_report', 'supervisor_report', 'renewal', 'link_invite', 'dev_login');
+CREATE TYPE "MagicLinkPurpose" AS ENUM ('wathb', 'weekly_report', 'supervisor_report', 'renewal', 'link_invite');
 
 -- CreateEnum
 CREATE TYPE "SubjectType" AS ENUM ('student', 'supervisor');
@@ -30,6 +30,18 @@ CREATE TYPE "AccuracyBand" AS ENUM ('low', 'mid', 'high');
 
 -- CreateEnum
 CREATE TYPE "SpeedBand" AS ENUM ('slow', 'on_pace', 'fast');
+
+-- CreateEnum
+CREATE TYPE "NotificationKind" AS ENUM ('daily_wathb', 'nudge', 'weekly_report_student', 'weekly_report_supervisor', 'streak_milestone', 'subscription_expiring', 'payment_failed', 'supervisor_invite', 'suspension');
+
+-- CreateEnum
+CREATE TYPE "NotifChannel" AS ENUM ('whatsapp_template', 'whatsapp_freeform', 'console');
+
+-- CreateEnum
+CREATE TYPE "NotificationCategory" AS ENUM ('utility', 'marketing');
+
+-- CreateEnum
+CREATE TYPE "NotificationStatus" AS ENUM ('scheduled', 'sent', 'delivered', 'read', 'failed');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -55,7 +67,9 @@ CREATE TABLE "students" (
     "targetTestId" TEXT,
     "targetScore" INTEGER,
     "testDate" TIMESTAMP(3),
-    "skipDays" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+    "skipDays" INTEGER[] DEFAULT ARRAY[5]::INTEGER[],
+    "notifSlotStartHour" INTEGER NOT NULL DEFAULT 18,
+    "notifSlotEndHour" INTEGER NOT NULL DEFAULT 20,
     "currentStreak" INTEGER NOT NULL DEFAULT 0,
     "lastCompletedOn" TIMESTAMP(3),
     "placementDoneAt" TIMESTAMP(3),
@@ -272,6 +286,53 @@ CREATE TABLE "advice_rules" (
     CONSTRAINT "advice_rules_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "notifications" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "kind" "NotificationKind" NOT NULL,
+    "channel" "NotifChannel" NOT NULL,
+    "templateName" TEXT,
+    "category" "NotificationCategory" NOT NULL,
+    "waMessageId" TEXT,
+    "scheduledFor" DATE NOT NULL,
+    "sentAt" TIMESTAMP(3),
+    "deliveredAt" TIMESTAMP(3),
+    "readAt" TIMESTAMP(3),
+    "repliedAt" TIMESTAMP(3),
+    "wasBillable" BOOLEAN NOT NULL DEFAULT false,
+    "costEstimate" DOUBLE PRECISION,
+    "status" "NotificationStatus" NOT NULL DEFAULT 'scheduled',
+    "error" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "wa_sessions" (
+    "userId" TEXT NOT NULL,
+    "windowOpenedAt" TIMESTAMP(3),
+    "windowExpiresAt" TIMESTAMP(3),
+    "lastInboundAt" TIMESTAMP(3),
+
+    CONSTRAINT "wa_sessions_pkey" PRIMARY KEY ("userId")
+);
+
+-- CreateTable
+CREATE TABLE "otp_codes" (
+    "id" TEXT NOT NULL,
+    "mobileE164" TEXT NOT NULL,
+    "subjectType" "SubjectType" NOT NULL,
+    "codeHash" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "consumedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "otp_codes_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_mobileE164_key" ON "users"("mobileE164");
 
@@ -304,6 +365,12 @@ CREATE UNIQUE INDEX "magic_links_tokenHash_key" ON "magic_links"("tokenHash");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "advice_rules_labelId_accuracyBand_speedBand_key" ON "advice_rules"("labelId", "accuracyBand", "speedBand");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "notifications_userId_kind_scheduledFor_key" ON "notifications"("userId", "kind", "scheduledFor");
+
+-- CreateIndex
+CREATE INDEX "otp_codes_mobileE164_subjectType_idx" ON "otp_codes"("mobileE164", "subjectType");
 
 -- AddForeignKey
 ALTER TABLE "students" ADD CONSTRAINT "students_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -376,3 +443,9 @@ ALTER TABLE "student_label_stats" ADD CONSTRAINT "student_label_stats_labelId_fk
 
 -- AddForeignKey
 ALTER TABLE "advice_rules" ADD CONSTRAINT "advice_rules_labelId_fkey" FOREIGN KEY ("labelId") REFERENCES "labels"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "wa_sessions" ADD CONSTRAINT "wa_sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -11,7 +11,6 @@ const TTL_SECONDS_BY_PURPOSE: Record<MagicLinkPurpose, number> = {
   supervisor_report: 7 * 24 * 3600,
   renewal: 3600,
   link_invite: 7 * 24 * 3600,
-  dev_login: 24 * 3600,
 };
 
 function hashToken(raw: string): string {

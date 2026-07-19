@@ -4,7 +4,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { MagicLinkService } from './magic-link.service';
+import { OtpService } from './otp.service';
 import { SessionGuard } from './session.guard';
+import { NotificationChannelModule } from '../notifications/notification-channel.module';
 
 @Module({
   imports: [
@@ -15,9 +17,10 @@ import { SessionGuard } from './session.guard';
         secret: config.get<string>('JWT_SECRET', 'dev-secret-change-me'),
       }),
     }),
+    NotificationChannelModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, MagicLinkService, SessionGuard],
+  providers: [AuthService, MagicLinkService, OtpService, SessionGuard],
   exports: [AuthService, MagicLinkService, SessionGuard],
 })
 export class AuthModule {}

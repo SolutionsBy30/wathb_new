@@ -35,9 +35,14 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
 }
 
 export const api = {
-  // Dev-only stand-in for the WhatsApp magic-link tap — see api/src/auth/auth.controller.ts.
-  devRequestLink: (mobile, subjectType = 'student') =>
-    request('/auth/dev/request-link', { method: 'POST', body: { mobile, subjectType }, auth: false }),
+  // Login page — mobile + OTP (spec §9.3). devCode is only present when the
+  // API has ALLOW_DEV_LOGIN=true, so local dev doesn't need a real WhatsApp
+  // number to receive the code.
+  requestOtp: (mobile) => request('/auth/otp/request', { method: 'POST', body: { mobile, subjectType: 'student' }, auth: false }),
+  verifyOtp: (mobile, code) => request('/auth/otp/verify', { method: 'POST', body: { mobile, subjectType: 'student', code }, auth: false }),
+
+  // Exchanging the link a real WhatsApp Wathb notification delivers (see
+  // api/src/notifications/notifications.service.ts) — not part of login.
   exchangeMagicLink: (token) => request(`/auth/magic/${token}`, { method: 'POST', auth: false }),
 
   listTests: () => request('/tests', { auth: false }),

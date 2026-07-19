@@ -225,7 +225,8 @@ async function seedPeople(qudurat: { id: string }) {
   console.log(`  Admin login:       admin@wathb.dev / ${adminPassword}`);
   console.log(`  Demo student mobile:    ${student.mobileE164}`);
   console.log(`  Demo supervisor mobile: ${supervisor.mobileE164}`);
-  console.log('  (use POST /api/auth/dev/request-link with ALLOW_DEV_LOGIN=true to sign in as either)\n');
+  console.log('  Log in on the student/supervisor app with either mobile number — OTP is echoed back');
+  console.log('  in the request-code response when ALLOW_DEV_LOGIN=true (see api/.env.example).\n');
 }
 
 async function seedAdvice(labels: Record<string, { id: string }>) {

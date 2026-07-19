@@ -28,9 +28,17 @@ Each frontend is an independent Vite app sharing a copy of the same design
 system (`design-system/` — IBM Plex Sans Arabic + Outfit, indigo/sand/lime
 tokens) that shipped with the original prototype.
 
-**Auth model** implements spec §7.1 (scoped, single-purpose magic links,
-hashed tokens, no session in the URL) with one pragmatic deviation: the
-scoped session is returned as a JWT in the response body (stored in
+**Auth model** — two entry points, both spec §9.3:
+- **The login page** (student/supervisor apps): mobile number → 6-digit OTP,
+  delivered via the same `NotificationChannel` as everything else
+  (`POST /api/auth/otp/request|verify`). Code is hashed at rest, single-use,
+  5-minute expiry, capped at 5 verify attempts.
+- **The daily Wathb link**: spec §7.1's scoped, single-purpose magic links
+  (hashed tokens, no session in the URL) — what a real WhatsApp notification
+  tap lands on (`POST /api/auth/magic/:token`).
+
+Both issue the same kind of session. One pragmatic deviation from spec §7.1:
+the session is returned as a JWT in the response body (stored in
 `localStorage` by the frontends) rather than an `httpOnly` cookie, because the
 three frontends run on different localhost ports in dev. Swap this for a
 `Set-Cookie` + `SameSite` flow once the apps are served same-site in
@@ -156,12 +164,14 @@ cd admin && npm install && npm run dev  # admin console — http://localhost:517
 cd supervisor && npm install && npm run dev  # supervisor — http://localhost:5175/supervisor/
 ```
 
-The student and supervisor apps log in via a **dev-only magic-link
-stand-in**: enter the seeded mobile number and it mints + exchanges a token
-in one step (`ALLOW_DEV_LOGIN=true` in `api/.env`, off by default — never
-enable in production). This is the only place a real WhatsApp tap is
-simulated; everything downstream (session scoping, TTL, single-use) is the
-real mechanism from spec §7.1.
+The student and supervisor apps log in with the **real OTP flow**: enter the
+seeded mobile number, request a code, enter it. The code is sent through
+whichever `NotificationChannel` is active — with no WhatsApp credentials
+configured that's `ConsoleChannel`, so the code lands in the API's log
+output. Set `ALLOW_DEV_LOGIN=true` in `api/.env` (off by default) to also
+have the API echo the code back in the `otp/request` response, so the login
+page can display it directly — convenient for local dev, never set this in
+production.
 
 To configure real WhatsApp delivery instead of the console fallback, set
 `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`,
@@ -195,7 +205,7 @@ endpoints mirror spec §9.3:
 ```
 POST /api/auth/admin/login
 POST /api/auth/magic/:token
-POST /api/auth/dev/request-link        (dev-only)
+POST /api/auth/otp/request | verify    (student/supervisor login)
 
 GET  /api/wathb/today
 POST /api/wathb/:id/answer
@@ -231,8 +241,10 @@ GET|POST /api/webhooks/whatsapp                     (Meta verification + inbound
 - `student_label_stats.difficultyLevel` uses a simple ±1 ladder step per
   answer rather than a calibrated IRT-style model; adequate for the v1
   "deterministic and debuggable" requirement in §6.4.
-- No rate limiting on magic-link exchange/OTP (spec §9.5) — add before any
-  non-local deployment.
+- OTP has a per-code verify-attempt cap (5) and expiry (5 min), but no
+  per-mobile *request* throttling yet — someone could spam `otp/request` for
+  a given number. Add rate limiting here and on magic-link exchange (spec
+  §9.5) before any non-local deployment.
 - `plan_day`/`send_notification` are plain service methods triggered
   manually (admin endpoints), not registered BullMQ repeatable jobs —
   register them on a real queue before relying on them unattended.

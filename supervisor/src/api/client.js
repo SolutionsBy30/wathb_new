@@ -40,7 +40,12 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
 }
 
 export const api = {
-  devRequestLink: (mobile) => request('/auth/dev/request-link', { method: 'POST', body: { mobile, subjectType: 'supervisor' }, auth: false }),
+  // Login page — mobile + OTP (spec §9.3). devCode only present when the API
+  // has ALLOW_DEV_LOGIN=true.
+  requestOtp: (mobile) => request('/auth/otp/request', { method: 'POST', body: { mobile, subjectType: 'supervisor' }, auth: false }),
+  verifyOtp: (mobile, code) => request('/auth/otp/verify', { method: 'POST', body: { mobile, subjectType: 'supervisor', code }, auth: false }),
+
+  // Exchanging a student's supervisor-invite link — not part of login.
   exchangeMagicLink: (token) => request(`/auth/magic/${token}`, { method: 'POST', auth: false }),
 
   dashboard: () => request('/supervisors/me/dashboard'),

@@ -1,18 +1,14 @@
-import { Body, Controller, ForbiddenException, Ip, Param, Post, Headers } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Body, Controller, Ip, Param, Post, Headers } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { MagicLinkService } from './magic-link.service';
+import { OtpService } from './otp.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
-import { DevRequestLinkDto } from './dto/dev-request-link.dto';
-import { PrismaService } from '../prisma/prisma.service';
+import { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private auth: AuthService,
-    private magicLinks: MagicLinkService,
-    private prisma: PrismaService,
-    private config: ConfigService,
+    private otp: OtpService,
   ) {}
 
   @Post('admin/login')
@@ -21,29 +17,24 @@ export class AuthController {
   }
 
   // Mirrors spec §9.3: POST /api/auth/magic/:token -> exchange for scoped session.
+  // This is what a real WhatsApp notification tap lands on — see
+  // notifications.service.ts for where these links get minted.
   @Post('magic/:token')
   async exchange(@Param('token') token: string, @Ip() ip: string, @Headers('user-agent') userAgent?: string) {
     return this.auth.exchangeMagicLink(token, { ip, userAgent });
   }
 
-  /**
-   * Dev-only stand-in for "the WhatsApp message arrives and the student taps
-   * it." Real delivery is Phase 3 (Meta WhatsApp Business Cloud API). Gated
-   * off unless ALLOW_DEV_LOGIN=true so it can never ship live by accident.
-   */
-  @Post('dev/request-link')
-  async devRequestLink(@Body() dto: DevRequestLinkDto) {
-    if (this.config.get('ALLOW_DEV_LOGIN') !== 'true') {
-      throw new ForbiddenException('dev login is disabled');
-    }
-    const user = await this.prisma.user.findUnique({ where: { mobileE164: dto.mobile } });
-    if (!user) throw new ForbiddenException('no user with that mobile number');
-    const { token, expiresAt } = await this.magicLinks.mint({
-      subjectId: user.id,
-      subjectType: dto.subjectType,
-      purpose: 'dev_login',
-      maxUses: 5,
-    });
-    return { token, expiresAt, name: user.name };
+  // Mirrors spec §9.3: POST /api/auth/otp/request|verify — the login page for
+  // students/supervisors who don't have (or can't find) a fresh WhatsApp link.
+  @Post('otp/request')
+  requestOtp(@Body() dto: RequestOtpDto) {
+    return this.otp.requestOtp(dto.mobile, dto.subjectType);
+  }
+
+  @Post('otp/verify')
+  async verifyOtp(@Body() dto: VerifyOtpDto) {
+    const user = await this.otp.verifyOtp(dto.mobile, dto.subjectType, dto.code);
+    const token = this.auth.issueSession({ sub: user.id, kind: dto.subjectType }, 24 * 3600);
+    return { token, kind: dto.subjectType, name: user.name };
   }
 }

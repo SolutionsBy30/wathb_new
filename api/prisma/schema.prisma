@@ -61,7 +61,6 @@ enum MagicLinkPurpose {
   supervisor_report
   renewal
   link_invite
-  dev_login
 }
 
 enum SubjectType {
@@ -445,4 +444,21 @@ model WaSession {
   lastInboundAt   DateTime?
 
   @@map("wa_sessions")
+}
+
+// Mobile + OTP login (spec §9.3 POST /api/auth/otp/request|verify), also the
+// mechanism for step-up auth on sensitive actions later. Code is hashed at
+// rest exactly like magic-link tokens — never stored in the clear.
+model OtpCode {
+  id          String      @id @default(uuid())
+  mobileE164  String
+  subjectType SubjectType
+  codeHash    String
+  expiresAt   DateTime
+  attempts    Int         @default(0)
+  consumedAt  DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@index([mobileE164, subjectType])
+  @@map("otp_codes")
 }
