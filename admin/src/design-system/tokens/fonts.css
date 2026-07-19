@@ -1,0 +1,32 @@
+/* Wathb — webfonts
+   IBM Plex Sans Arabic (400/500/600) — Arabic-leading UI face, self-hosted (Arabic subrange).
+   Outfit (300/400/500) — Latin follower: numerals, English UI, Latin wordmark.
+   The Latin/Outfit weights are loaded from Google Fonts to keep this bundle small; the
+   Arabic subrange (the primary reading script for this app) is self-hosted below. */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Outfit:wght@300;400;500&display=swap");
+
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/IBMPlexSansArabic-Regular-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/IBMPlexSansArabic-Medium-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fonts/IBMPlexSansArabic-SemiBold-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC;
+}

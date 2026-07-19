@@ -1,0 +1,120 @@
+import { Bar } from '../../../design-system/components/Bar';
+
+const lineStyle = { borderBottom: '0.5px solid var(--on-indigo-line)' };
+
+function heatmapWeeks(heatmap, weeks = 8) {
+  const byDay = new Map(heatmap.map((h) => [h.day, h.count]));
+  const today = new Date();
+  const cells = [];
+  for (let w = weeks - 1; w >= 0; w--) {
+    const days = [];
+    for (let d = 6; d >= 0; d--) {
+      const dt = new Date(today);
+      dt.setUTCDate(dt.getUTCDate() - (w * 7 + d));
+      days.push((byDay.get(dt.toISOString().slice(0, 10)) ?? 0) > 0);
+    }
+    cells.push(days);
+  }
+  return cells;
+}
+
+export default function Performance({ report }) {
+  if (!report) {
+    return <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>جاري تحميل الأداء…</p>;
+  }
+
+  const trend = report.trend.filter((t) => t.accuracy !== null);
+  const maxAcc = Math.max(...trend.map((t) => t.accuracy), 0.01);
+
+  return (
+    <>
+      <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>لوحتي</h1>
+
+      <div style={{ display: 'flex', gap: '32px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--mist)' }}>الإجمالي (مدى الحياة)</span>
+          <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>{report.totals.lifetimeAnswered}</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--mist)' }}>هذا الأسبوع</span>
+          <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>{report.totals.weekAnswered}</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--mist)' }}>سلسلة الوثبات</span>
+          <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--lime)' }}>{report.streak.current}</span>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الدقة حسب المجال</h2>
+        {report.accuracyByArea.length === 0 && (
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>لا توجد بيانات بعد — أكمل وثبتك الأولى.</p>
+        )}
+        {report.accuracyByArea.map((area) => (
+          <div key={area.areaId} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+              <span style={{ color: 'var(--sand)' }}>{area.nameAr}</span>
+              <span style={{ fontFamily: 'var(--font-latin)', color: area.collecting ? 'var(--mist)' : 'var(--teal-ink)' }}>
+                {area.collecting ? `قيد الجمع — ${area.nAnswered} من ${area.needed}` : `${Math.round(area.accuracy * 100)}%`}
+              </span>
+            </div>
+            <Bar value={area.collecting ? 0 : Math.round(area.accuracy * 100)} tone={!area.collecting && area.accuracy < 0.6 ? 'coral' : 'teal'} style={{ height: '7px' }} />
+          </div>
+        ))}
+      </div>
+
+      <div className="sd-grid-2" style={{ gap: '20px' }}>
+        <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>اتجاه الأداء — أسبوعياً</h2>
+          {trend.length === 0 ? (
+            <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد بيانات كافية بعد.</p>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '80px' }}>
+              {trend.map((t, i) => (
+                <div
+                  key={t.weekStart}
+                  style={{
+                    flex: 1,
+                    height: `${12 + Math.round((t.accuracy / maxAcc) * 60)}px`,
+                    borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
+                    background: i === trend.length - 1 ? 'var(--lime)' : 'var(--on-indigo-line)',
+                  }}
+                  title={`${t.weekStart}: ${Math.round(t.accuracy * 100)}%`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الاتساق</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            {heatmapWeeks(report.heatmap).map((week, wi) => (
+              <div key={wi} style={{ display: 'flex', gap: '3px', justifyContent: 'flex-end' }}>
+                {week.map((filled, di) => (
+                  <div key={di} style={{ width: '13px', height: '13px', borderRadius: '3px', background: filled ? 'var(--lime)' : 'var(--on-indigo-subtle)' }} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>أخطاء حديثة</h2>
+        {report.recentMistakes.length === 0 && (
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد أخطاء حديثة — استمر!</p>
+        )}
+        {report.recentMistakes.map((m, i) => {
+          const correctText = (m.options || []).find((o) => o.key === m.correctKey)?.text ?? m.correctKey;
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingBottom: '12px', ...lineStyle }}>
+              <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)', lineHeight: 1.8 }}>{m.stem}</p>
+              <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', fontWeight: 500, color: 'var(--coral)' }}>الصحيح: {correctText}</p>
+              <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)', lineHeight: 1.8 }}>{m.explanation}</p>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}

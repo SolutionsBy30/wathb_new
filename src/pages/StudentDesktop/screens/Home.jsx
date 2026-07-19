@@ -1,7 +1,7 @@
 import { Button } from '../../../design-system/components/Button';
 import { Bar } from '../../../design-system/components/Bar';
 
-export default function Home({ vm, goTestPicker, resetProgress }) {
+export default function Home({ vm, goTestPicker }) {
   return (
     <>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '24px', fontWeight: 500, color: 'var(--sand)' }}>{vm.homeHeadline}</h1>
@@ -26,8 +26,7 @@ export default function Home({ vm, goTestPicker, resetProgress }) {
       )}
 
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <Button variant="primary" onClick={goTestPicker}>{vm.startButtonLabel}</Button>
-        <button onClick={resetProgress} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', fontFamily: 'var(--font-arabic)', fontSize: '12px', cursor: 'pointer' }}>إعادة تعيين النموذج</button>
+        <Button variant="primary" disabled={vm.alreadyDoneToday} onClick={goTestPicker}>{vm.startButtonLabel}</Button>
       </div>
     </>
   );

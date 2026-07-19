@@ -1,6 +1,6 @@
 import { Button } from '../../../design-system/components/Button';
 
-export default function Complete({ vm, goTestPicker, goDashboard, backHome }) {
+export default function Complete({ vm, goDashboard, backHome }) {
   return (
     <>
       <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>{vm.activeTestName} مكتملة</span>
@@ -15,9 +15,11 @@ export default function Complete({ vm, goTestPicker, goDashboard, backHome }) {
           <span style={{ fontFamily: 'var(--font-latin)', fontSize: '28px', fontWeight: 500, color: 'var(--lime)' }}>{vm.streakCount}</span>
         </div>
       </div>
+      <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
+        غداً وثبة جديدة — تدريب إضافي عند الطلب جزء من مرحلة لاحقة.
+      </p>
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <Button variant="primary" onClick={goTestPicker}>ابدأ وثبة جديدة</Button>
-        <Button variant="secondary" onClick={goDashboard}>لوحة الأداء</Button>
+        <Button variant="primary" onClick={goDashboard}>لوحة الأداء</Button>
         <button onClick={backHome} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', fontFamily: 'var(--font-arabic)', fontSize: '13px', cursor: 'pointer' }}>الرئيسية</button>
       </div>
     </>

@@ -1,0 +1,126 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { LabelState } from '../selection/selection-engine.types';
+import { selectLabelsForBundle } from '../selection/selection-engine';
+
+const PLACEMENT_SIZE = 12;
+
+@Injectable()
+export class WathbGenerationService {
+  private readonly logger = new Logger(WathbGenerationService.name);
+
+  constructor(private prisma: PrismaService) {}
+
+  private async eligibleLabels(testId: string, track: 'scientific' | 'humanities' | null) {
+    // Filtered in application code rather than via Prisma's `isEmpty` list
+    // filter, which does not reliably match empty Postgres enum-array columns
+    // (verified against Prisma 5.22 / pg16 — an empty appliesToTracks[] was
+    // silently excluded instead of treated as "applies to every track").
+    const all = await this.prisma.label.findMany({
+      where: { isRetired: false, area: { section: { testId } } },
+      include: { area: { include: { section: true } } },
+    });
+    return all.filter((l) => l.area.appliesToTracks.length === 0 || (track != null && l.area.appliesToTracks.includes(track)));
+  }
+
+  /** Picks one unseen published question near targetDifficulty for a label, expanding the window if needed. */
+  private async pickQuestion(labelId: string, targetDifficulty: number, studentId: string, excludeQuestionIds: Set<string>) {
+    const answered = await this.prisma.answer.findMany({ where: { studentId }, select: { questionId: true } });
+    const seen = new Set(answered.map((a) => a.questionId));
+
+    for (const window of [0, 1, 2, 3, 4]) {
+      const lo = Math.max(1, targetDifficulty - window);
+      const hi = Math.min(5, targetDifficulty + window);
+      const candidates = await this.prisma.question.findMany({
+        where: {
+          labelId,
+          status: 'published',
+          difficulty: { gte: lo, lte: hi },
+          id: { notIn: [...seen, ...excludeQuestionIds] },
+        },
+        include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+        take: 20,
+      });
+      if (candidates.length > 0) {
+        return candidates[Math.floor(Math.random() * candidates.length)];
+      }
+      if (window === 4) break;
+    }
+    return null;
+  }
+
+  async generatePlacement(studentId: string, testId: string, track: 'scientific' | 'humanities' | null) {
+    const labels = await this.eligibleLabels(testId, track);
+    const picks: string[] = [];
+    // Uniform coverage — no weakness signal exists yet (spec §6.4 "cold start").
+    for (let i = 0; i < PLACEMENT_SIZE && labels.length > 0; i++) {
+      picks.push(labels[i % labels.length].id);
+    }
+    return this.buildWathb(studentId, picks.map((labelId) => ({ labelId, targetDifficulty: 3 })), 'placement');
+  }
+
+  async generateDaily(studentId: string, testId: string, track: 'scientific' | 'humanities' | null, bundleSize: number) {
+    const labels = await this.eligibleLabels(testId, track);
+    if (labels.length === 0) return null;
+
+    const stats = await this.prisma.studentLabelStat.findMany({ where: { studentId, labelId: { in: labels.map((l) => l.id) } } });
+    const statByLabel = new Map(stats.map((s) => [s.labelId, s]));
+    const now = Date.now();
+
+    const labelStates: LabelState[] = labels.map((l) => {
+      const s = statByLabel.get(l.id);
+      const nAnswered = s?.nAnswered ?? 0;
+      return {
+        labelId: l.id,
+        accuracy: nAnswered > 0 ? s!.nCorrect / nAnswered : 0.5,
+        nAnswered,
+        lastServedDaysAgo: s?.lastServedAt ? Math.floor((now - s.lastServedAt.getTime()) / 86400000) : null,
+        curriculumWeight: l.area.section.weight,
+        difficultyLevel: s?.difficultyLevel ?? 3,
+      };
+    });
+
+    const picks = selectLabelsForBundle(labelStates, { bundleSize });
+    return this.buildWathb(studentId, picks, 'standard');
+  }
+
+  private async buildWathb(
+    studentId: string,
+    picks: { labelId: string; targetDifficulty: number }[],
+    bundleType: 'placement' | 'standard',
+  ) {
+    const used = new Set<string>();
+    const resolved: { labelId: string; question: Awaited<ReturnType<WathbGenerationService['pickQuestion']>> }[] = [];
+    for (const pick of picks) {
+      const q = await this.pickQuestion(pick.labelId, pick.targetDifficulty, studentId, used);
+      if (!q) {
+        this.logger.warn(`bank exhaustion: label ${pick.labelId} has no unseen published question for student ${studentId}`);
+        continue;
+      }
+      used.add(q.id);
+      resolved.push({ labelId: pick.labelId, question: q });
+    }
+    if (resolved.length === 0) return null;
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    return this.prisma.wathb.create({
+      data: {
+        studentId,
+        scheduledFor: today,
+        bundleType,
+        status: 'pending',
+        questions: {
+          create: resolved.map((r, i) => ({
+            position: i,
+            questionId: r.question!.id,
+            questionVersionId: r.question!.currentVersionId ?? r.question!.versions[0].id,
+            servedAt: i === 0 ? new Date() : null,
+          })),
+        },
+      },
+      include: { questions: { orderBy: { position: 'asc' }, include: { questionVersion: true, question: { include: { label: true } } } } },
+    });
+  }
+}

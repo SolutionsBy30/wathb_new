@@ -1,0 +1,99 @@
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { MagicLinkService } from '../auth/magic-link.service';
+import { MIN_SAMPLE_FOR_REPORTING } from '../reports/reports.service';
+
+@Injectable()
+export class SupervisorsService {
+  constructor(
+    private prisma: PrismaService,
+    private magicLinks: MagicLinkService,
+  ) {}
+
+  async createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor') {
+    return this.prisma.user.create({
+      data: { mobileE164: mobile, name, role: 'supervisor', supervisor: { create: { type } } },
+      include: { supervisor: true },
+    });
+  }
+
+  /** Student invites a supervisor by mobile — spec §2: "linking is done by student invite." */
+  async invite(studentId: string, mobile: string, name: string, type: 'parent' | 'instructor') {
+    let supervisorUser = await this.prisma.user.findUnique({ where: { mobileE164: mobile } });
+    if (!supervisorUser) {
+      supervisorUser = await this.prisma.user.create({
+        data: { mobileE164: mobile, name, role: 'supervisor', supervisor: { create: { type } } },
+      });
+    } else if (supervisorUser.role !== 'supervisor') {
+      throw new BadRequestException('this mobile number belongs to a non-supervisor account');
+    }
+
+    const link = await this.prisma.studentSupervisor.upsert({
+      where: { studentId_supervisorId: { studentId, supervisorId: supervisorUser.id } },
+      create: { studentId, supervisorId: supervisorUser.id },
+      update: { revokedAt: null },
+    });
+
+    const magicLink = await this.magicLinks.mint({
+      subjectId: supervisorUser.id,
+      subjectType: 'supervisor',
+      purpose: 'link_invite',
+      targetId: link.id,
+    });
+
+    return { studentSupervisorId: link.id, inviteToken: magicLink.token, expiresAt: magicLink.expiresAt };
+  }
+
+  async acceptInvite(supervisorId: string, studentSupervisorId: string) {
+    const link = await this.prisma.studentSupervisor.findUnique({ where: { id: studentSupervisorId } });
+    if (!link) throw new NotFoundException('invite not found');
+    if (link.supervisorId !== supervisorId) throw new ForbiddenException();
+    return this.prisma.studentSupervisor.update({ where: { id: studentSupervisorId }, data: { acceptedAt: new Date() } });
+  }
+
+  /** Consent is explicit and revocable by the student — spec §2. */
+  async revoke(studentId: string, studentSupervisorId: string) {
+    const link = await this.prisma.studentSupervisor.findUnique({ where: { id: studentSupervisorId } });
+    if (!link || link.studentId !== studentId) throw new NotFoundException('link not found');
+    return this.prisma.studentSupervisor.update({ where: { id: studentSupervisorId }, data: { revokedAt: new Date() } });
+  }
+
+  async dashboard(supervisorId: string) {
+    const supervisor = await this.prisma.supervisor.findUnique({ where: { userId: supervisorId } });
+    if (!supervisor) throw new NotFoundException('supervisor not found');
+
+    const links = await this.prisma.studentSupervisor.findMany({
+      where: { supervisorId, acceptedAt: { not: null }, revokedAt: null },
+      include: { student: { include: { user: true } } },
+    });
+
+    const cards = await Promise.all(
+      links.map(async (link) => {
+        const stats = await this.prisma.studentLabelStat.findMany({
+          where: { studentId: link.studentId },
+          include: { label: true },
+        });
+        const reportable = stats.filter((s) => s.nAnswered >= MIN_SAMPLE_FOR_REPORTING);
+        const strongest = reportable.sort((a, b) => b.nCorrect / b.nAnswered - a.nCorrect / a.nAnswered)[0];
+        const weakest = reportable.sort((a, b) => a.nCorrect / a.nAnswered - b.nCorrect / b.nAnswered)[0];
+        const weekStart = new Date();
+        weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay());
+        weekStart.setUTCHours(0, 0, 0, 0);
+        const weekAnswered = await this.prisma.answer.count({
+          where: { studentId: link.studentId, answeredAt: { gte: weekStart } },
+        });
+        return {
+          studentId: link.studentId,
+          name: link.student.user.name,
+          streak: link.student.currentStreak,
+          weekAnswered,
+          testDate: link.student.testDate,
+          topStrength: strongest ? { nameAr: strongest.label.nameAr, nameEn: strongest.label.nameEn, accuracy: strongest.nCorrect / strongest.nAnswered } : null,
+          topWeakness: weakest ? { nameAr: weakest.label.nameAr, nameEn: weakest.label.nameEn, accuracy: weakest.nCorrect / weakest.nAnswered } : null,
+        };
+      }),
+    );
+
+    return { supervisorType: supervisor.type, viewMode: supervisor.type === 'parent' || cards.length <= 3 ? 'family_card' : 'instructor_table', students: cards };
+  }
+}

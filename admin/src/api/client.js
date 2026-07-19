@@ -1,0 +1,67 @@
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const SESSION_KEY = 'wathb_admin_session_token';
+
+export function getToken() {
+  return localStorage.getItem(SESSION_KEY);
+}
+export function setToken(token) {
+  if (token) localStorage.setItem(SESSION_KEY, token);
+  else localStorage.removeItem(SESSION_KEY);
+}
+
+async function request(path, { method = 'GET', body, isForm = false } = {}) {
+  const headers = {};
+  if (!isForm) headers['Content-Type'] = 'application/json';
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers,
+    body: isForm ? body : body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const err = await res.json();
+      message = err.message || message;
+    } catch {
+      /* body wasn't JSON */
+    }
+    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+export const api = {
+  login: (email, password) => request('/auth/admin/login', { method: 'POST', body: { email, password } }),
+
+  listTests: () => request('/tests'),
+  tree: (testId) => request(`/tests/${testId}/tree`),
+  createTest: (dto) => request('/admin/tests', { method: 'POST', body: dto }),
+  createSection: (testId, dto) => request(`/admin/tests/${testId}/sections`, { method: 'POST', body: dto }),
+  createArea: (sectionId, dto) => request(`/admin/sections/${sectionId}/areas`, { method: 'POST', body: dto }),
+  createLabel: (areaId, dto) => request(`/admin/areas/${areaId}/labels`, { method: 'POST', body: dto }),
+  updateLabel: (id, dto) => request(`/admin/labels/${id}`, { method: 'PATCH', body: dto }),
+  retireLabel: (id) => request(`/admin/labels/${id}/retire`, { method: 'POST' }),
+
+  listQuestions: (params = {}) => {
+    const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''))).toString();
+    return request(`/admin/questions${qs ? `?${qs}` : ''}`);
+  },
+  getQuestion: (id) => request(`/admin/questions/${id}`),
+  createQuestion: (dto) => request('/admin/questions', { method: 'POST', body: dto }),
+  newVersion: (id, dto) => request(`/admin/questions/${id}/versions`, { method: 'POST', body: dto }),
+  setStatus: (id, status) => request(`/admin/questions/${id}/status`, { method: 'PATCH', body: { status } }),
+  bulkRetire: (ids) => request('/admin/questions/bulk-retire', { method: 'POST', body: { ids } }),
+  findSimilar: (stem) => request(`/admin/questions/similar?stem=${encodeURIComponent(stem)}`),
+
+  importCsv: (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request('/admin/questions/import', { method: 'POST', body: form, isForm: true });
+  },
+  patchImportRow: (jobId, rowIndex, patch) => request(`/admin/questions/import/${jobId}/rows/${rowIndex}`, { method: 'PATCH', body: patch }),
+  commitImport: (jobId) => request(`/admin/questions/import/${jobId}/commit`, { method: 'POST' }),
+};

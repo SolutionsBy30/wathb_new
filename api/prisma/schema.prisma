@@ -1,0 +1,372 @@
+// Wathb API — Prisma schema, Phase 0-2 scope (foundations, the loop, intelligence).
+// Packages/subscriptions/discount codes/notifications/payments/geography are later phases —
+// see /api/README.md for what's deliberately out of scope right now.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  supervisor
+  student
+}
+
+enum SupervisorType {
+  parent
+  instructor
+}
+
+enum Track {
+  scientific
+  humanities
+}
+
+enum QuestionType {
+  mcq_single
+  mcq_multi
+  numeric_entry
+  true_false
+}
+
+enum QuestionStatus {
+  draft
+  in_review
+  published
+  retired
+}
+
+enum BundleType {
+  standard
+  passage
+  placement
+}
+
+enum WathbStatus {
+  pending
+  opened
+  completed
+  expired
+  partial
+}
+
+enum MagicLinkPurpose {
+  wathb
+  weekly_report
+  supervisor_report
+  renewal
+  link_invite
+  dev_login
+}
+
+enum SubjectType {
+  student
+  supervisor
+}
+
+enum AccuracyBand {
+  low
+  mid
+  high
+}
+
+enum SpeedBand {
+  slow
+  on_pace
+  fast
+}
+
+model User {
+  id               String    @id @default(uuid())
+  mobileE164       String?   @unique
+  email            String?   @unique
+  passwordHash     String?
+  name             String
+  role             Role
+  locale           String    @default("ar")
+  timezone         String    @default("Asia/Riyadh")
+  status           String    @default("active")
+  whatsappOptInAt  DateTime?
+  createdAt        DateTime  @default(now())
+
+  student    Student?
+  supervisor Supervisor?
+
+  @@map("users")
+}
+
+model Student {
+  userId           String    @id
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track            Track?
+  targetTestId     String?
+  targetTest       Test?     @relation(fields: [targetTestId], references: [id])
+  targetScore      Int?
+  testDate         DateTime?
+  skipDays         Int[]     @default([])
+  currentStreak    Int       @default(0)
+  lastCompletedOn  DateTime?
+  placementDoneAt  DateTime?
+
+  wathbs             Wathb[]
+  answers             Answer[]
+  labelStats          StudentLabelStat[]
+  supervisorLinks     StudentSupervisor[]
+
+  @@map("students")
+}
+
+model Supervisor {
+  userId String         @id
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   SupervisorType
+
+  studentLinks StudentSupervisor[]
+
+  @@map("supervisors")
+}
+
+model StudentSupervisor {
+  id           String     @id @default(uuid())
+  studentId    String
+  student      Student    @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  supervisorId String
+  supervisor   Supervisor @relation(fields: [supervisorId], references: [userId], onDelete: Cascade)
+  acceptedAt   DateTime?
+  revokedAt    DateTime?
+
+  @@unique([studentId, supervisorId])
+  @@map("student_supervisors")
+}
+
+model Test {
+  id       String    @id @default(uuid())
+  nameAr   String
+  nameEn   String
+  isActive Boolean   @default(true)
+  sections Section[]
+  students Student[]
+
+  @@map("tests")
+}
+
+model Section {
+  id     String @id @default(uuid())
+  testId String
+  test   Test   @relation(fields: [testId], references: [id], onDelete: Cascade)
+  nameAr String
+  nameEn String
+  weight Float  @default(1)
+  sort   Int    @default(0)
+  areas  Area[]
+
+  @@map("sections")
+}
+
+model Area {
+  id               String   @id @default(uuid())
+  sectionId        String
+  section          Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  nameAr           String
+  nameEn           String
+  appliesToTracks  Track[]
+  sort             Int      @default(0)
+  labels           Label[]
+
+  @@map("areas")
+}
+
+model Label {
+  id                String     @id @default(uuid())
+  areaId            String
+  area              Area       @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  nameAr            String
+  nameEn            String
+  defaultTimeLimitS Int        @default(45)
+  sort              Int        @default(0)
+  isRetired         Boolean    @default(false)
+
+  passages          Passage[]
+  questions         Question[]
+  labelStats        StudentLabelStat[]
+  adviceRules       AdviceRule[]
+
+  @@map("labels")
+}
+
+model Passage {
+  id        String     @id @default(uuid())
+  labelId   String
+  label     Label      @relation(fields: [labelId], references: [id])
+  body      String
+  status    QuestionStatus @default(draft)
+  questions Question[]
+
+  @@map("passages")
+}
+
+model Question {
+  id                String         @id @default(uuid())
+  labelId           String
+  label             Label          @relation(fields: [labelId], references: [id])
+  passageId         String?
+  passage           Passage?       @relation(fields: [passageId], references: [id])
+  type              QuestionType   @default(mcq_single)
+  difficulty        Int            @default(3)
+  timeLimitS        Int?
+  status            QuestionStatus @default(draft)
+  source            String?
+  stemHash          String
+  currentVersionId  String?
+  createdBy         String?
+  createdAt         DateTime       @default(now())
+
+  versions          QuestionVersion[] @relation("QuestionToVersions")
+  wathbQuestions    WathbQuestion[]
+  answers           Answer[]
+
+  @@index([labelId, status])
+  @@index([stemHash])
+  @@map("questions")
+}
+
+model QuestionVersion {
+  id            String   @id @default(uuid())
+  questionId    String
+  question      Question @relation("QuestionToVersions", fields: [questionId], references: [id], onDelete: Cascade)
+  version       Int
+  stem          String
+  stemImageUrl  String?
+  options       Json
+  correctKey    String
+  explanation   String
+  createdAt     DateTime @default(now())
+  createdBy     String?
+
+  wathbQuestions WathbQuestion[]
+  answers        Answer[]
+
+  @@unique([questionId, version])
+  @@map("question_versions")
+}
+
+model Wathb {
+  id            String      @id @default(uuid())
+  studentId     String
+  student       Student     @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  scheduledFor  DateTime    @db.Date
+  bundleType    BundleType  @default(standard)
+  status        WathbStatus @default(pending)
+  openedAt      DateTime?
+  completedAt   DateTime?
+  magicLinkId   String?
+
+  questions WathbQuestion[]
+  answers   Answer[]
+
+  @@unique([studentId, scheduledFor])
+  @@map("wathbs")
+}
+
+model WathbQuestion {
+  id                String          @id @default(uuid())
+  wathbId           String
+  wathb             Wathb           @relation(fields: [wathbId], references: [id], onDelete: Cascade)
+  questionId        String
+  question          Question        @relation(fields: [questionId], references: [id])
+  questionVersionId String
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id])
+  position          Int
+  servedAt          DateTime?
+
+  @@unique([wathbId, position])
+  @@map("wathb_questions")
+}
+
+model Answer {
+  id                String          @id @default(uuid())
+  wathbId           String
+  wathb             Wathb           @relation(fields: [wathbId], references: [id], onDelete: Cascade)
+  studentId         String
+  student           Student         @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  questionId        String
+  question          Question        @relation(fields: [questionId], references: [id])
+  questionVersionId String
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id])
+  labelId           String
+  selectedKey       String?
+  isCorrect         Boolean
+  timeTakenMs       Int
+  timedOut          Boolean         @default(false)
+  isReview          Boolean         @default(false)
+  answeredAt        DateTime        @default(now())
+
+  @@unique([wathbId, questionId])
+  @@map("answers")
+}
+
+model MagicLink {
+  id            String            @id @default(uuid())
+  tokenHash     String            @unique
+  subjectId     String
+  subjectType   SubjectType
+  purpose       MagicLinkPurpose
+  targetId      String?
+  expiresAt     DateTime
+  maxUses       Int               @default(1)
+  uses          Int               @default(0)
+  firstUsedAt   DateTime?
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime          @default(now())
+
+  accessLog MagicLinkAccess[]
+
+  @@map("magic_links")
+}
+
+model MagicLinkAccess {
+  id          String    @id @default(uuid())
+  magicLinkId String
+  magicLink   MagicLink @relation(fields: [magicLinkId], references: [id], onDelete: Cascade)
+  ip          String?
+  userAgent   String?
+  accessedAt  DateTime  @default(now())
+
+  @@map("magic_link_access")
+}
+
+// Materialised on every answer write — the selection engine reads this, never `answers` directly.
+model StudentLabelStat {
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  labelId         String
+  label           Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  nAnswered       Int      @default(0)
+  nCorrect        Int      @default(0)
+  meanTimeMs      Int      @default(0)
+  difficultyLevel Int      @default(3)
+  lastServedAt    DateTime?
+
+  @@id([studentId, labelId])
+  @@map("student_label_stats")
+}
+
+// §6.5 — hand-written coaching strings, admin-editable data, not generated text.
+model AdviceRule {
+  id           String       @id @default(uuid())
+  labelId      String
+  label        Label        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  accuracyBand AccuracyBand
+  speedBand    SpeedBand
+  textAr       String
+  textEn       String
+
+  @@unique([labelId, accuracyBand, speedBand])
+  @@map("advice_rules")
+}
