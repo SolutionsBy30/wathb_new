@@ -45,19 +45,31 @@ export class OtpService {
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000);
     await this.prisma.otpCode.create({ data: { mobileE164: mobile, subjectType, codeHash: hashCode(code), expiresAt } });
 
-    await this.channel.sendTemplate({
-      to: mobile,
-      templateName: this.config.get('WHATSAPP_TEMPLATE_OTP', 'wathb_otp_login'),
-      languageCode: 'ar',
-      bodyParams: [code],
-    });
+    // A misconfigured/failing WhatsApp integration (bad phone number ID,
+    // expired token, unapproved template, ...) must never turn into a 500
+    // that locks everyone out of login — the code is already generated and
+    // stored, so fall back to surfacing it the same way "not configured"
+    // does instead of propagating the provider error.
+    let deliveryFailed = false;
+    if (whatsappConfigured) {
+      try {
+        await this.channel.sendTemplate({
+          to: mobile,
+          templateName: this.config.get('WHATSAPP_TEMPLATE_OTP', 'wathb_otp_login'),
+          languageCode: 'ar',
+          bodyParams: [code],
+        });
+      } catch {
+        deliveryFailed = true;
+      }
+    }
 
     const allowDev = this.config.get('ALLOW_DEV_LOGIN') === 'true';
-    // The fallback code isn't a secret — nothing actually sent it anywhere —
-    // so always surface it. A real WhatsApp-delivered code only appears here
-    // when ALLOW_DEV_LOGIN is explicitly on.
-    const devCode = !whatsappConfigured ? code : allowDev ? code : undefined;
-    return { sent: true, expiresInMinutes: OTP_TTL_MINUTES, devCode };
+    // The fallback/undelivered code isn't a secret — nothing actually sent
+    // it anywhere — so always surface it. A successfully WhatsApp-delivered
+    // code only appears here when ALLOW_DEV_LOGIN is explicitly on.
+    const devCode = !whatsappConfigured || deliveryFailed ? code : allowDev ? code : undefined;
+    return { sent: !deliveryFailed, expiresInMinutes: OTP_TTL_MINUTES, devCode };
   }
 
   async verifyOtp(mobile: string, subjectType: SubjectType, code: string) {
