@@ -21,6 +21,10 @@ function heatmapWeeks(heatmap, weeks = 8) {
 export default function StudentReport({ report, onBack }) {
   if (!report) return <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>جاري التحميل…</p>;
 
+  const trend = report.trend.filter((t) => t.accuracy !== null);
+  const maxAcc = Math.max(...trend.map((t) => t.accuracy), 0.01);
+  const allLabels = report.accuracyByArea.flatMap((a) => a.labels ?? []);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -34,33 +38,87 @@ export default function StudentReport({ report, onBack }) {
         <Stat label="سلسلة الوثبات" value={report.streak.current} color="var(--lime)" />
       </div>
 
-      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
         <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الدقة حسب المجال</h2>
         {report.accuracyByArea.length === 0 && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>لا توجد بيانات بعد.</p>}
         {report.accuracyByArea.map((area) => (
-          <div key={area.areaId} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span style={{ color: 'var(--sand)' }}>{area.nameAr}</span>
-              <span style={{ fontFamily: 'var(--font-latin)', color: area.collecting ? 'var(--mist)' : 'var(--teal-ink)' }}>
-                {area.collecting ? `قيد الجمع — ${area.nAnswered} من ${area.needed}` : `${Math.round(area.accuracy * 100)}%`}
-              </span>
+          <div key={area.areaId} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: 'var(--sand)', fontWeight: 500 }}>{area.nameAr}</span>
+                <span style={{ fontFamily: 'var(--font-latin)', color: area.collecting ? 'var(--mist)' : 'var(--teal-ink)' }}>
+                  {area.collecting ? `قيد الجمع — ${area.nAnswered} من ${area.needed}` : `${Math.round(area.accuracy * 100)}%`}
+                </span>
+              </div>
+              <Bar value={area.collecting ? 0 : Math.round(area.accuracy * 100)} tone={!area.collecting && area.accuracy < 0.6 ? 'coral' : 'teal'} style={{ height: '7px' }} />
             </div>
-            <Bar value={area.collecting ? 0 : Math.round(area.accuracy * 100)} tone={!area.collecting && area.accuracy < 0.6 ? 'coral' : 'teal'} style={{ height: '7px' }} />
+            {area.labels?.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', paddingInlineStart: '8px' }}>
+                {area.labels.map((l) => (
+                  <div key={l.labelId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                    <span style={{ color: 'var(--mist)' }}>{l.nameAr}</span>
+                    <span style={{ fontFamily: 'var(--font-latin)', color: l.collecting ? 'var(--mist)' : l.accuracy < 0.6 ? 'var(--coral)' : 'var(--sand)' }}>
+                      {l.collecting ? `${l.nAnswered}/${l.needed}` : `${Math.round(l.accuracy * 100)}%`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الاتساق</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-          {heatmapWeeks(report.heatmap).map((week, wi) => (
-            <div key={wi} style={{ display: 'flex', gap: '3px', justifyContent: 'flex-end' }}>
-              {week.map((filled, di) => (
-                <div key={di} style={{ width: '13px', height: '13px', borderRadius: '3px', background: filled ? 'var(--lime)' : 'var(--indigo)' }} />
+      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '260px', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>اتجاه الأداء — أسبوعياً</h2>
+          {trend.length === 0 ? (
+            <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد بيانات كافية بعد.</p>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '80px' }}>
+              {trend.map((t, i) => (
+                <div
+                  key={t.weekStart}
+                  style={{
+                    flex: 1,
+                    height: `${12 + Math.round((t.accuracy / maxAcc) * 60)}px`,
+                    borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0',
+                    background: i === trend.length - 1 ? 'var(--lime)' : 'var(--on-indigo-line)',
+                  }}
+                  title={`${t.weekStart}: ${Math.round(t.accuracy * 100)}%`}
+                />
               ))}
             </div>
-          ))}
+          )}
         </div>
+        <div style={{ flex: 1, minWidth: '260px', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الاتساق</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            {heatmapWeeks(report.heatmap).map((week, wi) => (
+              <div key={wi} style={{ display: 'flex', gap: '3px', justifyContent: 'flex-end' }}>
+                {week.map((filled, di) => (
+                  <div key={di} style={{ width: '13px', height: '13px', borderRadius: '3px', background: filled ? 'var(--lime)' : 'var(--indigo)' }} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        <h2 style={{ margin: '0 0 10px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>السرعة مقابل الهدف</h2>
+        {allLabels.length === 0 && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد بيانات بعد.</p>}
+        {allLabels.map((l) => {
+          const hasTiming = l.meanTimeS != null && l.targetTimeS != null;
+          const diff = hasTiming ? l.meanTimeS - l.targetTimeS : null;
+          const speedText = !hasTiming ? '—' : diff <= 0 ? `أسرع من الهدف بـ${Math.abs(diff)}ث` : `أبطأ من الهدف بـ${diff}ث`;
+          const speedColor = !hasTiming ? 'var(--mist)' : diff <= 0 ? 'var(--teal-ink)' : 'var(--coral)';
+          return (
+            <div key={l.labelId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '5px 0', borderBottom: '0.5px solid var(--on-indigo-line)' }}>
+              <span style={{ color: 'var(--sand)' }}>{l.nameAr}</span>
+              <span style={{ fontFamily: 'var(--font-latin)', color: speedColor }}>{speedText}</span>
+            </div>
+          );
+        })}
       </div>
 
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>

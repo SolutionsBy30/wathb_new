@@ -1,3 +1,5 @@
+import { Bar } from '../design-system/components/Bar';
+
 function daysUntil(dateStr) {
   if (!dateStr) return null;
   const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
@@ -7,20 +9,40 @@ function daysUntil(dateStr) {
 function StudentCard({ s, onOpen }) {
   const countdown = daysUntil(s.testDate);
   return (
-    <button
-      onClick={() => onOpen(s.studentId)}
+    <div
       style={{
-        all: 'unset', cursor: 'pointer', boxSizing: 'border-box', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)',
-        padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '260px',
+        boxSizing: 'border-box', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)',
+        padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '260px', width: '320px',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '16px', fontWeight: 500, color: 'var(--sand)' }}>{s.name}</span>
         <span style={{ fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--lime)' }}>🔥 {s.streak}</span>
       </div>
-      <div style={{ display: 'flex', gap: '6px', fontSize: '12px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>
-        <span>هذا الأسبوع: {s.weekAnswered} سؤال</span>
+
+      <div style={{ display: 'flex', gap: '18px', background: 'var(--indigo)', borderRadius: 'var(--radius-sm)', padding: '10px 14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '10px', color: 'var(--mist)' }}>إجمالي الأسئلة</span>
+          <span style={{ fontFamily: 'var(--font-latin)', fontSize: '15px', fontWeight: 500, color: 'var(--sand)' }}>{s.totalAnswered ?? 0}</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '10px', color: 'var(--mist)' }}>صحيحة</span>
+          <span style={{ fontFamily: 'var(--font-latin)', fontSize: '15px', fontWeight: 500, color: 'var(--teal-ink)' }}>{s.totalCorrect ?? 0}</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '10px', color: 'var(--mist)' }}>خاطئة</span>
+          <span style={{ fontFamily: 'var(--font-latin)', fontSize: '15px', fontWeight: 500, color: 'var(--coral)' }}>{s.totalWrong ?? 0}</span>
+        </div>
       </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--mist)' }}>
+          <span>{s.weekAnswered} من {s.weeklyTarget ?? 35} هذا الأسبوع</span>
+          <span>{Math.round((s.weekAnswered / (s.weeklyTarget ?? 35)) * 100)}%</span>
+        </div>
+        <Bar value={Math.round((s.weekAnswered / (s.weeklyTarget ?? 35)) * 100)} tone="teal" style={{ height: '6px' }} />
+      </div>
+
       {s.topStrength && (
         <span style={{ fontSize: '12px', color: 'var(--teal-ink)', fontFamily: 'var(--font-arabic)' }}>
           أقوى مجال: {s.topStrength.nameAr} ({Math.round(s.topStrength.accuracy * 100)}%)
@@ -34,7 +56,17 @@ function StudentCard({ s, onOpen }) {
       {countdown !== null && (
         <span style={{ fontSize: '11px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>الاختبار خلال {countdown} يوماً</span>
       )}
-    </button>
+      <button
+        onClick={() => onOpen(s.studentId)}
+        style={{
+          width: '100%', minHeight: '40px', borderRadius: '999px', border: 'none', cursor: 'pointer',
+          background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--sand)',
+          fontFamily: 'var(--font-arabic)', fontSize: '13px', fontWeight: 500,
+        }}
+      >
+        عرض التقرير
+      </button>
+    </div>
   );
 }
 

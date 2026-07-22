@@ -81,11 +81,17 @@ export class SupervisorsService {
         const weekAnswered = await this.prisma.answer.count({
           where: { studentId: link.studentId, answeredAt: { gte: weekStart } },
         });
+        const totalAnswered = stats.reduce((sum, s) => sum + s.nAnswered, 0);
+        const totalCorrect = stats.reduce((sum, s) => sum + s.nCorrect, 0);
         return {
           studentId: link.studentId,
           name: link.student.user.name,
           streak: link.student.currentStreak,
           weekAnswered,
+          weeklyTarget: 35,
+          totalAnswered,
+          totalCorrect,
+          totalWrong: totalAnswered - totalCorrect,
           testDate: link.student.testDate,
           topStrength: strongest ? { nameAr: strongest.label.nameAr, nameEn: strongest.label.nameEn, accuracy: strongest.nCorrect / strongest.nAnswered } : null,
           topWeakness: weakest ? { nameAr: weakest.label.nameAr, nameEn: weakest.label.nameEn, accuracy: weakest.nCorrect / weakest.nAnswered } : null,
