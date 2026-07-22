@@ -47,8 +47,9 @@ export class ReportsService {
     startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
     startOfWeek.setUTCHours(0, 0, 0, 0);
 
-    const [lifetimeAnswered, weekAnswered, labelStats, recentMistakes, trend, heatmap] = await Promise.all([
+    const [lifetimeAnswered, lifetimeCorrect, weekAnswered, labelStats, recentMistakes, trend, heatmap] = await Promise.all([
       this.prisma.answer.count({ where: { studentId } }),
+      this.prisma.answer.count({ where: { studentId, isCorrect: true } }),
       this.prisma.answer.count({ where: { studentId, answeredAt: { gte: startOfWeek } } }),
       this.prisma.studentLabelStat.findMany({
         where: { studentId },
@@ -122,6 +123,8 @@ export class ReportsService {
       student: { id: student.userId, name: student.user.name },
       totals: {
         lifetimeAnswered,
+        lifetimeCorrect,
+        lifetimeWrong: lifetimeAnswered - lifetimeCorrect,
         weekAnswered,
         dailyTarget: DEFAULT_DAILY_TARGET,
       },

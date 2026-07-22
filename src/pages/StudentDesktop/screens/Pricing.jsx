@@ -5,7 +5,7 @@ function halalasToSar(h) {
   return (h / 100).toFixed(0);
 }
 
-export default function Pricing({ packages, onSubscribe, blockedMessage }) {
+export default function Pricing({ packages, onSubscribe, blockedMessage, onBack }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState(null);
 
@@ -22,6 +22,11 @@ export default function Pricing({ packages, onSubscribe, blockedMessage }) {
 
   return (
     <>
+      {onBack && (
+        <button onClick={onBack} style={{ alignSelf: 'flex-start', border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
+          → رجوع
+        </button>
+      )}
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '24px', fontWeight: 500, color: 'var(--sand)' }}>
         الباقات
       </h1>

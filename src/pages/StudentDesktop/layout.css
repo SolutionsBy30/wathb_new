@@ -1,69 +1,120 @@
-/* Structural layout for Student Desktop — the only parts that need to change
-   shape at narrow viewports. Colors, spacing scale, and typography stay in
-   the design system and inline styles; this file only ever touches
-   width / gap / padding / grid-template-columns. */
+/* Structural layout for the student app — mirrors Student.dc.html: a single
+   narrow "shell" card (mobile-first), not a permanent desktop sidebar. Only
+   the Home screen splits into a rail + content at wider viewports; every
+   other screen stays single-column with a bottom nav bar. */
+
+.sd-page {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  display: flex;
+  justify-content: center;
+  background: var(--sand-deep);
+  padding: 24px 0;
+}
 
 .sd-shell {
-  width: 100%;
-  max-width: 1120px;
-  display: flex;
-  gap: 32px;
-  padding: 32px;
-  box-sizing: border-box;
-}
-
-.sd-sidebar {
-  width: 280px;
-  flex: none;
+  width: 390px;
+  max-width: 100%;
+  min-height: 800px;
+  border-radius: 28px;
+  background: var(--indigo);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 24px;
 }
 
-.sd-main {
+.sd-screen {
   flex: 1;
-  min-width: 0;
-  padding: 36px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  box-sizing: border-box;
+  padding: 24px 24px 0;
+  gap: 20px;
+  overflow: auto;
 }
 
-.sd-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
-.sd-grid-6040 {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr;
+.sd-screen-tight {
+  padding: 28px 24px;
   gap: 20px;
 }
 
-@media (max-width: 860px) {
+.sd-split {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.sd-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sd-card-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sd-stat-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sd-bottom-nav {
+  display: flex;
+  border-top: 0.5px solid var(--on-indigo-line);
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  margin-top: auto;
+}
+
+.sd-nav-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 10px 4px;
+  font-family: var(--font-arabic);
+  font-size: 12px;
+  color: var(--mist);
+}
+
+.sd-nav-btn.active {
+  color: var(--lime);
+  font-weight: 500;
+}
+
+@media (min-width: 760px) {
   .sd-shell {
-    flex-direction: column;
-    gap: 20px;
-    padding: 16px;
-  }
-  .sd-sidebar {
     width: 100%;
+    max-width: 960px;
+    min-height: 100vh;
+    border-radius: 0;
   }
-  .sd-main {
-    padding: 20px;
+  .sd-card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
   }
-  .sd-grid-2,
-  .sd-grid-6040 {
-    grid-template-columns: 1fr;
+  .sd-split {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    align-items: start;
+    gap: 36px;
+  }
+  .sd-rail {
+    position: sticky;
+    top: 28px;
+  }
+  .sd-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 32px;
   }
 }
 
-@media (max-width: 480px) {
+@media (min-width: 1080px) {
   .sd-shell {
-    padding: 12px;
-  }
-  .sd-main {
-    padding: 16px;
+    max-width: 1080px;
   }
 }

@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StreakStrip } from '../../design-system/components/StreakStrip';
-import markOnIndigo from '../../design-system/assets/mark-on-indigo.svg';
 import './layout.css';
 import { api, getToken, setToken, decodeSession } from '../../api/client';
 import Landing from '../Landing';
@@ -14,14 +12,6 @@ import Performance from './screens/Performance';
 import Profile from './screens/Profile';
 import Pricing from './screens/Pricing';
 import WeeklyReport from './screens/WeeklyReport';
-
-function navBtnStyle(active) {
-  return {
-    textAlign: 'start', border: 'none', cursor: 'pointer', padding: '10px 14px', borderRadius: 'var(--radius-md)',
-    fontFamily: 'var(--font-arabic)', fontSize: '14px', fontWeight: active ? 500 : 400,
-    color: active ? 'var(--sand)' : 'var(--mist)', background: active ? 'var(--on-indigo-subtle)' : 'transparent',
-  };
-}
 
 export default function StudentDesktop() {
   const [screen, setScreen] = useState('loading');
@@ -310,6 +300,7 @@ export default function StudentDesktop() {
     const weeklyTarget = 35;
     const weeklyAnswered = report?.totals?.weekAnswered ?? 0;
     const worstArea = report?.accuracyByArea?.filter((a) => !a.collecting).sort((a, b) => a.accuracy - b.accuracy)[0];
+    const streakCount = report?.streak?.current ?? 0;
     return {
       homeHeadline: alreadyDoneToday ? 'راح تكون هنا غداً وثبة جديدة.' : 'اختر وثبة اليوم.',
       dailyTip: worstArea
@@ -320,6 +311,11 @@ export default function StudentDesktop() {
       alreadyDoneToday,
       todayScoreText: completeResult ? `أجبت ${completeResult.correctCount} من ${completeResult.total} إجابة صحيحة.` : '',
       startButtonLabel: alreadyDoneToday ? 'أُنجزت وثبة اليوم' : 'ابدأ الوثبة',
+      streakCount,
+      streakDays: Array.from({ length: 7 }, (_, i) => i >= 7 - Math.min(streakCount, 7)),
+      totalAnswered: report?.totals?.lifetimeAnswered ?? 0,
+      totalCorrect: report?.totals?.lifetimeCorrect ?? 0,
+      totalWrong: report?.totals?.lifetimeWrong ?? 0,
     };
   }, [report, alreadyDoneToday, completeResult]);
 
@@ -365,22 +361,24 @@ export default function StudentDesktop() {
 
   if (screen === 'login') {
     return (
-      <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '440px', padding: '32px' }}>
-          <Login
-            initialMode={loginMode}
-            onRequestCode={requestOtp}
-            onVerifyCode={verifyOtp}
-            onSignup={signupStudent}
-            error={loginError}
-            busy={loginBusy}
-          />
-          <button
-            onClick={goLanding}
-            style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
-          >
-            ← العودة للصفحة الرئيسية
-          </button>
+      <div dir="rtl" className="sd-page">
+        <div className="sd-shell" style={{ alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', width: '100%', padding: '0 24px' }}>
+            <Login
+              initialMode={loginMode}
+              onRequestCode={requestOtp}
+              onVerifyCode={verifyOtp}
+              onSignup={signupStudent}
+              error={loginError}
+              busy={loginBusy}
+            />
+            <button
+              onClick={goLanding}
+              style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '12px', alignSelf: 'center' }}
+            >
+              ← العودة للصفحة الرئيسية
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -388,48 +386,28 @@ export default function StudentDesktop() {
 
   if (screen === 'goal') {
     return (
-      <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '440px', padding: '32px' }}>
+      <div dir="rtl" className="sd-page">
+        <div className="sd-shell sd-screen sd-screen-tight" style={{ justifyContent: 'center' }}>
           <GoalSetup tests={tests} onSubmit={handleGoalSubmit} busy={goalBusy} />
         </div>
       </div>
     );
   }
 
+  // Home / Dashboard / Profile keep the bottom tab bar — the focused/immersive
+  // screens (Question, Explanations, Complete, Pricing, WeeklyReport) don't,
+  // matching Student.dc.html's bottomNavStyle only appearing on those three.
+  const tabScreens = ['home', 'performance', 'profile'];
+  const showBottomNav = tabScreens.includes(screen);
+
   return (
-    <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--indigo)', display: 'flex', justifyContent: 'center' }}>
+    <div dir="rtl" className="sd-page">
       <div className="sd-shell">
-        <aside className="sd-sidebar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img src={markOnIndigo} alt="وثب" style={{ width: '36px', height: '33px' }} />
-            <span style={{ fontFamily: 'var(--font-arabic)', fontWeight: 600, fontSize: '18px', color: 'var(--sand)' }}>وثب</span>
-          </div>
-
-          <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '15px', fontWeight: 500, color: 'var(--sand)' }}>{student?.user?.name}</span>
-            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{student?.targetTest?.nameAr}</span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>سلسلة الوثبات</span>
-              <span style={{ fontFamily: 'var(--font-latin)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>{report?.streak?.current ?? 0}</span>
-            </div>
-            <StreakStrip days={Array.from({ length: 7 }, (_, i) => i >= 7 - Math.min(report?.streak?.current ?? 0, 7))} style={{ width: '100%', height: '26px' }} />
-          </div>
-
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <button onClick={goHome} style={navBtnStyle(screen === 'home')}>الرئيسية</button>
-            <button onClick={goPerformance} style={navBtnStyle(screen === 'performance')}>لوحتي</button>
-            <button onClick={goProfile} style={navBtnStyle(screen === 'profile')}>ملفي</button>
-          </nav>
-        </aside>
-
-        <main className="sd-main" style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-lg)' }}>
+        <div className={`sd-screen${showBottomNav ? '' : ' sd-screen-tight'}`}>
           {wathbError && (
             <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{wathbError}</p>
           )}
-          {screen === 'home' && <Home vm={homeVm} goTestPicker={startWathb} />}
+          {screen === 'home' && <Home vm={homeVm} student={student} goTestPicker={startWathb} />}
           {screen === 'question' && questionVm && (
             <Question vm={questionVm} selectOption={setSelectedIndex} confirmAnswer={confirmAnswer} />
           )}
@@ -442,7 +420,7 @@ export default function StudentDesktop() {
           {screen === 'performance' && <Performance report={report} />}
           {screen === 'weeklyReport' && <WeeklyReport report={report} onOpenPerformance={goPerformance} />}
           {screen === 'pricing' && (
-            <Pricing packages={packages} onSubscribe={subscribeToPackage} blockedMessage={pricingMessage} />
+            <Pricing packages={packages} onSubscribe={subscribeToPackage} blockedMessage={pricingMessage} onBack={goHome} />
           )}
           {screen === 'profile' && (
             <Profile
@@ -456,7 +434,15 @@ export default function StudentDesktop() {
               inviteError={inviteError}
             />
           )}
-        </main>
+
+          {showBottomNav && (
+            <div className="sd-bottom-nav">
+              <button onClick={goHome} className={`sd-nav-btn${screen === 'home' ? ' active' : ''}`}>الرئيسية</button>
+              <button onClick={goPerformance} className={`sd-nav-btn${screen === 'performance' ? ' active' : ''}`}>لوحة التحكم</button>
+              <button onClick={goProfile} className={`sd-nav-btn${screen === 'profile' ? ' active' : ''}`}>ملفي</button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
