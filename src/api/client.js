@@ -48,6 +48,7 @@ export const api = {
   // number to receive the code.
   requestOtp: (mobile) => request('/auth/otp/request', { method: 'POST', body: { mobile, subjectType: 'student' }, auth: false }),
   verifyOtp: (mobile, code) => request('/auth/otp/verify', { method: 'POST', body: { mobile, subjectType: 'student', code }, auth: false }),
+  signupStudent: (mobile, name) => request('/auth/signup/student', { method: 'POST', body: { mobile, name }, auth: false }),
 
   // Exchanging the link a real WhatsApp Wathb notification delivers (see
   // api/src/notifications/notifications.service.ts) — not part of login.

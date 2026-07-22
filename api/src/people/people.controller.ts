@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { SupervisorsService } from './supervisors.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
@@ -24,6 +24,12 @@ export class PeopleController {
   @Post('admin/supervisors')
   createSupervisor(@Body() dto: CreateSupervisorDto) {
     return this.supervisors.createSupervisor(dto.mobile, dto.name, dto.type);
+  }
+
+  @RequireSession('admin')
+  @Get('admin/students/search')
+  searchStudent(@Query('mobile') mobile: string) {
+    return this.students.searchByMobile(mobile);
   }
 
   @RequireSession('student')

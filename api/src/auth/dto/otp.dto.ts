@@ -13,6 +13,6 @@ export class VerifyOtpDto {
   @IsIn(['student', 'supervisor'])
   subjectType!: 'student' | 'supervisor';
 
-  @IsString() @Length(6, 6)
+  @IsString() @Length(4, 6)
   code!: string;
 }

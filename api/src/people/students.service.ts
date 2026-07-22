@@ -1,17 +1,40 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccountsService } from './accounts.service';
 import { GoalSetupDto } from './dto/people.dto';
 
 @Injectable()
 export class StudentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private accounts: AccountsService,
+  ) {}
 
-  async createStudent(mobile: string, name: string) {
-    const user = await this.prisma.user.create({
-      data: { mobileE164: mobile, name, role: 'student', student: { create: {} } },
-      include: { student: true },
+  createStudent(mobile: string, name: string) {
+    return this.accounts.createStudent(mobile, name);
+  }
+
+  /** Admin lookup for manual actions (e.g. wire-transfer activation) — exact mobile match. */
+  async searchByMobile(mobile: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { mobileE164: mobile },
+      include: {
+        student: {
+          include: {
+            targetTest: true,
+            subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, include: { package: true } },
+          },
+        },
+      },
     });
-    return user;
+    if (!user || !user.student) return null;
+    return {
+      studentId: user.id,
+      name: user.name,
+      mobile: user.mobileE164,
+      targetTest: user.student.targetTest?.nameAr ?? null,
+      latestSubscription: user.student.subscriptions[0] ?? null,
+    };
   }
 
   async me(studentId: string) {

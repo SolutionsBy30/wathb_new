@@ -72,4 +72,8 @@ export const api = {
   listPackages: () => request('/admin/packages'),
   createPackage: (dto) => request('/admin/packages', { method: 'POST', body: dto }),
   updatePackage: (id, dto) => request(`/admin/packages/${id}`, { method: 'PATCH', body: dto }),
+
+  paymentStatus: () => request('/admin/payment-status'),
+  searchStudent: (mobile) => request(`/admin/students/search?mobile=${encodeURIComponent(mobile)}`),
+  activateWireTransfer: (studentId, packageId) => request('/admin/subscriptions/activate-wire-transfer', { method: 'POST', body: { studentId, packageId } }),
 };

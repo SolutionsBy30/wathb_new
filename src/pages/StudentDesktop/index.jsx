@@ -3,6 +3,7 @@ import { StreakStrip } from '../../design-system/components/StreakStrip';
 import markOnIndigo from '../../design-system/assets/mark-on-indigo.svg';
 import './layout.css';
 import { api, getToken, setToken, decodeSession } from '../../api/client';
+import Landing from '../Landing';
 import Login from './screens/Login';
 import GoalSetup from './screens/GoalSetup';
 import Home from './screens/Home';
@@ -24,6 +25,7 @@ function navBtnStyle(active) {
 
 export default function StudentDesktop() {
   const [screen, setScreen] = useState('loading');
+  const [loginMode, setLoginMode] = useState('login');
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState(null);
   const [goalBusy, setGoalBusy] = useState(false);
@@ -87,7 +89,7 @@ export default function StudentDesktop() {
     }
 
     if (!getToken()) {
-      setScreen('login');
+      setScreen('landing');
       return;
     }
     try {
@@ -132,6 +134,23 @@ export default function StudentDesktop() {
       setLoginBusy(false);
     }
   };
+
+  const signupStudent = async (mobile, name) => {
+    setLoginBusy(true);
+    setLoginError(null);
+    try {
+      return await api.signupStudent(mobile, name);
+    } catch (e) {
+      setLoginError(e.message || 'تعذّر إنشاء الحساب');
+      return null;
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const goLanding = () => setScreen('landing');
+  const goLogin = () => { setLoginMode('login'); setScreen('login'); };
+  const goSignup = () => { setLoginMode('signup'); setScreen('login'); };
 
   const verifyOtp = async (mobile, code) => {
     setLoginBusy(true);
@@ -340,11 +359,28 @@ export default function StudentDesktop() {
     );
   }
 
+  if (screen === 'landing') {
+    return <Landing onGoLogin={goLogin} onGoSignup={goSignup} />;
+  }
+
   if (screen === 'login') {
     return (
       <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '440px', padding: '32px' }}>
-          <Login onRequestCode={requestOtp} onVerifyCode={verifyOtp} error={loginError} busy={loginBusy} />
+          <Login
+            initialMode={loginMode}
+            onRequestCode={requestOtp}
+            onVerifyCode={verifyOtp}
+            onSignup={signupStudent}
+            error={loginError}
+            busy={loginBusy}
+          />
+          <button
+            onClick={goLanding}
+            style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+          >
+            ← العودة للصفحة الرئيسية
+          </button>
         </div>
       </div>
     );

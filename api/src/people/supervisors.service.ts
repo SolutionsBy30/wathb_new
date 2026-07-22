@@ -2,19 +2,18 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { MagicLinkService } from '../auth/magic-link.service';
 import { MIN_SAMPLE_FOR_REPORTING } from '../reports/reports.service';
+import { AccountsService } from './accounts.service';
 
 @Injectable()
 export class SupervisorsService {
   constructor(
     private prisma: PrismaService,
     private magicLinks: MagicLinkService,
+    private accounts: AccountsService,
   ) {}
 
-  async createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor') {
-    return this.prisma.user.create({
-      data: { mobileE164: mobile, name, role: 'supervisor', supervisor: { create: { type } } },
-      include: { supervisor: true },
-    });
+  createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor') {
+    return this.accounts.createSupervisor(mobile, name, type);
   }
 
   /** Student invites a supervisor by mobile — spec §2: "linking is done by student invite." */

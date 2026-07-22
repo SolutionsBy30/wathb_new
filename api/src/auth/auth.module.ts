@@ -7,6 +7,7 @@ import { MagicLinkService } from './magic-link.service';
 import { OtpService } from './otp.service';
 import { SessionGuard } from './session.guard';
 import { NotificationChannelModule } from '../notifications/notification-channel.module';
+import { AccountsModule } from '../people/accounts.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { NotificationChannelModule } from '../notifications/notification-channel
       }),
     }),
     NotificationChannelModule,
+    AccountsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, MagicLinkService, OtpService, SessionGuard],

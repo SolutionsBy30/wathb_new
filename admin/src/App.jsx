@@ -7,6 +7,7 @@ import QuestionEditor from './pages/QuestionEditor';
 import BulkImport from './pages/BulkImport';
 import DeliveryLog from './pages/DeliveryLog';
 import Packages from './pages/Packages';
+import Subscriptions from './pages/Subscriptions';
 
 const NAV = [
   { id: 'taxonomy', label: 'الاختبارات والتصنيف' },
@@ -14,6 +15,7 @@ const NAV = [
   { id: 'import', label: 'استيراد جماعي' },
   { id: 'notifications', label: 'الإشعارات' },
   { id: 'packages', label: 'الباقات والتسعير' },
+  { id: 'subscriptions', label: 'الاشتراكات' },
 ];
 
 export default function App() {
@@ -77,6 +79,7 @@ export default function App() {
         {tab === 'import' && <BulkImport />}
         {tab === 'notifications' && <DeliveryLog />}
         {tab === 'packages' && <Packages tests={tests} />}
+        {tab === 'subscriptions' && <Subscriptions />}
       </main>
     </div>
   );

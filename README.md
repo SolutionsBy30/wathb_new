@@ -194,6 +194,45 @@ yet read by anything — the manual trigger sends immediately regardless of a
 supervisor's chosen slot (there's no scheduler to honor it yet, same
 limitation as Phase 3's `plan_day`).
 
+### Landing page, self-signup, OTP fallback, and wire-transfer activation
+
+A follow-up pass added the marketing entry point plus a few pragmatic
+fallbacks for running before WhatsApp/Paymob credentials are configured:
+
+- **Landing page** (`src/pages/Landing`): imported from the Claude Design
+  prototype (`Landing.dc.html`) — header with a login/signup dropdown, hero,
+  a six-card feature grid, a pricing section reading real `Package` rows
+  (not the prototype's hardcoded mock plans), and a footer. This is now the
+  default unauthenticated screen for the student app; the supervisor and
+  admin login links in the header point at their own subdomains
+  (`VITE_SUPERVISOR_APP_URL` / `VITE_ADMIN_APP_URL`).
+- **Self-signup for students and supervisors**
+  (`POST /api/auth/signup/student|supervisor`): previously accounts could
+  only be created by an admin. Signup creates the account (rejecting an
+  already-registered mobile number) and immediately requests an OTP so the
+  client goes straight to the code-entry step, same as login. Both the
+  student and supervisor login screens were rebuilt to match
+  `Student Login.dc.html`: `+966` badge + 9-digit local number, and a
+  login/signup mode toggle.
+- **4-digit OTP, entered as four separate boxes** (matching the prototype)
+  — was a single 6-digit field before.
+- **OTP fallback code**: when no real WhatsApp credentials are configured
+  (`ConsoleChannel` active), the OTP is always the fixed code `1928` instead
+  of a random one — `ConsoleChannel` only logs server-side, which isn't
+  reachable to whoever is testing signup/login, so a predictable code stands
+  in for it. The API also always echoes it back in the response in that case
+  (regardless of `ALLOW_DEV_LOGIN`) since it isn't actually a secret when
+  nothing sent it anywhere. With real WhatsApp credentials configured, codes
+  are random 4-digit and only echoed back when `ALLOW_DEV_LOGIN=true`.
+- **Admin wire-transfer activation**: when Paymob isn't configured (or a
+  student simply pays by bank transfer instead of card), an admin can search
+  a student by mobile (`GET /api/admin/students/search`) and activate a
+  subscription directly (`POST /api/admin/subscriptions/activate-wire-transfer`),
+  recording `paymentRef = wire_transfer:<adminUserId>`. The new admin
+  "الاشتراكات" tab surfaces a banner (backed by `GET /api/admin/payment-status`)
+  when the gateway isn't configured, and exposes this form regardless — a
+  manual override is useful even alongside a working gateway.
+
 ## What's not built yet
 
 Deliberately out of scope for this pass — each is a later phase in the
@@ -240,14 +279,20 @@ cd admin && npm install && npm run dev  # admin console — http://localhost:517
 cd supervisor && npm install && npm run dev  # supervisor — http://localhost:5175/supervisor/
 ```
 
-The student and supervisor apps log in with the **real OTP flow**: enter the
-seeded mobile number, request a code, enter it. The code is sent through
-whichever `NotificationChannel` is active — with no WhatsApp credentials
-configured that's `ConsoleChannel`, so the code lands in the API's log
-output. Set `ALLOW_DEV_LOGIN=true` in `api/.env` (off by default) to also
-have the API echo the code back in the `otp/request` response, so the login
-page can display it directly — convenient for local dev, never set this in
-production.
+The student app opens on the **landing page** (`Landing.dc.html`), not the
+login screen directly — its header has a login/signup dropdown, and the hero
+CTA goes to student signup. Optionally set `VITE_SUPERVISOR_APP_URL` /
+`VITE_ADMIN_APP_URL` (root `.env`) if the other two apps aren't on the
+defaults (`http://localhost:5174/supervisor/`, `http://localhost:5175/admin/`).
+
+Both the student and supervisor apps support **self-signup and login** via
+mobile + OTP: enter a mobile number (new or already-registered), request a
+code, enter the 4-digit code. The code is sent through whichever
+`NotificationChannel` is active — with no WhatsApp credentials configured
+that's `ConsoleChannel`, and the code is always the fixed `1928` in that
+case (no need to check server logs). Set `ALLOW_DEV_LOGIN=true` in
+`api/.env` (off by default) to also echo *real*, WhatsApp-configured codes
+back in the `otp/request` response — never set this in production.
 
 To configure real WhatsApp delivery instead of the console fallback, set
 `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`,
@@ -272,16 +317,27 @@ the same as a real WhatsApp tap would.
 
 ### 5. Trying checkout without real Paymob credentials
 
-Log into the student app with a mobile number that has no active
-subscription (the seed's demo student already has one — create another via
-`POST /api/admin/students` as admin, or just let `otp/request` create the
-account implicitly is not supported; use the admin endpoint). Tap "ابدأ
+Sign up a new student from the landing page (any new mobile number has no
+subscription — the seed's demo student already has one). Tap "ابدأ
 الوثبة" with no subscription and the app routes straight to the pricing
 screen; tap "اشترك الآن" on any package and the console provider's checkout
 URL confirms the subscription and redirects straight back — no card details,
 no real Paymob account needed.
 
-### 6. Tests
+### 6. Trying wire-transfer activation without real Paymob credentials
+
+```bash
+# as admin:
+GET  /api/admin/payment-status                                  # { gatewayConfigured: false } with no Paymob creds
+GET  /api/admin/students/search?mobile=%2B966500000001
+POST /api/admin/subscriptions/activate-wire-transfer  { "studentId": "...", "packageId": "..." }
+```
+
+Or from the admin app: الاشتراكات tab → search by mobile → pick a package →
+"تفعيل عبر تحويل بنكي". Works regardless of whether Paymob is configured;
+the banner just makes it prominent when it's the only option.
+
+### 7. Tests
 
 ```bash
 cd api && npm test     # selection engine + reactive scheduler + subscription + weekly-report unit tests (37 total)
@@ -295,7 +351,8 @@ endpoints mirror spec §9.3:
 ```
 POST /api/auth/admin/login
 POST /api/auth/magic/:token
-POST /api/auth/otp/request | verify    (student/supervisor login)
+POST /api/auth/otp/request | verify    (student/supervisor login — 4-digit code, fixed 1928 when WhatsApp isn't configured)
+POST /api/auth/signup/student | signup/supervisor
 
 GET  /api/wathb/today
 POST /api/wathb/:id/answer
@@ -329,6 +386,10 @@ POST /api/checkout/start                            (student session)
 GET  /api/checkout/me                                (student's latest subscription)
 GET  /api/checkout/dev-complete                      (dev-only, self-disables with real Paymob creds)
 POST /api/webhooks/paymob                            (Paymob transaction callback, HMAC-verified)
+
+GET  /api/admin/payment-status                       ({ gatewayConfigured })
+GET  /api/admin/students/search?mobile=              (admin lookup for manual actions)
+POST /api/admin/subscriptions/activate-wire-transfer (manual subscription activation)
 ```
 
 ## Known limitations of this pass
@@ -344,6 +405,9 @@ POST /api/webhooks/paymob                            (Paymob transaction callbac
   per-mobile *request* throttling yet — someone could spam `otp/request` for
   a given number. Add rate limiting here and on magic-link exchange (spec
   §9.5) before any non-local deployment.
+- Signup (`auth/signup/student|supervisor`) has no rate limiting either — it's
+  a public, unauthenticated endpoint. Add the same throttling as `otp/request`
+  before any non-local deployment, and consider CAPTCHA/abuse protection.
 - `plan_day`/`send_notification` are plain service methods triggered
   manually (admin endpoints), not registered BullMQ repeatable jobs —
   register them on a real queue before relying on them unattended.

@@ -3,12 +3,15 @@ import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
+import { SignupStudentDto, SignupSupervisorDto } from './dto/signup.dto';
+import { AccountsService } from '../people/accounts.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private auth: AuthService,
     private otp: OtpService,
+    private accounts: AccountsService,
   ) {}
 
   @Post('admin/login')
@@ -36,5 +39,19 @@ export class AuthController {
     const user = await this.otp.verifyOtp(dto.mobile, dto.subjectType, dto.code);
     const token = this.auth.issueSession({ sub: user.id, kind: dto.subjectType }, 24 * 3600);
     return { token, kind: dto.subjectType, name: user.name };
+  }
+
+  // Public self-signup — creates the account, then immediately requests an
+  // OTP so the client can go straight to the code-entry step, same as login.
+  @Post('signup/student')
+  async signupStudent(@Body() dto: SignupStudentDto) {
+    await this.accounts.createStudent(dto.mobile, dto.name);
+    return this.otp.requestOtp(dto.mobile, 'student');
+  }
+
+  @Post('signup/supervisor')
+  async signupSupervisor(@Body() dto: SignupSupervisorDto) {
+    await this.accounts.createSupervisor(dto.mobile, dto.name, dto.type);
+    return this.otp.requestOtp(dto.mobile, 'supervisor');
   }
 }

@@ -8,6 +8,11 @@ import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/chan
 const OTP_TTL_MINUTES = 5;
 const MAX_ATTEMPTS = 5;
 
+// Fixed fallback code used whenever no real WhatsApp channel is wired up —
+// ConsoleChannel just logs to the server, which isn't reachable to whoever
+// is testing signup/login, so a predictable code stands in for it.
+const FALLBACK_OTP_CODE = '1928';
+
 function hashCode(code: string): string {
   return createHash('sha256').update(code).digest('hex');
 }
@@ -24,13 +29,19 @@ export class OtpService {
     private config: ConfigService,
   ) {}
 
+  /** True only when real WhatsApp Cloud API credentials are configured — see notification-channel.provider.ts's identical check. */
+  private hasWhatsAppConfigured(): boolean {
+    return !!this.config.get('WHATSAPP_ACCESS_TOKEN') && !!this.config.get('WHATSAPP_PHONE_NUMBER_ID');
+  }
+
   async requestOtp(mobile: string, subjectType: SubjectType) {
     const user = await this.prisma.user.findUnique({ where: { mobileE164: mobile } });
     if (!user || user.role !== subjectType) {
       throw new ForbiddenException('no account found for this mobile number');
     }
 
-    const code = randomInt(100000, 1000000).toString();
+    const whatsappConfigured = this.hasWhatsAppConfigured();
+    const code = whatsappConfigured ? randomInt(1000, 10000).toString() : FALLBACK_OTP_CODE;
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000);
     await this.prisma.otpCode.create({ data: { mobileE164: mobile, subjectType, codeHash: hashCode(code), expiresAt } });
 
@@ -42,7 +53,11 @@ export class OtpService {
     });
 
     const allowDev = this.config.get('ALLOW_DEV_LOGIN') === 'true';
-    return { sent: true, expiresInMinutes: OTP_TTL_MINUTES, devCode: allowDev ? code : undefined };
+    // The fallback code isn't a secret — nothing actually sent it anywhere —
+    // so always surface it. A real WhatsApp-delivered code only appears here
+    // when ALLOW_DEV_LOGIN is explicitly on.
+    const devCode = !whatsappConfigured ? code : allowDev ? code : undefined;
+    return { sent: true, expiresInMinutes: OTP_TTL_MINUTES, devCode };
   }
 
   async verifyOtp(mobile: string, subjectType: SubjectType, code: string) {

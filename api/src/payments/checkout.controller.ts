@@ -4,7 +4,7 @@ import { CheckoutService } from './checkout.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
-import { StartCheckoutDto } from './dto/packages.dto';
+import { StartCheckoutDto, ActivateWireTransferDto } from './dto/packages.dto';
 
 @Controller()
 export class CheckoutController {
@@ -37,5 +37,21 @@ export class CheckoutController {
     }
     await this.checkout.confirmPayment(subscriptionId);
     res.redirect(302, redirect);
+  }
+
+  // Lets the admin UI decide whether to surface the wire-transfer activation
+  // path prominently (gateway not configured) or as a secondary option.
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @Get('admin/payment-status')
+  paymentStatus() {
+    return { gatewayConfigured: !this.checkout.isDevProviderActive() };
+  }
+
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @Post('admin/subscriptions/activate-wire-transfer')
+  activateWireTransfer(@Body() dto: ActivateWireTransferDto, @CurrentSession() session: SessionPayload) {
+    return this.checkout.activateViaWireTransfer(dto.studentId, dto.packageId, session.sub);
   }
 }

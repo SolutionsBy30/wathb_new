@@ -79,6 +79,19 @@ export default function App() {
     }
   };
 
+  const signupSupervisor = async (mobile, name, type) => {
+    setLoginBusy(true);
+    setLoginError(null);
+    try {
+      return await api.signupSupervisor(mobile, name, type);
+    } catch (e) {
+      setLoginError(e.message || 'تعذّر إنشاء الحساب');
+      return null;
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
   const handleAccept = async () => {
     setAcceptBusy(true);
     setAcceptError(null);
@@ -106,7 +119,7 @@ export default function App() {
     );
   }
 
-  if (screen === 'login') return <Login onRequestCode={requestOtp} onVerifyCode={verifyOtp} error={loginError} busy={loginBusy} />;
+  if (screen === 'login') return <Login onRequestCode={requestOtp} onVerifyCode={verifyOtp} onSignup={signupSupervisor} error={loginError} busy={loginBusy} />;
   if (screen === 'accept') return <AcceptInvite onAccept={handleAccept} busy={acceptBusy} error={acceptError} />;
 
   return (

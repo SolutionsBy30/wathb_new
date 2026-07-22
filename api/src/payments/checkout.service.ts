@@ -66,4 +66,35 @@ export class CheckoutService {
       include: { package: true },
     });
   }
+
+  /**
+   * Manual activation path for when Paymob isn't configured yet (or a
+   * student simply paid by bank transfer instead of card) — an admin
+   * confirms the transfer happened and activates the subscription directly.
+   * Not gated on isDevProviderActive(): a real production deployment may
+   * still want the ability to honour an offline wire transfer alongside a
+   * configured gateway.
+   */
+  async activateViaWireTransfer(studentId: string, packageId: string, adminUserId: string) {
+    const pkg = await this.prisma.package.findUnique({ where: { id: packageId } });
+    if (!pkg || !pkg.isActive) throw new NotFoundException('package not found or inactive');
+    await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId } });
+
+    const startsAt = new Date();
+    const endsAt = new Date(startsAt);
+    endsAt.setUTCMonth(endsAt.getUTCMonth() + pkg.durationMonths);
+
+    return this.prisma.subscription.create({
+      data: {
+        studentId,
+        packageId,
+        priceSnapshotHalalas: pkg.priceHalalas,
+        status: 'active',
+        startsAt,
+        endsAt,
+        paymentRef: `wire_transfer:${adminUserId}`,
+      },
+      include: { package: true },
+    });
+  }
 }

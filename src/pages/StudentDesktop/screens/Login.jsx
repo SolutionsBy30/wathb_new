@@ -1,75 +1,151 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
+import markOnIndigo from '../../../design-system/assets/mark-on-indigo.svg';
 
-const inputStyle = {
-  maxWidth: '260px', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: 'none',
-  background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '14px',
+const fieldStyle = {
+  padding: '14px', borderRadius: 'var(--radius-sm)', border: 'none',
+  background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '15px',
 };
 
-export default function Login({ onRequestCode, onVerifyCode, error, busy }) {
-  const [step, setStep] = useState('mobile'); // 'mobile' | 'code'
-  const [mobile, setMobile] = useState('+9665');
-  const [code, setCode] = useState('');
-  const [devCode, setDevCode] = useState(null);
+const otpBoxStyle = {
+  width: '48px', height: '56px', textAlign: 'center', borderRadius: 'var(--radius-sm)', border: 'none',
+  background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '22px',
+};
 
-  const sendCode = async () => {
-    const result = await onRequestCode(mobile.trim());
+// Mirrors the Student Login.dc.html prototype: +966 badge + 9-digit local
+// number, then a 4-box OTP entry (the fallback code, when WhatsApp isn't
+// configured, is always 1928 — see api/src/auth/otp.service.ts).
+export default function Login({ onRequestCode, onVerifyCode, onSignup, error, busy, initialMode = 'login' }) {
+  const [mode, setMode] = useState(initialMode); // 'login' | 'signup'
+  const [step, setStep] = useState('phone'); // 'phone' | 'otp'
+  const [name, setName] = useState('');
+  const [local, setLocal] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '']);
+  const [phoneError, setPhoneError] = useState(false);
+  const [devCode, setDevCode] = useState(null);
+  const otpRefs = [useRef(), useRef(), useRef(), useRef()];
+
+  const mobile = `+966${local}`;
+
+  const submitPhone = async () => {
+    if (!/^5\d{8}$/.test(local)) {
+      setPhoneError(true);
+      return;
+    }
+    if (mode === 'signup' && name.trim().length < 2) {
+      setPhoneError(true);
+      return;
+    }
+    setPhoneError(false);
+    const result = mode === 'signup' ? await onSignup(mobile, name.trim()) : await onRequestCode(mobile);
     if (result) {
       setDevCode(result.devCode ?? null);
-      setStep('code');
+      setStep('otp');
+      setTimeout(() => otpRefs[0].current?.focus(), 0);
     }
   };
 
-  return (
-    <>
-      <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '24px', fontWeight: 500, color: 'var(--sand)' }}>
-        دخول
-      </h1>
+  const setDigit = (i, value) => {
+    const v = value.replace(/\D/g, '').slice(-1);
+    setOtp((prev) => {
+      const next = [...prev];
+      next[i] = v;
+      return next;
+    });
+    if (v && i < 3) otpRefs[i + 1].current?.focus();
+  };
 
-      {step === 'mobile' && (
-        <>
-          <p style={{ margin: 0, maxWidth: '420px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)', lineHeight: 1.8 }}>
-            أدخل رقم جوالك المسجَّل وسنرسل لك رمز تحقق عبر واتساب.
-          </p>
-          <input value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+9665xxxxxxxx" style={inputStyle} />
-          {error && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>}
-          <Button variant="primary" disabled={busy || !mobile.trim()} onClick={sendCode}>
+  const onOtpKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !otp[i] && i > 0) otpRefs[i - 1].current?.focus();
+  };
+
+  const code = otp.join('');
+  const backToPhone = () => {
+    setStep('phone');
+    setOtp(['', '', '', '']);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '28px', width: '390px', maxWidth: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+        <img src={markOnIndigo} alt="وثب" style={{ width: '44px', height: '41px' }} />
+        <span style={{ fontFamily: 'var(--font-arabic)', fontWeight: 600, fontSize: '19px', color: 'var(--sand)' }}>
+          {step === 'otp' ? (mode === 'signup' ? 'تأكيد رقم الجوال' : 'دخول الطالب') : mode === 'signup' ? 'إنشاء حساب طالب' : 'دخول الطالب'}
+        </span>
+      </div>
+
+      {step === 'phone' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
+          {mode === 'signup' && (
+            <>
+              <label style={{ fontSize: '13px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>الاسم</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="اسمك الكامل"
+                style={{ ...fieldStyle, fontFamily: 'var(--font-arabic)' }}
+              />
+            </>
+          )}
+          <label style={{ fontSize: '13px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>رقم الجوال</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <span style={{ padding: '14px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '14px' }}>
+              +966
+            </span>
+            <input
+              type="tel"
+              value={local}
+              onChange={(e) => setLocal(e.target.value.replace(/\D/g, '').slice(0, 9))}
+              placeholder="5xxxxxxxx"
+              dir="ltr"
+              style={{ ...fieldStyle, flex: 1, textAlign: 'right' }}
+            />
+          </div>
+          {phoneError && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)', fontFamily: 'var(--font-arabic)' }}>أدخل رقم جوال صحيح{mode === 'signup' ? ' واسمك' : ''}.</p>}
+          {error && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)', fontFamily: 'var(--font-arabic)' }}>{error}</p>}
+          <Button variant="primary" fullWidth disabled={busy} onClick={submitPhone}>
             {busy ? 'جاري الإرسال…' : 'إرسال رمز التحقق'}
           </Button>
-        </>
+          <button
+            onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setPhoneError(false); }}
+            style={{ border: 'none', background: 'transparent', color: 'var(--lime-print)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+          >
+            {mode === 'login' ? 'ليس لديك حساب؟ سجّل الآن' : 'لديك حساب بالفعل؟ سجّل الدخول'}
+          </button>
+        </div>
       )}
 
-      {step === 'code' && (
-        <>
-          <p style={{ margin: 0, maxWidth: '420px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)', lineHeight: 1.8 }}>
-            أدخل رمز التحقق المكوّن من 6 أرقام المرسل إلى {mobile} عبر واتساب.
-          </p>
+      {step === 'otp' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', alignItems: 'center' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>أرسلنا رمزاً إلى ‎{mobile}</p>
           {devCode && (
             <p style={{ margin: 0, fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--lime)' }}>
               (بيئة تجريبية — الرمز: {devCode})
             </p>
           )}
-          <input
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="000000"
-            inputMode="numeric"
-            style={{ ...inputStyle, letterSpacing: '4px', textAlign: 'center' }}
-          />
-          {error && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>}
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <Button variant="primary" disabled={busy || code.length !== 6} onClick={() => onVerifyCode(mobile.trim(), code)}>
-              {busy ? 'جاري التحقق…' : 'تحقق ودخول'}
-            </Button>
-            <button
-              onClick={() => { setStep('mobile'); setCode(''); }}
-              style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
-            >
-              تغيير الرقم
-            </button>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', direction: 'ltr' }}>
+            {otp.map((d, i) => (
+              <input
+                key={i}
+                ref={otpRefs[i]}
+                value={d}
+                onChange={(e) => setDigit(i, e.target.value)}
+                onKeyDown={(e) => onOtpKeyDown(i, e)}
+                maxLength={1}
+                inputMode="numeric"
+                style={otpBoxStyle}
+              />
+            ))}
           </div>
-        </>
+          {error && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)', fontFamily: 'var(--font-arabic)', textAlign: 'center' }}>{error}</p>}
+          <Button variant="primary" fullWidth disabled={busy || code.length !== 4} onClick={() => onVerifyCode(mobile, code)}>
+            {busy ? 'جاري التحقق…' : 'تأكيد'}
+          </Button>
+          <button onClick={backToPhone} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}>
+            تعديل الرقم
+          </button>
+        </div>
       )}
-    </>
+    </div>
   );
 }
