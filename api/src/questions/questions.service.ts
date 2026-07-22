@@ -36,7 +36,7 @@ export class QuestionsService {
         orderBy: { createdAt: 'desc' },
         include: {
           label: { include: { area: { include: { section: { include: { test: true } } } } } },
-          versions: { orderBy: { version: 'desc' }, take: 1 },
+          versions: { orderBy: { version: 'desc' }, take: 1, include: { stats: true } },
         },
       }),
     ]);

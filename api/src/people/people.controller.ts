@@ -32,6 +32,24 @@ export class PeopleController {
     return this.students.searchByMobile(mobile);
   }
 
+  @RequireSession('admin')
+  @Get('admin/students')
+  adminListStudents(@Query('search') search?: string, @Query('offset') offset?: string, @Query('limit') limit?: string) {
+    return this.students.adminList(search, offset ? Number(offset) : undefined, limit ? Number(limit) : undefined);
+  }
+
+  @RequireSession('admin')
+  @Patch('admin/students/:id/school')
+  setStudentSchool(@Param('id') id: string, @Body('schoolId') schoolId: string | null) {
+    return this.students.setSchool(id, schoolId);
+  }
+
+  @RequireSession('admin')
+  @Get('admin/supervisors')
+  adminListSupervisors() {
+    return this.supervisors.adminList();
+  }
+
   @RequireSession('student')
   @Get('students/me')
   me(@CurrentSession() session: SessionPayload) {

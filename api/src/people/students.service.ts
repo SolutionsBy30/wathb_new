@@ -14,6 +14,28 @@ export class StudentsService {
     return this.accounts.createStudent(mobile, name);
   }
 
+  /** A9 in the spec — admin students list. Paginated, optional name/mobile search. */
+  async adminList(search?: string, offset = 0, limit = 50) {
+    const where = search
+      ? { user: { OR: [{ name: { contains: search, mode: 'insensitive' as const } }, { mobileE164: { contains: search } }] } }
+      : {};
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.student.count({ where }),
+      this.prisma.student.findMany({
+        where,
+        skip: offset,
+        take: limit,
+        orderBy: { user: { createdAt: 'desc' } },
+        include: { user: true, targetTest: true, school: { include: { city: true } } },
+      }),
+    ]);
+    return { total, items };
+  }
+
+  setSchool(studentId: string, schoolId: string | null) {
+    return this.prisma.student.update({ where: { userId: studentId }, data: { schoolId } });
+  }
+
   /** Admin lookup for manual actions (e.g. wire-transfer activation) — exact mobile match. */
   async searchByMobile(mobile: string) {
     const user = await this.prisma.user.findUnique({

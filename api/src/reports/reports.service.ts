@@ -8,6 +8,11 @@ export const MIN_SAMPLE_FOR_REPORTING = 20;
 const DEFAULT_DAILY_TARGET = 5; // Package.questionsPerDay is a later phase; hardcoded until packages exist.
 const HEATMAP_WEEKS = 8;
 
+// §4.8 guardrail #1 — a school with 3 students is not a data point. Both
+// floors must clear before any cohort percentage renders.
+export const MIN_COHORT_STUDENTS = 15;
+export const MIN_COHORT_ANSWERS = 500;
+
 function accuracyOrCollecting(nAnswered: number, nCorrect: number) {
   if (nAnswered < MIN_SAMPLE_FOR_REPORTING) {
     return { accuracy: null, nAnswered, collecting: true, needed: MIN_SAMPLE_FOR_REPORTING };
@@ -147,6 +152,68 @@ export class ReportsService {
         options: m.questionVersion.options,
         answeredAt: m.answeredAt,
       })),
+    };
+  }
+
+  /**
+   * §4.8 — admin-only cohort view. "Reuse, don't rebuild": same aggregation
+   * as getStudentReport, key swapped from student_id to a cohort of student
+   * ids. Computed on demand rather than a nightly-materialised
+   * cohort_label_stats table (documented pragmatic deviation — no real cron
+   * in this sandbox, and cohort volumes here are far below where a live
+   * aggregation query would be slow).
+   */
+  async getCohortReport(type: 'school' | 'city' | 'region', id: string) {
+    const studentWhere =
+      type === 'school'
+        ? { schoolId: id }
+        : type === 'city'
+          ? { school: { cityId: id } }
+          : { school: { city: { regionId: id } } };
+
+    const students = await this.prisma.student.findMany({ where: studentWhere, select: { userId: true } });
+    const studentIds = students.map((s) => s.userId);
+
+    if (studentIds.length === 0) {
+      return { gated: true, studentCount: 0, totalAnswered: 0, cohortType: type, cohortId: id };
+    }
+
+    const totalAnswered = await this.prisma.answer.count({ where: { studentId: { in: studentIds } } });
+
+    // Guardrail #1 (§4.8): below the floor, return the roster and raw counts
+    // — never a rate. "17 subscribed students at this school", not a %.
+    if (studentIds.length < MIN_COHORT_STUDENTS || totalAnswered < MIN_COHORT_ANSWERS) {
+      return { gated: true, studentCount: studentIds.length, totalAnswered, cohortType: type, cohortId: id };
+    }
+
+    const labelStats = await this.prisma.studentLabelStat.findMany({
+      where: { studentId: { in: studentIds } },
+      include: { label: { include: { area: true } } },
+    });
+
+    const byArea = new Map<string, { areaId: string; nameAr: string; nameEn: string; nAnswered: number; nCorrect: number }>();
+    for (const s of labelStats) {
+      const area = s.label.area;
+      if (!byArea.has(area.id)) byArea.set(area.id, { areaId: area.id, nameAr: area.nameAr, nameEn: area.nameEn, nAnswered: 0, nCorrect: 0 });
+      const bucket = byArea.get(area.id)!;
+      bucket.nAnswered += s.nAnswered;
+      bucket.nCorrect += s.nCorrect;
+    }
+
+    const accuracyByArea = [...byArea.values()].map((a) => ({
+      areaId: a.areaId,
+      nameAr: a.nameAr,
+      nameEn: a.nameEn,
+      ...accuracyOrCollecting(a.nAnswered, a.nCorrect),
+    }));
+
+    return {
+      gated: false,
+      cohortType: type,
+      cohortId: id,
+      studentCount: studentIds.length,
+      totalAnswered,
+      accuracyByArea,
     };
   }
 }

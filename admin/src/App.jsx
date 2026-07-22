@@ -8,12 +8,20 @@ import BulkImport from './pages/BulkImport';
 import DeliveryLog from './pages/DeliveryLog';
 import Packages from './pages/Packages';
 import Subscriptions from './pages/Subscriptions';
+import SolutionPerformance from './pages/SolutionPerformance';
+import Geography from './pages/Geography';
+import Students from './pages/Students';
+import Supervisors from './pages/Supervisors';
 
 const NAV = [
   { id: 'taxonomy', label: 'الاختبارات والتصنيف' },
   { id: 'bank', label: 'بنك الأسئلة' },
   { id: 'import', label: 'استيراد جماعي' },
+  { id: 'solutionPerf', label: 'أداء الأسئلة' },
+  { id: 'students', label: 'الطلاب' },
+  { id: 'geography', label: 'الجغرافيا والمدارس' },
   { id: 'notifications', label: 'الإشعارات' },
+  { id: 'supervisors', label: 'المشرفون' },
   { id: 'packages', label: 'الباقات والتسعير' },
   { id: 'subscriptions', label: 'الاشتراكات' },
 ];
@@ -77,7 +85,11 @@ export default function App() {
           />
         )}
         {tab === 'import' && <BulkImport />}
+        {tab === 'solutionPerf' && <SolutionPerformance tests={tests} />}
+        {tab === 'students' && <Students />}
+        {tab === 'geography' && <Geography />}
         {tab === 'notifications' && <DeliveryLog />}
+        {tab === 'supervisors' && <Supervisors />}
         {tab === 'packages' && <Packages tests={tests} />}
         {tab === 'subscriptions' && <Subscriptions />}
       </main>

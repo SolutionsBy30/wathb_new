@@ -116,6 +116,10 @@ model Student {
   currentStreak    Int       @default(0)
   lastCompletedOn  DateTime?
   placementDoneAt  DateTime?
+  // Optional and skippable per spec §4.8 (PDPL: not strictly necessary to
+  // deliver daily practice, so collection must stay opt-in).
+  schoolId         String?
+  school           School?   @relation(fields: [schoolId], references: [id])
 
   wathbs             Wathb[]
   answers             Answer[]
@@ -124,6 +128,50 @@ model Student {
   subscriptions       Subscription[]
 
   @@map("students")
+}
+
+// §3.4 — Region > City > School. Regions/cities are seeded and admin-extensible;
+// schools come from an admin-managed registry or a student's self-declared
+// suggestion (status=pending_review, never inserted directly — §3.4's "valve
+// that keeps the registry clean").
+model Region {
+  id     String @id @default(uuid())
+  nameAr String
+  nameEn String
+  cities City[]
+
+  @@map("regions")
+}
+
+model City {
+  id       String   @id @default(uuid())
+  regionId String
+  region   Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  nameAr   String
+  nameEn   String
+  schools  School[]
+
+  @@map("cities")
+}
+
+enum SchoolStatus {
+  approved
+  pending_review
+}
+
+model School {
+  id                    String       @id @default(uuid())
+  cityId                String
+  city                  City         @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  nameAr                String
+  nameEn                String?
+  status                SchoolStatus @default(approved)
+  suggestedByStudentId  String?
+  createdAt             DateTime     @default(now())
+
+  students Student[]
+
+  @@map("schools")
 }
 
 model Supervisor {
@@ -259,9 +307,31 @@ model QuestionVersion {
 
   wathbQuestions WathbQuestion[]
   answers        Answer[]
+  stats          QuestionStats?
 
   @@unique([questionId, version])
   @@map("question_versions")
+}
+
+// §4.5.2 / §6 "solution performance" — is this question any good? Recomputed
+// via an admin-triggered refresh (POST /api/admin/questions/refresh-stats),
+// same manual-trigger pattern as plan_day/send_notification — no real cron
+// in this sandbox. p_value/discrimination are null until enough volume
+// exists (MIN_SAMPLE_FOR_REPORTING), same statistical-honesty discipline as
+// student-facing reports.
+model QuestionStats {
+  questionVersionId String          @id
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  nServed           Int             @default(0)
+  nCorrect          Int             @default(0)
+  pValue            Float?
+  discrimination    Float?
+  meanTimeMs        Int             @default(0)
+  timeoutRate       Float           @default(0)
+  distractorDist    Json?
+  updatedAt         DateTime        @updatedAt
+
+  @@map("question_stats")
 }
 
 model Wathb {

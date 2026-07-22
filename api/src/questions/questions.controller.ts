@@ -14,6 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { QuestionsService } from './questions.service';
 import { BulkImportService } from './bulk-import.service';
+import { QuestionStatsService } from './question-stats.service';
 import { CreateQuestionDto, ListQuestionsQuery, UpdateQuestionContentDto } from './dto/questions.dto';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
@@ -26,7 +27,14 @@ export class QuestionsController {
   constructor(
     private questions: QuestionsService,
     private bulkImport: BulkImportService,
+    private questionStats: QuestionStatsService,
   ) {}
+
+  // §6 "refresh_question_stats" — admin-triggered stand-in for the nightly job.
+  @Post('refresh-stats')
+  refreshStats() {
+    return this.questionStats.refreshAll();
+  }
 
   @Get()
   list(@Query() query: ListQuestionsQuery) {

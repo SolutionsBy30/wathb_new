@@ -233,13 +233,62 @@ fallbacks for running before WhatsApp/Paymob credentials are configured:
   when the gateway isn't configured, and exposes this form regardless — a
   manual override is useful even alongside a working gateway.
 
+### Phase 6 — Operations (partial): geography/schools, solution performance, cohort analytics
+
+- **Geography & schools** (spec §3.4): `Region` → `City` → `School`, seeded
+  with all 13 KSA regions and a handful of demo cities/schools
+  (admin-extensible, not the full Ministry registry). `Student.schoolId` is
+  optional and nullable — spec §4.8 flags school data as not strictly
+  necessary to deliver daily practice, so collection stays opt-in (PDPL).
+  Schools can be admin-created directly (`status: approved`) or
+  student-suggested (`POST /api/geography/schools/suggest`, lands as
+  `pending_review` and is **never** inserted as approved directly — spec
+  §3.4's "valve that keeps the registry clean") — approve/reject from the
+  admin "الجغرافيا والمدارس" screen.
+- **Solution performance** (spec §4.5.2): a new `question_stats` table
+  (`p_value`, `discrimination`, `mean_time_ms`, `timeout_rate`,
+  `distractor_dist`), recomputed via an admin-triggered
+  `POST /api/admin/questions/refresh-stats` — same manual-trigger pattern as
+  `plan_day`/`send_notification`, standing in for the spec's nightly
+  `refresh_question_stats` job (no real cron in this sandbox). `p_value`
+  and `discrimination` stay `null` below `MIN_SAMPLE_FOR_REPORTING` (20
+  answers) / a 20-distinct-student floor for the top/bottom-27%
+  discrimination split — same statistical-honesty discipline as
+  student-facing reports. The "أداء الأسئلة" admin screen flags
+  non-discriminating items (p < 0.15 or > 0.95) and — loudly, per spec — a
+  negative discrimination index, which almost always means the answer key
+  is wrong.
+- **Cohort analytics** (spec §4.8): `GET /api/report/cohort?type=school|city|region&id=`,
+  admin-only (403 for student/supervisor, enforced server-side not just
+  UI-hidden), reusing `ReportsService`'s per-area aggregation with the key
+  swapped from `student_id` to a cohort of student ids — "reuse, don't
+  rebuild" as the spec puts it. Gated at `MIN_COHORT_STUDENTS = 15` **and**
+  `MIN_COHORT_ANSWERS = 500` (spec §4.8 guardrail #1); below the floor the
+  endpoint returns the roster count and raw totals, **never** a percentage.
+  **Documented deviation**: computed live on request rather than a
+  nightly-materialised `cohort_label_stats` table — no real cron in this
+  sandbox, and cohort volumes here are far below where a live aggregation
+  query would need pre-materialization. Revisit before real scale.
+- **Admin students/supervisors lists** (spec A9): lightweight paginated
+  student list (name/mobile search, target test, school) and a supervisors
+  list (linked students, acceptance status) — not the fuller student-detail
+  drill-down (subs/payments/delivery log/link access log) the spec
+  describes, just enough for admin visibility today.
+
+**Not implemented in Phase 6**: bank health check job, problem-report inbox,
+suspensions/audit log, advice-string library beyond the 2-row demo, spaced
+repetition (21-day review re-entry), discount codes, the school
+**comparison view** (2–5 schools/cities overlaid — the single-cohort report
+above is built, the overlay isn't), and the geography admin screen's light
+"web console" theme from `Admin.dc.html` — kept in the existing admin app's
+dark theme for internal consistency rather than re-theming ~8 already-working
+screens.
+
 ## What's not built yet
 
 Deliberately out of scope for this pass — each is a later phase in the
-spec's own build sequence (§11): geography/schools, cohort analytics,
-solution-performance analytics (p-value/discrimination), suspensions/audit
-log, advice-string library beyond a 2-row demo, spaced repetition (21-day
-review re-entry) — all Phase 6. Plus the Phase 3/4/5 gaps called out above.
+spec's own build sequence (§11): the remaining Phase 6 items called out
+just above, plus the Phase 3/4/5 gaps called out earlier in this README.
 
 ## Running it locally
 
@@ -390,10 +439,34 @@ POST /api/webhooks/paymob                            (Paymob transaction callbac
 GET  /api/admin/payment-status                       ({ gatewayConfigured })
 GET  /api/admin/students/search?mobile=              (admin lookup for manual actions)
 POST /api/admin/subscriptions/activate-wire-transfer (manual subscription activation)
+
+GET  /api/geography/regions | cities | schools       (public reference data)
+POST /api/geography/schools/suggest                  (student self-declared, lands pending_review)
+POST /api/admin/geography/regions | cities | schools
+GET  /api/admin/geography/schools/pending
+POST /api/admin/geography/schools/:id/approve
+DELETE /api/admin/geography/schools/:id
+
+POST /api/admin/questions/refresh-stats              (p-value/discrimination/timing recompute)
+GET  /api/report/cohort?type=school|city|region&id=  (admin-only, MIN_COHORT-gated)
+GET  /api/admin/students                             (paginated, search)
+PATCH /api/admin/students/:id/school
+GET  /api/admin/supervisors
 ```
 
 ## Known limitations of this pass
 
+- `QuestionStatsService.refreshAll()` loops one query per question version
+  (dozens of questions at this seed's scale) rather than a single
+  aggregate SQL query — simple and correct, but rewrite as a grouped query
+  before the bank grows into the thousands the spec expects.
+- Cohort reports (`GET /api/report/cohort`) compute live per request instead
+  of the spec's nightly-materialised `cohort_label_stats` table — fine at
+  today's data volume, will need real materialization before school-count
+  and answer-count get large.
+- School suggestions (`geography/schools/suggest`) have no admin
+  notification — a suggested school sits in the pending-review queue until
+  an admin happens to check the "الجغرافيا والمدارس" screen.
 - Bulk-import jobs are held in an in-memory `Map` (`bulk-import.service.ts`)
   — fine for a single API instance, move to Redis before scaling out.
 - No spaced-repetition re-entry (§6.4's 21-day wrong-answer review) — the

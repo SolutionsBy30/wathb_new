@@ -16,6 +16,28 @@ export class SupervisorsService {
     return this.accounts.createSupervisor(mobile, name, type);
   }
 
+  /** Admin "المشرفون" screen — every supervisor and how many students they're linked to. */
+  async adminList() {
+    const supervisors = await this.prisma.supervisor.findMany({
+      include: {
+        user: true,
+        studentLinks: { where: { revokedAt: null }, include: { student: { include: { user: true } } } },
+      },
+      orderBy: { user: { createdAt: 'desc' } },
+    });
+    return supervisors.map((s) => ({
+      supervisorId: s.userId,
+      name: s.user.name,
+      mobile: s.user.mobileE164,
+      type: s.type,
+      students: s.studentLinks.map((l) => ({
+        studentId: l.studentId,
+        name: l.student.user.name,
+        accepted: !!l.acceptedAt,
+      })),
+    }));
+  }
+
   /** Student invites a supervisor by mobile — spec §2: "linking is done by student invite." */
   async invite(studentId: string, mobile: string, name: string, type: 'parent' | 'instructor') {
     let supervisorUser = await this.prisma.user.findUnique({ where: { mobileE164: mobile } });

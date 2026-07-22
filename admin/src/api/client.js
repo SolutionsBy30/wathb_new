@@ -76,4 +76,24 @@ export const api = {
   paymentStatus: () => request('/admin/payment-status'),
   searchStudent: (mobile) => request(`/admin/students/search?mobile=${encodeURIComponent(mobile)}`),
   activateWireTransfer: (studentId, packageId) => request('/admin/subscriptions/activate-wire-transfer', { method: 'POST', body: { studentId, packageId } }),
+
+  // Solution performance (§4.5.2)
+  refreshQuestionStats: () => request('/admin/questions/refresh-stats', { method: 'POST' }),
+
+  // Geography & schools (§3.4/§4.8)
+  listRegions: () => request('/geography/regions'),
+  listCities: (regionId) => request(`/geography/cities${regionId ? `?regionId=${regionId}` : ''}`),
+  listSchools: (cityId) => request(`/geography/schools${cityId ? `?cityId=${cityId}` : ''}`),
+  createRegion: (dto) => request('/admin/geography/regions', { method: 'POST', body: dto }),
+  createCity: (dto) => request('/admin/geography/cities', { method: 'POST', body: dto }),
+  createSchool: (dto) => request('/admin/geography/schools', { method: 'POST', body: dto }),
+  pendingSchools: () => request('/admin/geography/schools/pending'),
+  approveSchool: (id) => request(`/admin/geography/schools/${id}/approve`, { method: 'POST' }),
+  rejectSchool: (id) => request(`/admin/geography/schools/${id}`, { method: 'DELETE' }),
+  cohortReport: (type, id) => request(`/report/cohort?type=${type}&id=${id}`),
+
+  // Students & supervisors (A9)
+  listStudents: (search) => request(`/admin/students${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  setStudentSchool: (studentId, schoolId) => request(`/admin/students/${studentId}/school`, { method: 'PATCH', body: { schoolId } }),
+  listSupervisors: () => request('/admin/supervisors'),
 };

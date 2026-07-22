@@ -193,7 +193,7 @@ async function seedPackages(qudurat: { id: string }, tahsili: { id: string }) {
   return { monthly, sixMonth, yearly };
 }
 
-async function seedPeople(qudurat: { id: string }, yearlyPackage: { id: string; priceHalalas: number }) {
+async function seedPeople(qudurat: { id: string }, yearlyPackage: { id: string; priceHalalas: number }, school: { id: string }) {
   const adminPassword = 'wathb-admin-2026';
   await prisma.user.create({
     data: {
@@ -216,6 +216,7 @@ async function seedPeople(qudurat: { id: string }, yearlyPackage: { id: string; 
           targetTestId: qudurat.id,
           targetScore: 90,
           testDate: new Date(Date.now() + 64 * 86400000),
+          schoolId: school.id,
         },
       },
     },
@@ -268,13 +269,49 @@ async function seedAdvice(labels: Record<string, { id: string }>) {
   });
 }
 
+// §3.4 — 13 KSA administrative regions, seeded and fixed; a handful of demo
+// cities/schools (admin-extensible) rather than the full Ministry registry.
+const KSA_REGIONS = [
+  { nameAr: 'الرياض', nameEn: 'Riyadh', cities: [{ nameAr: 'الرياض', nameEn: 'Riyadh' }, { nameAr: 'الخرج', nameEn: 'Al-Kharj' }] },
+  { nameAr: 'مكة المكرمة', nameEn: 'Makkah', cities: [{ nameAr: 'جدة', nameEn: 'Jeddah' }, { nameAr: 'مكة المكرمة', nameEn: 'Makkah' }] },
+  { nameAr: 'المدينة المنورة', nameEn: 'Madinah', cities: [{ nameAr: 'المدينة المنورة', nameEn: 'Madinah' }] },
+  { nameAr: 'الشرقية', nameEn: 'Eastern Province', cities: [{ nameAr: 'الدمام', nameEn: 'Dammam' }, { nameAr: 'الخبر', nameEn: 'Al-Khobar' }] },
+  { nameAr: 'عسير', nameEn: 'Asir', cities: [{ nameAr: 'أبها', nameEn: 'Abha' }] },
+  { nameAr: 'تبوك', nameEn: 'Tabuk', cities: [{ nameAr: 'تبوك', nameEn: 'Tabuk' }] },
+  { nameAr: 'حائل', nameEn: 'Hail', cities: [{ nameAr: 'حائل', nameEn: 'Hail' }] },
+  { nameAr: 'الحدود الشمالية', nameEn: 'Northern Borders', cities: [{ nameAr: 'عرعر', nameEn: "Ar'ar" }] },
+  { nameAr: 'جازان', nameEn: 'Jazan', cities: [{ nameAr: 'جازان', nameEn: 'Jazan' }] },
+  { nameAr: 'نجران', nameEn: 'Najran', cities: [{ nameAr: 'نجران', nameEn: 'Najran' }] },
+  { nameAr: 'الباحة', nameEn: 'Al Bahah', cities: [{ nameAr: 'الباحة', nameEn: 'Al Bahah' }] },
+  { nameAr: 'الجوف', nameEn: 'Al Jawf', cities: [{ nameAr: 'سكاكا', nameEn: 'Sakaka' }] },
+  { nameAr: 'القصيم', nameEn: 'Qassim', cities: [{ nameAr: 'بريدة', nameEn: 'Buraidah' }] },
+];
+
+async function seedGeography() {
+  const regions: Record<string, { id: string }> = {};
+  const cities: Record<string, { id: string }> = {};
+  for (const r of KSA_REGIONS) {
+    const region = await prisma.region.create({ data: { nameAr: r.nameAr, nameEn: r.nameEn } });
+    regions[r.nameEn] = region;
+    for (const c of r.cities) {
+      cities[c.nameEn] = await prisma.city.create({ data: { regionId: region.id, nameAr: c.nameAr, nameEn: c.nameEn } });
+    }
+  }
+  // A couple of demo schools so admin screens have something to show.
+  const riyadh = cities['Riyadh'];
+  const school = await prisma.school.create({ data: { cityId: riyadh.id, nameAr: 'مدارس الرياض النموذجية', nameEn: 'Riyadh Model Schools', status: 'approved' } });
+  await prisma.school.create({ data: { cityId: riyadh.id, nameAr: 'ثانوية الملك فيصل', nameEn: 'King Faisal Secondary School', status: 'approved' } });
+  return { school };
+}
+
 async function main() {
   const { qudurat, tahsili, labels, tahsiliLabels } = await seedTaxonomy();
   await seedQuestions(labels, QUDURAT_QUESTIONS);
   await seedQuestions(tahsiliLabels, TAHSILI_QUESTIONS);
   await seedAdvice(labels);
   const { yearly } = await seedPackages(qudurat, tahsili);
-  await seedPeople(qudurat, yearly);
+  const { school } = await seedGeography();
+  await seedPeople(qudurat, yearly, school);
 }
 
 main()

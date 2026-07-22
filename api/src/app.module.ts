@@ -10,6 +10,7 @@ import { ReportsModule } from './reports/reports.module';
 import { PeopleModule } from './people/people.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentsModule } from './payments/payments.module';
+import { GeographyModule } from './geography/geography.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PaymentsModule } from './payments/payments.module';
     PeopleModule,
     NotificationsModule,
     PaymentsModule,
+    GeographyModule,
   ],
   controllers: [AppController],
 })
