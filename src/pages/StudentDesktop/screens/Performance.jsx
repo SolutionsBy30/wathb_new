@@ -25,6 +25,7 @@ export default function Performance({ report }) {
 
   const trend = report.trend.filter((t) => t.accuracy !== null);
   const maxAcc = Math.max(...trend.map((t) => t.accuracy), 0.01);
+  const allLabels = report.accuracyByArea.flatMap((a) => a.labels ?? []);
 
   return (
     <>
@@ -45,26 +46,40 @@ export default function Performance({ report }) {
         </div>
       </div>
 
-      <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
         <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الدقة حسب المجال</h2>
         {report.accuracyByArea.length === 0 && (
           <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>لا توجد بيانات بعد — أكمل وثبتك الأولى.</p>
         )}
         {report.accuracyByArea.map((area) => (
-          <div key={area.areaId} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span style={{ color: 'var(--sand)' }}>{area.nameAr}</span>
-              <span style={{ fontFamily: 'var(--font-latin)', color: area.collecting ? 'var(--mist)' : 'var(--teal-ink)' }}>
-                {area.collecting ? `قيد الجمع — ${area.nAnswered} من ${area.needed}` : `${Math.round(area.accuracy * 100)}%`}
-              </span>
+          <div key={area.areaId} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: 'var(--sand)', fontWeight: 500 }}>{area.nameAr}</span>
+                <span style={{ fontFamily: 'var(--font-latin)', color: area.collecting ? 'var(--mist)' : 'var(--teal-ink)' }}>
+                  {area.collecting ? `قيد الجمع — ${area.nAnswered} من ${area.needed}` : `${Math.round(area.accuracy * 100)}%`}
+                </span>
+              </div>
+              <Bar value={area.collecting ? 0 : Math.round(area.accuracy * 100)} tone={!area.collecting && area.accuracy < 0.6 ? 'coral' : 'teal'} style={{ height: '7px' }} />
             </div>
-            <Bar value={area.collecting ? 0 : Math.round(area.accuracy * 100)} tone={!area.collecting && area.accuracy < 0.6 ? 'coral' : 'teal'} style={{ height: '7px' }} />
+            {area.labels?.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', paddingInlineStart: '8px' }}>
+                {area.labels.map((l) => (
+                  <div key={l.labelId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                    <span style={{ color: 'var(--mist)' }}>{l.nameAr}</span>
+                    <span style={{ fontFamily: 'var(--font-latin)', color: l.collecting ? 'var(--mist)' : l.accuracy < 0.6 ? 'var(--coral)' : 'var(--sand)' }}>
+                      {l.collecting ? `${l.nAnswered}/${l.needed}` : `${Math.round(l.accuracy * 100)}%`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      <div className="sd-grid-2" style={{ gap: '20px' }}>
-        <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div className="sd-card-grid" style={{ gap: '20px' }}>
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>اتجاه الأداء — أسبوعياً</h2>
           {trend.length === 0 ? (
             <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد بيانات كافية بعد.</p>
@@ -85,7 +100,7 @@ export default function Performance({ report }) {
             </div>
           )}
         </div>
-        <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الاتساق</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             {heatmapWeeks(report.heatmap).map((week, wi) => (
@@ -99,7 +114,26 @@ export default function Performance({ report }) {
         </div>
       </div>
 
-      <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        <h2 style={{ margin: '0 0 10px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>السرعة مقابل الهدف</h2>
+        {allLabels.length === 0 && (
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد بيانات بعد.</p>
+        )}
+        {allLabels.map((l) => {
+          const hasTiming = l.meanTimeS != null && l.targetTimeS != null;
+          const diff = hasTiming ? l.meanTimeS - l.targetTimeS : null;
+          const speedText = !hasTiming ? '—' : diff <= 0 ? `أسرع من الهدف بـ${Math.abs(diff)}ث` : `أبطأ من الهدف بـ${diff}ث`;
+          const speedColor = !hasTiming ? 'var(--mist)' : diff <= 0 ? 'var(--teal-ink)' : 'var(--coral)';
+          return (
+            <div key={l.labelId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '5px 0', borderBottom: '0.5px solid var(--on-indigo-line)' }}>
+              <span style={{ color: 'var(--sand)' }}>{l.nameAr}</span>
+              <span style={{ fontFamily: 'var(--font-latin)', color: speedColor }}>{speedText}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>أخطاء حديثة</h2>
         {report.recentMistakes.length === 0 && (
           <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد أخطاء حديثة — استمر!</p>

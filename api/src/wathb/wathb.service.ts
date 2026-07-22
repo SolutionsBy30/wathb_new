@@ -247,6 +247,8 @@ export class WathbService {
         selectedKey: a.selectedKey,
         isCorrect: a.isCorrect,
         timedOut: a.timedOut,
+        labelId: wq.question.labelId,
+        labelNameAr: wq.question.label.nameAr,
       };
     });
 

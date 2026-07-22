@@ -339,13 +339,43 @@ export default function StudentDesktop() {
 
   const completeVm = useMemo(() => {
     if (!completeResult) return null;
+    // `report` here is still the *pre-session* snapshot — nothing reloads it
+    // between starting a Wathb and reaching this screen — so it doubles as
+    // the "before" baseline for the per-label comparison below.
+    const beforeByLabel = new Map();
+    for (const area of report?.accuracyByArea ?? []) {
+      for (const l of area.labels ?? []) beforeByLabel.set(l.labelId, l);
+    }
+    const sessionByLabel = new Map();
+    for (const q of completeResult.questions) {
+      const cur = sessionByLabel.get(q.labelId) ?? { labelId: q.labelId, name: q.labelNameAr, total: 0, correct: 0 };
+      cur.total += 1;
+      if (q.isCorrect) cur.correct += 1;
+      sessionByLabel.set(q.labelId, cur);
+    }
+    const labelRows = [...sessionByLabel.values()].map((s) => {
+      const before = beforeByLabel.get(s.labelId);
+      const nowPct = Math.round((s.correct / s.total) * 100);
+      const hasBaseline = before && !before.collecting;
+      const deltaPts = hasBaseline ? nowPct - Math.round(before.accuracy * 100) : null;
+      return {
+        labelId: s.labelId,
+        name: s.name,
+        nowPct,
+        deltaText: deltaPts === null ? 'أول بيانات' : deltaPts === 0 ? 'بلا تغيير' : deltaPts > 0 ? `+${deltaPts}%` : `${deltaPts}%`,
+        deltaColor: deltaPts === null ? 'var(--mist)' : deltaPts >= 0 ? 'var(--teal-ink)' : 'var(--coral)',
+      };
+    });
+    const streakCount = completeResult.streak;
     return {
       activeTestName: wathb?.bundleType === 'placement' ? 'وثبة تحديد المستوى' : 'وثبة اليوم',
       completeHeadline: completeResult.correctCount === completeResult.total ? 'إجابات كاملة. وثبة نظيفة.' : 'وثبة مكتملة.',
       sessionCorrect: completeResult.correctCount, qTotal: completeResult.total,
-      streakCount: completeResult.streak,
+      streakCount,
+      streakDays: Array.from({ length: 7 }, (_, i) => i >= 7 - Math.min(streakCount, 7)),
+      labelRows,
     };
-  }, [completeResult, wathb]);
+  }, [completeResult, wathb, report]);
 
   if (screen === 'loading') {
     return (

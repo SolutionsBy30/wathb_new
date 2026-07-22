@@ -49,14 +49,14 @@ export default function WeeklyReport({ report, onOpenPerformance }) {
 
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
         {strength && (
-          <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '18px', minWidth: '220px' }}>
+          <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', minWidth: '220px' }}>
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--lime)' }}>أقوى مجال</span>
             <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-arabic)', fontSize: '15px', color: 'var(--sand)' }}>{strength.nameAr}</p>
             <p style={{ margin: '4px 0 0', fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--teal-ink)' }}>{Math.round(strength.accuracy * 100)}%</p>
           </div>
         )}
         {weakness && (
-          <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '18px', minWidth: '220px' }}>
+          <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', minWidth: '220px' }}>
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>الأضعف — ركّز هنا</span>
             <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-arabic)', fontSize: '15px', color: 'var(--sand)' }}>{weakness.nameAr}</p>
             <p style={{ margin: '4px 0 0', fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--coral)' }}>{Math.round(weakness.accuracy * 100)}%</p>

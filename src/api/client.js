@@ -57,6 +57,7 @@ export const api = {
   listTests: () => request('/tests', { auth: false }),
   me: () => request('/students/me'),
   setGoal: (dto) => request('/students/me/goal', { method: 'PATCH', body: dto }),
+  setNotificationPrefs: (dto) => request('/students/me/notification-prefs', { method: 'PATCH', body: dto }),
 
   today: () => request('/wathb/today'),
   answer: (wathbId, position, selectedKey) =>

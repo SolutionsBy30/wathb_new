@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
+import { api } from '../../../api/client';
 
 function formatDate(d) {
   return d ? new Date(d).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
@@ -7,12 +8,18 @@ function formatDate(d) {
 
 const SUB_STATUS_LABEL = { active: 'نشط', pending: 'بانتظار الدفع', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
 const SUB_STATUS_COLOR = { active: 'var(--teal-ink)', pending: 'var(--mist)', expired: 'var(--coral)', cancelled: 'var(--coral)', refunded: 'var(--coral)' };
+const TRACK_LABEL = { scientific: 'علمي', humanities: 'أدبي' };
 
 export default function Profile({ student, subscription, onManageSubscription, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('+9665');
   const [type, setType] = useState('parent');
   const [sent, setSent] = useState(false);
+
+  const [startHour, setStartHour] = useState(student?.notifSlotStartHour ?? 18);
+  const [endHour, setEndHour] = useState(student?.notifSlotEndHour ?? 20);
+  const [notifBusy, setNotifBusy] = useState(false);
+  const [notifSaved, setNotifSaved] = useState(false);
 
   const submit = async () => {
     if (!name.trim() || !mobile.trim()) return;
@@ -21,20 +28,31 @@ export default function Profile({ student, subscription, onManageSubscription, s
     setName('');
   };
 
+  const saveNotifPrefs = async () => {
+    setNotifBusy(true);
+    setNotifSaved(false);
+    try {
+      await api.setNotificationPrefs({ notifSlotStartHour: Number(startHour), notifSlotEndHour: Number(endHour) });
+      setNotifSaved(true);
+    } finally {
+      setNotifBusy(false);
+    }
+  };
+
   return (
     <>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>ملفي</h1>
 
-      <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '6px', maxWidth: '360px' }}>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '6px', maxWidth: '360px' }}>
         <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '15px', fontWeight: 500, color: 'var(--sand)' }}>{student?.user?.name}</span>
         <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{student?.mobileE164 ?? student?.user?.mobileE164}</span>
         <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
-          {student?.targetTest?.nameAr} · {student?.track === 'scientific' ? 'علمي' : 'أدبي'}
+          {student?.targetTest?.nameAr} · {TRACK_LABEL[student?.track] ?? '—'}
         </span>
       </div>
 
-      <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '360px' }}>
-        <h2 style={{ margin: '0 0 4px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الاشتراك</h2>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الاشتراك</h2>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '360px' }}>
         {subscription ? (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
@@ -54,52 +72,14 @@ export default function Profile({ student, subscription, onManageSubscription, s
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--mist)' }}>لا يوجد اشتراك حالياً.</p>
         )}
         <Button variant="secondary" onClick={onManageSubscription}>
-          {subscription?.status === 'active' ? 'إدارة الاشتراك' : 'اشترك الآن'}
+          {subscription?.status === 'active' ? 'تجديد الاشتراك الآن' : 'اشترك الآن'}
         </Button>
       </div>
 
-      <div className="sd-grid-2" style={{ gap: '20px' }}>
-        <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <h2 style={{ margin: '0 0 4px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>دعوة ولي أمر أو مشرف</h2>
-          <input
-            placeholder="الاسم"
-            value={name}
-            onChange={(e) => { setName(e.target.value); setSent(false); }}
-            style={{ padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
-          />
-          <input
-            placeholder="رقم الجوال"
-            value={mobile}
-            onChange={(e) => { setMobile(e.target.value); setSent(false); }}
-            style={{ padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}
-          />
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {[{ id: 'parent', label: 'ولي أمر' }, { id: 'instructor', label: 'معلّم' }].map((o) => (
-              <button
-                key={o.id}
-                onClick={() => setType(o.id)}
-                style={{
-                  border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px',
-                  fontFamily: 'var(--font-arabic)', fontSize: '12px',
-                  background: type === o.id ? 'var(--lime)' : 'var(--on-indigo-subtle)',
-                  color: type === o.id ? 'var(--lime-ink)' : 'var(--sand)',
-                }}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-          <Button variant="primary" disabled={inviteBusy || !name.trim() || !mobile.trim()} onClick={submit}>
-            {inviteBusy ? 'جاري الإرسال…' : 'إرسال الدعوة'}
-          </Button>
-          {inviteError && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)' }}>{inviteError}</p>}
-          {sent && !inviteError && (
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--teal-ink)' }}>أُرسلت الدعوة. سيتمكن من متابعة تقدمك عند القبول.</p>
-          )}
-        </div>
-
-        <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المشرف وولي الأمر</h2>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المشرف وولي الأمر</h2>
+      <div className="sd-card-grid" style={{ gap: '20px' }}>
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>المتابعون الحاليون</h3>
           {supervisors.length === 0 && (
             <p style={{ margin: 0, fontSize: '12px', color: 'var(--mist)' }}>لا يوجد أحد يتابع تقدمك حالياً.</p>
           )}
@@ -117,11 +97,66 @@ export default function Profile({ student, subscription, onManageSubscription, s
             </div>
           ))}
         </div>
+
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>دعوة ولي أمر أو مشرف</h3>
+          <input
+            placeholder="الاسم"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setSent(false); }}
+            style={{ padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+          />
+          <input
+            placeholder="رقم الجوال"
+            value={mobile}
+            onChange={(e) => { setMobile(e.target.value); setSent(false); }}
+            style={{ padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}
+          />
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {[{ id: 'parent', label: 'ولي أمر' }, { id: 'instructor', label: 'معلّم' }].map((o) => (
+              <button
+                key={o.id}
+                onClick={() => setType(o.id)}
+                style={{
+                  border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px',
+                  fontFamily: 'var(--font-arabic)', fontSize: '12px',
+                  background: type === o.id ? 'var(--lime)' : 'var(--indigo)',
+                  color: type === o.id ? 'var(--lime-ink)' : 'var(--sand)',
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <Button variant="primary" disabled={inviteBusy || !name.trim() || !mobile.trim()} onClick={submit}>
+            {inviteBusy ? 'جاري الإرسال…' : 'إرسال الدعوة'}
+          </Button>
+          {inviteError && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)' }}>{inviteError}</p>}
+          {sent && !inviteError && (
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--teal-ink)' }}>أُرسلت الدعوة. سيتمكن من متابعة تقدمك عند القبول.</p>
+          )}
+        </div>
       </div>
 
-      <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
-        تخصيص موعد إشعار واتساب اليومي (الآن ثابت على {student?.notifSlotStartHour ?? 18}–{student?.notifSlotEndHour ?? 20}) لم يُبنَ كواجهة بعد.
-      </p>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>إعدادات الإشعارات</h2>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '420px' }}>
+        <div>
+          <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>نافذة إرسال الوثبة اليومية عبر واتساب</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <select value={startHour} onChange={(e) => setStartHour(e.target.value)} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}>
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}
+            </select>
+            <span style={{ color: 'var(--mist)', fontSize: '12px' }}>إلى</span>
+            <select value={endHour} onChange={(e) => setEndHour(e.target.value)} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}>
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}
+            </select>
+          </div>
+        </div>
+        <Button variant="primary" style={{ alignSelf: 'flex-start' }} disabled={notifBusy} onClick={saveNotifPrefs}>
+          {notifBusy ? 'جاري الحفظ…' : 'حفظ'}
+        </Button>
+        {notifSaved && <span style={{ fontSize: '12px', color: 'var(--teal-ink)' }}>تم الحفظ.</span>}
+      </div>
     </>
   );
 }

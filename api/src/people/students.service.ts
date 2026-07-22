@@ -64,4 +64,12 @@ export class StudentsService {
       },
     });
   }
+
+  setNotificationPrefs(studentId: string, dto: { notifSlotStartHour?: number; notifSlotEndHour?: number }) {
+    return this.prisma.student.update({
+      where: { userId: studentId },
+      data: dto,
+      select: { notifSlotStartHour: true, notifSlotEndHour: true },
+    });
+  }
 }

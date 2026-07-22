@@ -4,7 +4,7 @@ import { SupervisorsService } from './supervisors.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
-import { CreateStudentDto, CreateSupervisorDto, GoalSetupDto, InviteSupervisorDto, SupervisorPreferencesDto } from './dto/people.dto';
+import { CreateStudentDto, CreateSupervisorDto, GoalSetupDto, InviteSupervisorDto, StudentNotificationPrefsDto, SupervisorPreferencesDto } from './dto/people.dto';
 
 @UseGuards(SessionGuard)
 @Controller()
@@ -42,6 +42,12 @@ export class PeopleController {
   @Patch('students/me/goal')
   setGoal(@Body() dto: GoalSetupDto, @CurrentSession() session: SessionPayload) {
     return this.students.setGoal(session.sub, dto);
+  }
+
+  @RequireSession('student')
+  @Patch('students/me/notification-prefs')
+  setNotificationPrefs(@Body() dto: StudentNotificationPrefsDto, @CurrentSession() session: SessionPayload) {
+    return this.students.setNotificationPrefs(session.sub, dto);
   }
 
   @RequireSession('student')

@@ -29,3 +29,8 @@ export class SupervisorPreferencesDto {
   @IsOptional() @IsInt() @Min(0) @Max(23) weeklyReportHour?: number;
   @IsOptional() @IsBoolean() weeklyReportMuted?: boolean;
 }
+
+export class StudentNotificationPrefsDto {
+  @IsOptional() @IsInt() @Min(0) @Max(23) notifSlotStartHour?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(23) notifSlotEndHour?: number;
+}
