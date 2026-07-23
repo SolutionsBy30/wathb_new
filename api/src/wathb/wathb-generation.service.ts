@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { LabelState } from '../selection/selection-engine.types';
-import { selectLabelsForBundle } from '../selection/selection-engine';
+import { LabelState, SectionState } from '../selection/selection-engine.types';
+import { selectLabelsForBundle, selectSectionForDay } from '../selection/selection-engine';
 
 const PLACEMENT_SIZE = 12;
 
@@ -72,6 +72,7 @@ export class WathbGenerationService {
       const nAnswered = s?.nAnswered ?? 0;
       return {
         labelId: l.id,
+        sectionId: l.area.sectionId,
         accuracy: nAnswered > 0 ? s!.nCorrect / nAnswered : 0.5,
         nAnswered,
         lastServedDaysAgo: s?.lastServedAt ? Math.floor((now - s.lastServedAt.getTime()) / 86400000) : null,
@@ -80,7 +81,31 @@ export class WathbGenerationService {
       };
     });
 
-    const picks = selectLabelsForBundle(labelStates, { bundleSize });
+    // SEL-001 — one section per Wathb. Aggregate the same per-label stats one
+    // level up the taxonomy rather than a separate query.
+    const sectionAgg = new Map<string, { nAnswered: number; nCorrect: number; lastServedDaysAgo: number | null }>();
+    for (const l of labels) {
+      const s = statByLabel.get(l.id);
+      const nAnswered = s?.nAnswered ?? 0;
+      const nCorrect = s?.nCorrect ?? 0;
+      const daysAgo = s?.lastServedAt ? Math.floor((now - s.lastServedAt.getTime()) / 86400000) : null;
+      const cur = sectionAgg.get(l.area.sectionId) ?? { nAnswered: 0, nCorrect: 0, lastServedDaysAgo: null };
+      cur.nAnswered += nAnswered;
+      cur.nCorrect += nCorrect;
+      if (daysAgo !== null && (cur.lastServedDaysAgo === null || daysAgo < cur.lastServedDaysAgo)) cur.lastServedDaysAgo = daysAgo;
+      sectionAgg.set(l.area.sectionId, cur);
+    }
+    const sectionStates: SectionState[] = [...sectionAgg.entries()].map(([sectionId, a]) => ({
+      sectionId,
+      accuracy: a.nAnswered > 0 ? a.nCorrect / a.nAnswered : 0.5,
+      nAnswered: a.nAnswered,
+      lastServedDaysAgo: a.lastServedDaysAgo,
+    }));
+
+    const chosenSectionId = selectSectionForDay(sectionStates);
+    const scopedLabels = chosenSectionId ? labelStates.filter((l) => l.sectionId === chosenSectionId) : labelStates;
+
+    const picks = selectLabelsForBundle(scopedLabels, { bundleSize });
     return this.buildWathb(studentId, picks, 'standard', forDate);
   }
 

@@ -3,6 +3,8 @@
 
 export interface LabelState {
   labelId: string;
+  /** Which section this label belongs to — SEL-001: a bundle draws from one section only. */
+  sectionId: string;
   /** accuracy(label), 0..1. Pass 0.5 (neutral) when nAnswered is 0. */
   accuracy: number;
   nAnswered: number;
@@ -12,6 +14,16 @@ export interface LabelState {
   curriculumWeight: number;
   /** Student's difficulty-ladder position for this label, 1..5. */
   difficultyLevel: number;
+}
+
+// SEL-001 — one section is chosen per Wathb, favoring the student's weakest
+// while rotating over time so no section goes unmeasured. Aggregated the
+// same way as label state, just one level up the taxonomy.
+export interface SectionState {
+  sectionId: string;
+  accuracy: number;
+  nAnswered: number;
+  lastServedDaysAgo: number | null;
 }
 
 export interface SelectionConfig {

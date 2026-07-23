@@ -1,5 +1,5 @@
-import { isStrength, isUnderSampled, labelScore, recencyPenalty, selectLabelsForBundle } from './selection-engine';
-import { DEFAULT_SELECTION_CONFIG, LabelState, SelectionConfig } from './selection-engine.types';
+import { isStrength, isUnderSampled, labelScore, recencyPenalty, sectionScore, selectLabelsForBundle, selectSectionForDay } from './selection-engine';
+import { DEFAULT_SELECTION_CONFIG, LabelState, SectionState, SelectionConfig } from './selection-engine.types';
 
 function seededRng(seed: number): () => number {
   let s = seed;
@@ -12,6 +12,7 @@ function seededRng(seed: number): () => number {
 function label(overrides: Partial<LabelState>): LabelState {
   return {
     labelId: 'l',
+    sectionId: 's',
     accuracy: 0.5,
     nAnswered: 0,
     lastServedDaysAgo: null,
@@ -19,6 +20,10 @@ function label(overrides: Partial<LabelState>): LabelState {
     difficultyLevel: 3,
     ...overrides,
   };
+}
+
+function section(overrides: Partial<SectionState>): SectionState {
+  return { sectionId: 'sec', accuracy: 0.5, nAnswered: 0, lastServedDaysAgo: null, ...overrides };
 }
 
 describe('recencyPenalty', () => {
@@ -110,5 +115,49 @@ describe('selectLabelsForBundle', () => {
 
   it('is a no-op on an empty label set', () => {
     expect(selectLabelsForBundle([])).toEqual([]);
+  });
+});
+
+describe('sectionScore', () => {
+  it('weights a weak, well-sampled section higher than a strong one', () => {
+    const weak = section({ sectionId: 'weak', accuracy: 0.3, nAnswered: 100 });
+    const strong = section({ sectionId: 'strong', accuracy: 0.9, nAnswered: 100 });
+    expect(sectionScore(weak, 20)).toBeGreaterThan(sectionScore(strong, 20));
+  });
+
+  it('heavily penalizes a section served today, pushing rotation', () => {
+    const seenToday = section({ accuracy: 0.3, nAnswered: 100, lastServedDaysAgo: 0 });
+    const seenLongAgo = section({ accuracy: 0.3, nAnswered: 100, lastServedDaysAgo: 30 });
+    expect(sectionScore(seenToday, 20)).toBeLessThan(sectionScore(seenLongAgo, 20));
+  });
+});
+
+describe('selectSectionForDay', () => {
+  it('returns null for an empty section list', () => {
+    expect(selectSectionForDay([])).toBeNull();
+  });
+
+  it('returns the only section when there is just one', () => {
+    expect(selectSectionForDay([section({ sectionId: 'only' })])).toBe('only');
+  });
+
+  it('favors the weakest section across repeated draws', () => {
+    const sections = [
+      section({ sectionId: 'weak', accuracy: 0.3, nAnswered: 100 }),
+      section({ sectionId: 'strong', accuracy: 0.9, nAnswered: 100 }),
+    ];
+    let weakCount = 0;
+    for (let seed = 1; seed <= 50; seed++) {
+      if (selectSectionForDay(sections, { rng: seededRng(seed) }) === 'weak') weakCount += 1;
+    }
+    expect(weakCount).toBeGreaterThan(35); // clearly favored, not a coin flip
+  });
+
+  it('never picks a section not in the input list', () => {
+    const sections = [section({ sectionId: 'a' }), section({ sectionId: 'b' }), section({ sectionId: 'c' })];
+    for (let seed = 1; seed <= 20; seed++) {
+      const picked = selectSectionForDay(sections, { rng: seededRng(seed) });
+      expect(['a', 'b', 'c']).toContain(picked);
+    }
   });
 });

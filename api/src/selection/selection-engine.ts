@@ -14,7 +14,7 @@
 //   - <= 3 questions from any single label              (variety)
 //   - difficulty within +-1 of the student's ladder position for that label
 
-import { DEFAULT_SELECTION_CONFIG, LabelPick, LabelState, SelectionConfig } from './selection-engine.types';
+import { DEFAULT_SELECTION_CONFIG, LabelPick, LabelState, SectionState, SelectionConfig } from './selection-engine.types';
 
 export function recencyPenalty(daysAgo: number | null): number {
   if (daysAgo === null) return 1;
@@ -23,12 +23,43 @@ export function recencyPenalty(daysAgo: number | null): number {
   return 1;
 }
 
+/** Shared weakness/confidence/coverage shape — used for both section and label scoring (SEL-001/SEL-002). */
+function weaknessCoverageScore(accuracy: number, nAnswered: number, minSample: number): number {
+  const weaknessWeight = 1 - accuracy;
+  const confidence = Math.min(1, nAnswered / minSample);
+  const coverageWeight = 1 / (1 + nAnswered);
+  return weaknessWeight * confidence + coverageWeight * (1 - confidence);
+}
+
 export function labelScore(label: LabelState, minSample: number): number {
-  const weaknessWeight = 1 - label.accuracy;
-  const confidence = Math.min(1, label.nAnswered / minSample);
-  const coverageWeight = 1 / (1 + label.nAnswered);
-  const base = weaknessWeight * confidence + coverageWeight * (1 - confidence);
+  const base = weaknessCoverageScore(label.accuracy, label.nAnswered, minSample);
   return base * recencyPenalty(label.lastServedDaysAgo) * label.curriculumWeight;
+}
+
+export function sectionScore(section: SectionState, minSample: number): number {
+  const base = weaknessCoverageScore(section.accuracy, section.nAnswered, minSample);
+  return base * recencyPenalty(section.lastServedDaysAgo);
+}
+
+/**
+ * SEL-001 — pick the one section today's Wathb draws from: favors the
+ * student's weakest section while a stronger recency penalty than the
+ * label-level one (0 days ago counts for almost nothing) pushes rotation
+ * across sections so none goes unmeasured for long. Weighted-random, same
+ * technique as label selection, not a hard round-robin.
+ */
+export function selectSectionForDay(sections: SectionState[], configOverrides: Partial<SelectionConfig> = {}): string | null {
+  if (sections.length === 0) return null;
+  if (sections.length === 1) return sections[0].sectionId;
+  const cfg: SelectionConfig = { ...DEFAULT_SELECTION_CONFIG, rng: Math.random, ...configOverrides };
+  const weights = sections.map((s) => Math.max(sectionScore(s, cfg.minSample), 1e-6));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = cfg.rng() * total;
+  for (let i = 0; i < sections.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return sections[i].sectionId;
+  }
+  return sections[sections.length - 1].sectionId;
 }
 
 export function isStrength(label: LabelState, cfg: SelectionConfig): boolean {
