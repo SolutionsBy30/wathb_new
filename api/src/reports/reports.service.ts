@@ -130,7 +130,7 @@ export class ReportsService {
   // the JSON straight to the HTTP response.
   async getStudentReport(studentId: string, restricted?: false): Promise<{
     student: { id: string; name: string };
-    totals: { lifetimeAnswered: number; lifetimeCorrect: number; lifetimeWrong: number; weekAnswered: number; dailyTarget: number };
+    totals: { lifetimeAnswered: number; lifetimeCorrect: number; lifetimeWrong: number; weekAnswered: number; dailyTarget: number; uniqueQuestionsAnswered: number };
     streak: { current: number; lastCompletedOn: Date | null };
     restricted: boolean;
     accuracyByArea: any[];
@@ -152,10 +152,14 @@ export class ReportsService {
     startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
     startOfWeek.setUTCHours(0, 0, 0, 0);
 
-    const [lifetimeAnswered, lifetimeCorrect, weekAnswered, labelStats, recentMistakes, trend, heatmap] = await Promise.all([
+    const [lifetimeAnswered, lifetimeCorrect, weekAnswered, uniqueQuestions, labelStats, recentMistakes, trend, heatmap] = await Promise.all([
       this.prisma.answer.count({ where: { studentId } }),
       this.prisma.answer.count({ where: { studentId, isCorrect: true } }),
       this.prisma.answer.count({ where: { studentId, answeredAt: { gte: startOfWeek } } }),
+      // SEL-004 — a spaced-review repeat reuses a questionId, so a distinct
+      // count already keeps the "yearly unique-question" promise honest
+      // without needing to special-case isReview here.
+      this.prisma.answer.findMany({ where: { studentId }, distinct: ['questionId'], select: { questionId: true } }),
       this.prisma.studentLabelStat.findMany({
         where: { studentId },
         include: { label: { include: { area: { include: { section: true } } } } },
@@ -229,6 +233,7 @@ export class ReportsService {
         lifetimeWrong: lifetimeAnswered - lifetimeCorrect,
         weekAnswered,
         dailyTarget: DEFAULT_DAILY_TARGET,
+        uniqueQuestionsAnswered: uniqueQuestions.length,
       },
       streak: { current: student.currentStreak, lastCompletedOn: student.lastCompletedOn },
       restricted,

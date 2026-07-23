@@ -2,14 +2,23 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LabelState, SectionState } from '../selection/selection-engine.types';
 import { selectLabelsForBundle, selectSectionForDay } from '../selection/selection-engine';
+import { AuditLogService } from '../admin-ops/audit-log.service';
 
 const PLACEMENT_SIZE = 12;
+// SEL-004 — a question answered wrong re-enters the pool after ~21 days,
+// flagged as review (WathbService.answer() sets Answer.isReview off a prior
+// answer's existence). A question answered correctly never re-enters —
+// once mastered, stays excluded for good.
+const REVIEW_COOLDOWN_DAYS = 21;
 
 @Injectable()
 export class WathbGenerationService {
   private readonly logger = new Logger(WathbGenerationService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLog: AuditLogService,
+  ) {}
 
   private async eligibleLabels(testId: string, track: 'scientific' | 'humanities' | null) {
     // Filtered in application code rather than via Prisma's `isEmpty` list
@@ -23,10 +32,30 @@ export class WathbGenerationService {
     return all.filter((l) => l.area.appliesToTracks.length === 0 || (track != null && l.area.appliesToTracks.includes(track)));
   }
 
-  /** Picks one unseen published question near targetDifficulty for a label, expanding the window if needed. */
+  /** Picks one unseen (or spaced-review-eligible) published question near targetDifficulty for a label, expanding the window if needed. */
   private async pickQuestion(labelId: string, targetDifficulty: number, studentId: string, excludeQuestionIds: Set<string>) {
-    const answered = await this.prisma.answer.findMany({ where: { studentId }, select: { questionId: true } });
-    const seen = new Set(answered.map((a) => a.questionId));
+    const answered = await this.prisma.answer.findMany({
+      where: { studentId },
+      select: { questionId: true, isCorrect: true, answeredAt: true },
+      orderBy: { answeredAt: 'desc' },
+    });
+    // Keep only the most recent answer per question — a question can be
+    // answered more than once once it's re-entered the pool as a review item.
+    const latestByQuestion = new Map<string, { isCorrect: boolean; answeredAt: Date }>();
+    for (const a of answered) {
+      if (!latestByQuestion.has(a.questionId)) latestByQuestion.set(a.questionId, a);
+    }
+    const nowMs = Date.now();
+    const seen = new Set<string>();
+    for (const [questionId, a] of latestByQuestion) {
+      if (a.isCorrect) {
+        seen.add(questionId); // mastered — excluded for good
+        continue;
+      }
+      const daysSince = (nowMs - a.answeredAt.getTime()) / 86400_000;
+      if (daysSince < REVIEW_COOLDOWN_DAYS) seen.add(questionId); // still cooling down
+      // else: cooldown elapsed — eligible again as a spaced-review item
+    }
 
     for (const window of [0, 1, 2, 3, 4]) {
       const lo = Math.max(1, targetDifficulty - window);
@@ -121,6 +150,19 @@ export class WathbGenerationService {
       const q = await this.pickQuestion(pick.labelId, pick.targetDifficulty, studentId, used);
       if (!q) {
         this.logger.warn(`bank exhaustion: label ${pick.labelId} has no unseen published question for student ${studentId}`);
+        // SEL-006 — "fire an admin alert rather than error". No dedicated
+        // event/alert table exists, so this reuses AuditLog (already
+        // queryable, timestamped, actor-optional) rather than adding a new
+        // table for one event kind; OverviewService.alerts() surfaces
+        // recent entries of this action.
+        await this.auditLog.record({
+          actorId: null,
+          actorLabel: 'system',
+          action: 'selection.bank_exhausted',
+          entityType: 'Label',
+          entityId: pick.labelId,
+          note: `no unseen/review-eligible published question for student ${studentId}`,
+        });
         continue;
       }
       used.add(q.id);

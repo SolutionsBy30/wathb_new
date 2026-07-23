@@ -122,6 +122,13 @@ export class WathbService {
     const timedOut = selectedKey == null || elapsedMs > timeLimitMs + TIMEOUT_GRACE_MS;
     const isCorrect = !timedOut && selectedKey === nextExpected.questionVersion.correctKey;
 
+    // SEL-004 — the only way this question could be served again is via the
+    // 21-day spaced-review re-entry in WathbGenerationService.pickQuestion
+    // (a fresh question is always excluded once answered), so a prior
+    // answer to it is the signal that this attempt is a review, not a
+    // first encounter.
+    const priorAnswer = await this.prisma.answer.findFirst({ where: { studentId, questionId: nextExpected.questionId } });
+
     await this.prisma.$transaction(async (tx) => {
       if (!nextExpected.servedAt) {
         await tx.wathbQuestion.update({ where: { id: nextExpected.id }, data: { servedAt } });
@@ -137,6 +144,7 @@ export class WathbService {
           isCorrect,
           timeTakenMs: Math.max(0, elapsedMs),
           timedOut,
+          isReview: !!priorAnswer,
           answeredAt: now,
         },
       });

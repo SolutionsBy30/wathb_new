@@ -85,9 +85,9 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 |---|---|---|
 | SEL-001 **one section per Wathb, rotating** | ❌ | Biggest functional gap — engine currently has no section-level concept |
 | SEL-002/003 weighted scoring, hard constraints | ✅ | Weakness/coverage/recency/strength/exploration/variety/difficulty-ladder all implemented — just not scoped to a section |
-| SEL-004 in-bundle no-repeat + 21-day spaced review | 🟡 | No-repeat effectively holds; **21-day review re-entry not implemented** (README already flagged this) |
+| SEL-004 in-bundle no-repeat + 21-day spaced review | ✅ | No-repeat holds; 21-day review re-entry now implemented — `WathbGenerationService.pickQuestion` excludes correctly-answered questions permanently and wrong-answered ones only until 21 days have passed, `WathbService.answer()` sets `Answer.isReview` off a prior-answer check, and the student report's `totals.uniqueQuestionsAnswered` (distinct `questionId`) keeps the yearly unique-question tally honest independent of review repeats |
 | SEL-005 passages atomic, own bundle | ✅ | `bundleType: 'passage'` exists in schema; verify generation logic honors it |
-| SEL-006 graceful degradation + admin alert on exhaustion | 🟡 | Degradation exists (sibling-label borrowing per earlier build); no admin alert |
+| SEL-006 graceful degradation + admin alert on exhaustion | 🟡 | Degradation = skip-and-continue (a bundle just serves fewer questions rather than erroring); **correcting an earlier overclaim in this doc** — no sibling-label borrowing actually exists. Admin alert now built: every exhaustion event is written to `AuditLog` (`selection.bank_exhausted`) and surfaced on the new admin overview screen's alerts feed (ADM-002), grouped by label with a count over the last 7 days |
 | SEL-007 cold-start uniform coverage | ✅ | Placement Wathb |
 | SEL-008 package/activated-test scoping | 🟡 | Package test scope ✅; "activated tests" plural doesn't apply (single-test model) |
 

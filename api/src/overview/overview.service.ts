@@ -16,6 +16,9 @@ const WATHB_COMPLETION_LOOKBACK_DAYS = 30;
 const DISCRIMINATION_NEGATIVE = 0;
 const P_VALUE_LOW = 0.15;
 const P_VALUE_HIGH = 0.95;
+// SEL-006 — how far back to surface bank-exhaustion events (recorded to
+// AuditLog by WathbGenerationService.buildWathb on every occurrence).
+const EXHAUSTION_LOOKBACK_DAYS = 7;
 
 @Injectable()
 export class OverviewService {
@@ -108,6 +111,19 @@ export class OverviewService {
       distinctIps: ipsByLink.get(link.id)?.size ?? 0,
     }));
 
-    return { thinLabels, negativeDiscrimination, nonDiscriminating, sharingAnomalies };
+    // SEL-006 — "fire an admin alert rather than error" on bank exhaustion.
+    const exhaustionSince = new Date(Date.now() - EXHAUSTION_LOOKBACK_DAYS * 86400_000);
+    const exhaustionEvents = await this.prisma.auditLog.findMany({
+      where: { action: 'selection.bank_exhausted', createdAt: { gte: exhaustionSince } },
+      select: { entityId: true, createdAt: true },
+    });
+    const byLabel = new Map<string, number>();
+    for (const e of exhaustionEvents) byLabel.set(e.entityId, (byLabel.get(e.entityId) ?? 0) + 1);
+    const labelNames = new Map(labelCounts.map((l) => [l.labelId, l.nameAr]));
+    const bankExhaustionEvents = [...byLabel.entries()]
+      .map(([labelId, count]) => ({ labelId, nameAr: labelNames.get(labelId) ?? labelId, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return { thinLabels, negativeDiscrimination, nonDiscriminating, sharingAnomalies, bankExhaustionEvents };
   }
 }

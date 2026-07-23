@@ -102,6 +102,18 @@ export default function Overview() {
               ))}
             </div>
           </AlertSection>
+
+          <AlertSection title="نفاد بنك الأسئلة أثناء التوليد (٧ أيام)" count={alerts.bankExhaustionEvents.length}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {alerts.bankExhaustionEvents.slice(0, 8).map((e) => (
+                <div key={e.labelId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span style={{ fontFamily: 'var(--font-arabic)', color: 'var(--sand)' }}>{e.nameAr}</span>
+                  <span style={{ fontFamily: 'var(--font-latin)', color: 'var(--coral)' }}>{e.count} مرة</span>
+                </div>
+              ))}
+              {alerts.bankExhaustionEvents.length > 8 && <span style={{ fontSize: '11px', color: 'var(--mist)' }}>+{alerts.bankExhaustionEvents.length - 8} أخرى</span>}
+            </div>
+          </AlertSection>
         </div>
       )}
     </div>
