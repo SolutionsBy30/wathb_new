@@ -1,7 +1,86 @@
+import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
 import { AnswerState } from '../../../design-system/components/AnswerState';
+import { api } from '../../../api/client';
 
 const lineStyle = { borderBottom: '0.5px solid var(--on-indigo-line)' };
+
+// STU-012 — one-tap 👍/👎 on the explanation, plus a "report a problem"
+// action that routes the flag (with the student's answer attached) to the
+// admin problem-reports inbox.
+function ExplanationFeedback({ answerId }) {
+  const [rating, setRating] = useState(null);
+  const [reporting, setReporting] = useState(false);
+  const [note, setNote] = useState('');
+  const [reported, setReported] = useState(false);
+
+  const rate = async (value) => {
+    setRating(value);
+    try {
+      await api.rateExplanation(answerId, value);
+    } catch {
+      setRating(null); // roll back the optimistic tap on failure
+    }
+  };
+
+  const submitReport = async () => {
+    try {
+      await api.reportProblem(answerId, note.trim() || undefined);
+      setReported(true);
+      setReporting(false);
+    } catch {
+      /* the tap stays available to retry */
+    }
+  };
+
+  if (reported) {
+    return <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--teal-ink)' }}>تم إرسال البلاغ، شكراً لك.</span>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>هل كان الشرح مفيداً؟</span>
+        <button
+          onClick={() => rate('up')}
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '15px', opacity: rating === 'down' ? 0.4 : 1 }}
+          aria-label="مفيد"
+        >
+          👍
+        </button>
+        <button
+          onClick={() => rate('down')}
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '15px', opacity: rating === 'up' ? 0.4 : 1 }}
+          aria-label="غير مفيد"
+        >
+          👎
+        </button>
+        <button
+          onClick={() => setReporting((r) => !r)}
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)', marginInlineStart: 'auto' }}
+        >
+          الإبلاغ عن مشكلة
+        </button>
+      </div>
+      {reporting && (
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="صف المشكلة (اختياري)…"
+            style={{ flex: 1, padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+          />
+          <button
+            onClick={submitReport}
+            style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--coral)', color: 'var(--indigo)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+          >
+            إرسال
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // S8 in the spec: correctness is revealed here, all at once, after the bundle
 // is finished — never mid-bundle (§6.3), so a wrong answer can't poison focus
@@ -31,6 +110,7 @@ export default function Explanations({ result, onContinue }) {
               {q.timedOut && (
                 <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>انتهى الوقت قبل الإجابة.</span>
               )}
+              {q.answerId && <ExplanationFeedback answerId={q.answerId} />}
             </div>
           );
         })}

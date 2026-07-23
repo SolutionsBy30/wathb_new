@@ -62,6 +62,7 @@ export default function SolutionPerformance({ tests }) {
               <th style={th}>مرات العرض</th>
               <th style={th}>p-value</th>
               <th style={th}>مؤشر التمييز</th>
+              <th style={th}>تقييم الشرح</th>
               <th style={th}>الحالة</th>
             </tr>
           </thead>
@@ -83,6 +84,11 @@ export default function SolutionPerformance({ tests }) {
                   <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>{stats?.nServed ?? 0}</span></td>
                   <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: nonDiscriminating ? 'var(--coral)' : 'var(--sand)' }}>{pValue != null ? `${Math.round(pValue * 100)}%` : '—'}</span></td>
                   <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: badKey ? 'var(--coral)' : 'var(--sand)' }}>{disc != null ? disc.toFixed(2) : '—'}</span></td>
+                  <td style={td}>
+                    <span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>
+                      👍{stats?.explanationUpvotes ?? 0} · 👎{stats?.explanationDownvotes ?? 0}
+                    </span>
+                  </td>
                   <td style={td}>
                     {badKey && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)', fontWeight: 500 }}>⚠ تحقق من مفتاح الإجابة</span>}
                     {!badKey && nonDiscriminating && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>غير مميّز</span>}

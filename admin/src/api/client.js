@@ -61,6 +61,9 @@ export const api = {
   approveQuestion: (id, comment) => request(`/admin/questions/${id}/approve`, { method: 'POST', body: { comment } }),
   rejectQuestion: (id, comment) => request(`/admin/questions/${id}/reject`, { method: 'POST', body: { comment } }),
 
+  listProblemReports: (status) => request(`/admin/questions/problem-reports${status ? `?status=${status}` : ''}`),
+  resolveProblemReport: (id) => request(`/admin/questions/problem-reports/${id}/resolve`, { method: 'POST' }),
+
   importCsv: (file, labelId) => {
     const form = new FormData();
     form.append('file', file);

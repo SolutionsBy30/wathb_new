@@ -63,6 +63,8 @@ export const api = {
   answer: (wathbId, position, selectedKey) =>
     request(`/wathb/${wathbId}/answer`, { method: 'POST', body: { position, selectedKey } }),
   complete: (wathbId) => request(`/wathb/${wathbId}/complete`, { method: 'POST' }),
+  rateExplanation: (answerId, rating) => request(`/wathb/answers/${answerId}/rate-explanation`, { method: 'POST', body: { rating } }),
+  reportProblem: (answerId, note) => request(`/wathb/answers/${answerId}/report-problem`, { method: 'POST', body: { note } }),
 
   report: (studentId) => request(`/report/student/${studentId}`),
 

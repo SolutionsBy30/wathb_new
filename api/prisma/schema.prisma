@@ -135,6 +135,7 @@ model Student {
   labelStats          StudentLabelStat[]
   supervisorLinks     StudentSupervisor[]
   subscriptions       Subscription[]
+  problemReports      ProblemReport[]
 
   @@map("students")
 }
@@ -295,6 +296,7 @@ model Question {
   versions          QuestionVersion[] @relation("QuestionToVersions")
   wathbQuestions    WathbQuestion[]
   answers           Answer[]
+  problemReports    ProblemReport[]
 
   @@index([labelId, status])
   @@index([stemHash])
@@ -338,6 +340,10 @@ model QuestionStats {
   meanTimeMs        Int             @default(0)
   timeoutRate       Float           @default(0)
   distractorDist    Json?
+  // STU-012 — explanation 👍/👎 counts, surfaced on the admin solution-
+  // performance screen alongside p-value/discrimination.
+  explanationUpvotes   Int          @default(0)
+  explanationDownvotes Int          @default(0)
   updatedAt         DateTime        @updatedAt
 
   @@map("question_stats")
@@ -393,9 +399,45 @@ model Answer {
   timedOut          Boolean         @default(false)
   isReview          Boolean         @default(false)
   answeredAt        DateTime        @default(now())
+  // STU-012 — one-tap 👍/👎 on the explanation shown for this served answer.
+  explanationRating ExplanationRating?
+
+  problemReports    ProblemReport[]
 
   @@unique([wathbId, questionId])
   @@map("answers")
+}
+
+enum ExplanationRating {
+  up
+  down
+}
+
+// STU-012 — "report a problem" routes the flag, with the student's answer
+// attached, to an admin inbox. A dedicated model (not AuditLog) because
+// this needs its own open/resolved workflow state, not just an append-only
+// event record.
+model ProblemReport {
+  id         String              @id @default(uuid())
+  studentId  String
+  student    Student             @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  questionId String
+  question   Question            @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answerId   String?
+  answer     Answer?             @relation(fields: [answerId], references: [id], onDelete: SetNull)
+  note       String?
+  status     ProblemReportStatus @default(open)
+  createdAt  DateTime            @default(now())
+  resolvedAt DateTime?
+  resolvedBy String?
+
+  @@index([status])
+  @@map("problem_reports")
+}
+
+enum ProblemReportStatus {
+  open
+  resolved
 }
 
 model MagicLink {

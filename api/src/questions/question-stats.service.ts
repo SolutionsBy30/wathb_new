@@ -43,12 +43,14 @@ export class QuestionStatsService {
     for (const v of versions) {
       const answers = await this.prisma.answer.findMany({
         where: { questionVersionId: v.id },
-        select: { studentId: true, isCorrect: true, selectedKey: true, timeTakenMs: true, timedOut: true },
+        select: { studentId: true, isCorrect: true, selectedKey: true, timeTakenMs: true, timedOut: true, explanationRating: true },
       });
       const nServed = answers.length;
       if (nServed === 0) continue;
 
       const nCorrect = answers.filter((a) => a.isCorrect).length;
+      const explanationUpvotes = answers.filter((a) => a.explanationRating === 'up').length;
+      const explanationDownvotes = answers.filter((a) => a.explanationRating === 'down').length;
       const meanTimeMs = Math.round(answers.reduce((sum, a) => sum + a.timeTakenMs, 0) / nServed);
       const timeoutRate = answers.filter((a) => a.timedOut).length / nServed;
       const distractorDist: Record<string, number> = {};
@@ -73,8 +75,8 @@ export class QuestionStatsService {
 
       await this.prisma.questionStats.upsert({
         where: { questionVersionId: v.id },
-        create: { questionVersionId: v.id, nServed, nCorrect, pValue, discrimination, meanTimeMs, timeoutRate, distractorDist },
-        update: { nServed, nCorrect, pValue, discrimination, meanTimeMs, timeoutRate, distractorDist },
+        create: { questionVersionId: v.id, nServed, nCorrect, pValue, discrimination, meanTimeMs, timeoutRate, distractorDist, explanationUpvotes, explanationDownvotes },
+        update: { nServed, nCorrect, pValue, discrimination, meanTimeMs, timeoutRate, distractorDist, explanationUpvotes, explanationDownvotes },
       });
       processed += 1;
     }

@@ -3,12 +3,13 @@ import { QuestionsService } from './questions.service';
 import { QuestionsController } from './questions.controller';
 import { BulkImportService } from './bulk-import.service';
 import { QuestionStatsService } from './question-stats.service';
+import { ProblemReportsService } from './problem-reports.service';
 import { AuthModule } from '../auth/auth.module';
 import { AuditLogModule } from '../admin-ops/audit-log.module';
 
 @Module({
   imports: [AuthModule, AuditLogModule],
-  providers: [QuestionsService, BulkImportService, QuestionStatsService],
+  providers: [QuestionsService, BulkImportService, QuestionStatsService, ProblemReportsService],
   controllers: [QuestionsController],
   exports: [QuestionsService],
 })

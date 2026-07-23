@@ -248,6 +248,11 @@ export class WathbService {
       const a = byQuestion.get(wq.questionId)!;
       return {
         position: wq.position,
+        // STU-012 — the review screen needs this to attach a 👍/👎 rating or
+        // a problem report to the specific served answer, not just the
+        // question in the abstract (a question can recur across sessions).
+        answerId: a.id,
+        questionId: wq.questionId,
         stem: wq.questionVersion.stem,
         options: wq.questionVersion.options,
         correctKey: wq.questionVersion.correctKey,
@@ -257,6 +262,7 @@ export class WathbService {
         timedOut: a.timedOut,
         labelId: wq.question.labelId,
         labelNameAr: wq.question.label.nameAr,
+        explanationRating: a.explanationRating,
       };
     });
 
@@ -267,5 +273,26 @@ export class WathbService {
       correctCount: questions.filter((q) => q.isCorrect).length,
       questions,
     };
+  }
+
+  /** STU-012 — one-tap 👍/👎 on the explanation shown for a served answer. */
+  async rateExplanation(studentId: string, answerId: string, rating: 'up' | 'down') {
+    const answer = await this.prisma.answer.findUnique({ where: { id: answerId } });
+    if (!answer) throw new NotFoundException('answer not found');
+    if (answer.studentId !== studentId) throw new ForbiddenException();
+    return this.prisma.answer.update({ where: { id: answerId }, data: { explanationRating: rating } });
+  }
+
+  /**
+   * STU-012 — "report a problem" routes the flag, with the student's answer
+   * attached, to an admin inbox (ProblemReportsService owns that inbox).
+   */
+  async reportProblem(studentId: string, answerId: string, note: string | undefined) {
+    const answer = await this.prisma.answer.findUnique({ where: { id: answerId } });
+    if (!answer) throw new NotFoundException('answer not found');
+    if (answer.studentId !== studentId) throw new ForbiddenException();
+    return this.prisma.problemReport.create({
+      data: { studentId, questionId: answer.questionId, answerId: answer.id, note },
+    });
   }
 }

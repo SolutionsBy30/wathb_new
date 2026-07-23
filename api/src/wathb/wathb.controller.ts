@@ -4,6 +4,7 @@ import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 import { AnswerDto } from './dto/answer.dto';
+import { RateExplanationDto, ReportProblemDto } from './dto/feedback.dto';
 
 @UseGuards(SessionGuard)
 @RequireSession('student')
@@ -24,5 +25,17 @@ export class WathbController {
   @Post(':id/complete')
   complete(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
     return this.wathb.complete(session.sub, id);
+  }
+
+  // STU-012 — these key off the answer, not the wathb, so they live under
+  // /wathb/answers rather than nested one level deeper under /:id.
+  @Post('answers/:answerId/rate-explanation')
+  rateExplanation(@Param('answerId') answerId: string, @Body() dto: RateExplanationDto, @CurrentSession() session: SessionPayload) {
+    return this.wathb.rateExplanation(session.sub, answerId, dto.rating);
+  }
+
+  @Post('answers/:answerId/report-problem')
+  reportProblem(@Param('answerId') answerId: string, @Body() dto: ReportProblemDto, @CurrentSession() session: SessionPayload) {
+    return this.wathb.reportProblem(session.sub, answerId, dto.note);
   }
 }

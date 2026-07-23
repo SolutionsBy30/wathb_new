@@ -16,6 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { QuestionsService } from './questions.service';
 import { BulkImportService } from './bulk-import.service';
 import { QuestionStatsService } from './question-stats.service';
+import { ProblemReportsService } from './problem-reports.service';
 import { CreateQuestionDto, ListQuestionsQuery, UpdateQuestionContentDto } from './dto/questions.dto';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
@@ -29,7 +30,20 @@ export class QuestionsController {
     private questions: QuestionsService,
     private bulkImport: BulkImportService,
     private questionStats: QuestionStatsService,
+    private problemReports: ProblemReportsService,
   ) {}
+
+  // STU-012 — the admin inbox for "report a problem." Must come before
+  // ':id' or 'problem-reports' would be parsed as a question id.
+  @Get('problem-reports')
+  listProblemReports(@Query('status') status?: 'open' | 'resolved') {
+    return this.problemReports.list(status);
+  }
+
+  @Post('problem-reports/:id/resolve')
+  resolveProblemReport(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
+    return this.problemReports.resolve(id, session.sub);
+  }
 
   // §6 "refresh_question_stats" — admin-triggered stand-in for the nightly job.
   @Post('refresh-stats')
