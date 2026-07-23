@@ -61,6 +61,12 @@ export class PeopleController {
   }
 
   @RequireSession('admin')
+  @Get('admin/students/:id/detail')
+  adminStudentDetail(@Param('id') id: string) {
+    return this.students.adminDetail(id);
+  }
+
+  @RequireSession('admin')
   @Get('admin/supervisors')
   adminListSupervisors() {
     return this.supervisors.adminList();

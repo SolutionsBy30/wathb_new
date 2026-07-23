@@ -95,6 +95,41 @@ export class StudentsService {
     return this.prisma.student.update({ where: { userId: studentId }, data: { schoolId } });
   }
 
+  /**
+   * ADM-052 — everything the student list's report link-out doesn't show:
+   * subscription/payment history, the notification-delivery log, raw
+   * session-by-session answers, and a device/link access log — for support
+   * and abuse investigation. Each list is capped rather than paginated;
+   * that's enough for a single student's history at today's data volumes
+   * and keeps this one call instead of four separate paginated endpoints.
+   */
+  async adminDetail(studentId: string) {
+    const student = await this.prisma.student.findUnique({
+      where: { userId: studentId },
+      include: { user: true, targetTest: true, school: { include: { city: true } } },
+    });
+    if (!student) throw new NotFoundException('student not found');
+
+    const [subscriptions, notifications, sessions, magicLinks] = await Promise.all([
+      this.prisma.subscription.findMany({ where: { studentId }, orderBy: { createdAt: 'desc' }, include: { package: true } }),
+      this.prisma.notification.findMany({ where: { userId: studentId }, orderBy: { createdAt: 'desc' }, take: 50 }),
+      this.prisma.wathb.findMany({
+        where: { studentId },
+        orderBy: { scheduledFor: 'desc' },
+        take: 30,
+        include: { answers: { select: { isCorrect: true, timeTakenMs: true, timedOut: true, isReview: true, answeredAt: true, labelId: true } } },
+      }),
+      this.prisma.magicLink.findMany({
+        where: { subjectId: studentId, subjectType: 'student' },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: { accessLog: { orderBy: { accessedAt: 'desc' } } },
+      }),
+    ]);
+
+    return { student, subscriptions, notifications, sessions, magicLinks };
+  }
+
   /** Admin lookup for manual actions (e.g. wire-transfer activation) — exact mobile match. */
   async searchByMobile(mobile: string) {
     const user = await this.prisma.user.findUnique({

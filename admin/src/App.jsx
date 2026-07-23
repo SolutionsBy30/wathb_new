@@ -13,6 +13,7 @@ import Subscriptions from './pages/Subscriptions';
 import SolutionPerformance from './pages/SolutionPerformance';
 import Geography from './pages/Geography';
 import Students from './pages/Students';
+import StudentDetail from './pages/StudentDetail';
 import Supervisors from './pages/Supervisors';
 import AuditLog from './pages/AuditLog';
 
@@ -58,6 +59,7 @@ export default function App() {
   const [tab, setTab] = useState('overview');
   const [tests, setTests] = useState([]);
   const [editingQuestionId, setEditingQuestionId] = useState(undefined); // undefined = not editing, null = new
+  const [viewingStudentId, setViewingStudentId] = useState(null);
 
   useEffect(() => {
     if (authed) api.listTests().then(setTests).catch(() => {});
@@ -92,7 +94,7 @@ export default function App() {
               {g.items.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => { setTab(n.id); setEditingQuestionId(undefined); }}
+                  onClick={() => { setTab(n.id); setEditingQuestionId(undefined); setViewingStudentId(null); }}
                   style={{
                     border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: 'var(--radius-md)',
                     fontFamily: 'var(--font-arabic)', fontSize: '13px',
@@ -127,7 +129,10 @@ export default function App() {
         )}
         {tab === 'import' && <BulkImport tests={tests} />}
         {tab === 'solutionPerf' && <SolutionPerformance tests={tests} />}
-        {tab === 'students' && <Students />}
+        {tab === 'students' && viewingStudentId === null && <Students onOpenStudent={setViewingStudentId} />}
+        {tab === 'students' && viewingStudentId !== null && (
+          <StudentDetail studentId={viewingStudentId} onBack={() => setViewingStudentId(null)} />
+        )}
         {tab === 'geography' && <Geography />}
         {tab === 'notifications' && <DeliveryLog />}
         {tab === 'supervisors' && <Supervisors />}

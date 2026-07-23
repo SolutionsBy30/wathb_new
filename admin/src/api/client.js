@@ -108,6 +108,7 @@ export const api = {
   approveSchool: (id) => request(`/admin/geography/schools/${id}/approve`, { method: 'POST' }),
   rejectSchool: (id) => request(`/admin/geography/schools/${id}`, { method: 'DELETE' }),
   cohortReport: (type, id) => request(`/report/cohort?type=${type}&id=${id}`),
+  studentReport: (id) => request(`/report/student/${id}`),
 
   // Students & supervisors (A9)
   listStudents: (params = {}) => {
@@ -120,6 +121,7 @@ export const api = {
     const qs = q.toString();
     return request(`/admin/students${qs ? `?${qs}` : ''}`);
   },
+  studentDetail: (id) => request(`/admin/students/${id}/detail`),
   setStudentSchool: (studentId, schoolId) => request(`/admin/students/${studentId}/school`, { method: 'PATCH', body: { schoolId } }),
   listSupervisors: () => request('/admin/supervisors'),
 };

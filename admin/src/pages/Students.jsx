@@ -21,7 +21,7 @@ function SortHeader({ label, field, sortBy, sortDir, onSort }) {
   );
 }
 
-export default function Students() {
+export default function Students({ onOpenStudent }) {
   const [search, setSearch] = useState('');
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -103,7 +103,9 @@ export default function Students() {
           <tbody>
             {items.map((s) => (
               <tr key={s.userId} style={{ borderTop: '0.5px solid var(--on-indigo-line)' }}>
-                <td style={td}><span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>{s.user.name}</span></td>
+                <td style={{ ...td, cursor: 'pointer' }} onClick={() => onOpenStudent(s.userId)}>
+                  <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)', textDecoration: 'underline' }}>{s.user.name}</span>
+                </td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--mist)' }}>{s.user.mobileE164}</span></td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{s.school?.nameAr ?? '—'}</span></td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>{s._count?.answers ?? '—'}</span></td>
