@@ -1,12 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditLogService } from '../admin-ops/audit-log.service';
 import { CreateQuestionDto, ListQuestionsQuery, UpdateQuestionContentDto } from './dto/questions.dto';
 import { normalizeStem, stemHash } from './normalize';
 
 @Injectable()
 export class QuestionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLog: AuditLogService,
+  ) {}
 
   async list(query: ListQuestionsQuery) {
     const where: Prisma.QuestionWhereInput = {
@@ -138,5 +142,55 @@ export class QuestionsService {
 
   async bulkRetire(ids: string[]) {
     return this.prisma.question.updateMany({ where: { id: { in: ids } }, data: { status: 'retired' } });
+  }
+
+  /** ADM-027 — in_review questions awaiting a second reviewer, oldest first (FIFO). */
+  reviewQueue() {
+    return this.prisma.question.findMany({
+      where: { status: 'in_review' },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        label: { include: { area: { include: { section: { include: { test: true } } } } } },
+        versions: { orderBy: { version: 'desc' }, take: 1 },
+      },
+    });
+  }
+
+  /** A second reviewer approves — publishes the question as-is. */
+  async approveReview(id: string, reviewerId: string, comment?: string) {
+    const question = await this.get(id);
+    if (question.status !== 'in_review') throw new BadRequestException('question is not awaiting review');
+    const updated = await this.prisma.question.update({ where: { id }, data: { status: 'published' } });
+    await this.auditLog.record({
+      actorId: reviewerId,
+      actorLabel: 'admin',
+      action: 'question.review_approved',
+      entityType: 'Question',
+      entityId: id,
+      note: comment,
+    });
+    return updated;
+  }
+
+  /**
+   * A second reviewer rejects — sends the question back to draft so its
+   * author can revise and resubmit, rather than a dead-end status. The
+   * comment is required here since it's the only place the author will see
+   * *why* (spec §3.4 "approve/reject with a comment").
+   */
+  async rejectReview(id: string, reviewerId: string, comment: string) {
+    if (!comment?.trim()) throw new BadRequestException('a comment is required when rejecting');
+    const question = await this.get(id);
+    if (question.status !== 'in_review') throw new BadRequestException('question is not awaiting review');
+    const updated = await this.prisma.question.update({ where: { id }, data: { status: 'draft' } });
+    await this.auditLog.record({
+      actorId: reviewerId,
+      actorLabel: 'admin',
+      action: 'question.review_rejected',
+      entityType: 'Question',
+      entityId: id,
+      note: comment,
+    });
+    return updated;
   }
 }

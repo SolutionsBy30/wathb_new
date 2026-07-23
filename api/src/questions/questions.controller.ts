@@ -47,6 +47,12 @@ export class QuestionsController {
     return this.questions.findSimilar(stem);
   }
 
+  // ADM-027 — must come before ':id' or 'review-queue' would be parsed as an id.
+  @Get('review-queue')
+  reviewQueue() {
+    return this.questions.reviewQueue();
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.questions.get(id);
@@ -65,6 +71,16 @@ export class QuestionsController {
   @Patch(':id/status')
   setStatus(@Param('id') id: string, @Body('status') status: 'draft' | 'in_review' | 'published' | 'retired') {
     return this.questions.setStatus(id, status);
+  }
+
+  @Post(':id/approve')
+  approve(@Param('id') id: string, @Body('comment') comment: string | undefined, @CurrentSession() session: SessionPayload) {
+    return this.questions.approveReview(id, session.sub, comment);
+  }
+
+  @Post(':id/reject')
+  reject(@Param('id') id: string, @Body('comment') comment: string, @CurrentSession() session: SessionPayload) {
+    return this.questions.rejectReview(id, session.sub, comment);
   }
 
   @Post('bulk-retire')

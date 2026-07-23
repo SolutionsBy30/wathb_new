@@ -32,6 +32,7 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
   const [correctKey, setCorrectKey] = useState('أ');
   const [explanation, setExplanation] = useState('');
   const [source, setSource] = useState('');
+  const [status, setStatusField] = useState(null);
   const [dup, setDup] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -50,6 +51,7 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
         setCorrectKey(v.correctKey);
         setExplanation(v.explanation);
         setSource(q.source ?? '');
+        setStatusField(q.status);
       });
     }
   }, [isNew, questionId]);
@@ -60,6 +62,21 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
       const res = await api.findSimilar(stem.trim());
       setDup(res.exactDuplicateQuestionId || res.fuzzyMatches.length > 0 ? res : null);
     } catch { /* non-fatal */ }
+  };
+
+  const STATUS_LABEL = { draft: 'مسودة', in_review: 'قيد المراجعة', published: 'منشور', retired: 'متقاعد' };
+
+  const submitForReview = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await api.setStatus(questionId, 'in_review');
+      onDone();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const save = async () => {
@@ -87,9 +104,12 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>
-          {isNew ? 'سؤال جديد' : 'تعديل السؤال (نسخة جديدة)'}
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>
+            {isNew ? 'سؤال جديد' : 'تعديل السؤال (نسخة جديدة)'}
+          </h1>
+          {status && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>· {STATUS_LABEL[status]}</span>}
+        </div>
         <button onClick={onDone} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>→ رجوع للبنك</button>
       </div>
 
@@ -150,7 +170,18 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
           <input value={source} onChange={(e) => setSource(e.target.value)} style={fieldStyle} />
 
           {error && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>}
-          <Button variant="primary" disabled={busy} onClick={save}>{busy ? 'جاري الحفظ…' : 'حفظ'}</Button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Button variant="primary" disabled={busy} onClick={save}>{busy ? 'جاري الحفظ…' : 'حفظ'}</Button>
+            {!isNew && status === 'draft' && (
+              <button
+                disabled={busy}
+                onClick={submitForReview}
+                style={{ border: 'none', cursor: 'pointer', padding: '10px 16px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--lime)', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+              >
+                إرسال للمراجعة
+              </button>
+            )}
+          </div>
         </div>
 
         <div dir="rtl" style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-lg)', padding: '24px', maxWidth: '420px', position: 'sticky', top: '20px' }}>

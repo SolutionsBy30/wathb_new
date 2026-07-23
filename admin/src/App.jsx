@@ -5,6 +5,7 @@ import Overview from './pages/Overview';
 import Taxonomy from './pages/Taxonomy';
 import QuestionBank from './pages/QuestionBank';
 import QuestionEditor from './pages/QuestionEditor';
+import ReviewQueue from './pages/ReviewQueue';
 import BulkImport from './pages/BulkImport';
 import DeliveryLog from './pages/DeliveryLog';
 import Packages from './pages/Packages';
@@ -23,6 +24,7 @@ const NAV_GROUPS = [
     items: [
       { id: 'taxonomy', label: 'الاختبارات والتصنيف' },
       { id: 'bank', label: 'بنك الأسئلة' },
+      { id: 'reviewQueue', label: 'قائمة المراجعة' },
       { id: 'import', label: 'استيراد جماعي' },
       { id: 'solutionPerf', label: 'أداء الأسئلة' },
     ],
@@ -119,6 +121,9 @@ export default function App() {
             questionId={editingQuestionId}
             onDone={() => setEditingQuestionId(undefined)}
           />
+        )}
+        {tab === 'reviewQueue' && (
+          <ReviewQueue onEdit={(id) => { setTab('bank'); setEditingQuestionId(id); }} />
         )}
         {tab === 'import' && <BulkImport tests={tests} />}
         {tab === 'solutionPerf' && <SolutionPerformance tests={tests} />}

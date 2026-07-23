@@ -57,6 +57,10 @@ export const api = {
   bulkRetire: (ids) => request('/admin/questions/bulk-retire', { method: 'POST', body: { ids } }),
   findSimilar: (stem) => request(`/admin/questions/similar?stem=${encodeURIComponent(stem)}`),
 
+  reviewQueue: () => request('/admin/questions/review-queue'),
+  approveQuestion: (id, comment) => request(`/admin/questions/${id}/approve`, { method: 'POST', body: { comment } }),
+  rejectQuestion: (id, comment) => request(`/admin/questions/${id}/reject`, { method: 'POST', body: { comment } }),
+
   importCsv: (file, labelId) => {
     const form = new FormData();
     form.append('file', file);

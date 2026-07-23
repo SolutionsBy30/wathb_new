@@ -63,8 +63,8 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 | ADM-020–023 question bank + editor | ✅ | |
 | ADM-024 versioning | ✅ | |
 | ADM-025 duplicate detection | ✅ | `findSimilar` (pg_trgm) |
-| ADM-026 bank-health widget | ❌ | Not built |
-| ADM-027 review queue | ❌ | `in_review` status exists as a filter, no dedicated queue/approve screen |
+| ADM-026 bank-health widget | 🟡 | Correcting a stale ❌ in this doc — `bankHealthScore` + low-inventory label list were already built into the overview/alerts screen (`MIN_PUBLISHED_PER_LABEL = 10`); still a simplified stand-in for the spec's fuller "months-of-runway" demand-curve model, which this codebase has no per-day-plan data to compute |
+| ADM-027 review queue | ✅ | `GET /admin/questions/review-queue` (FIFO, oldest first), `POST .../approve` and `.../reject` — reject requires a comment (spec: "approve/reject with a comment"), stored via the audit log rather than a new column. Reject returns the question to `draft` so its author can revise and resubmit; approve publishes it. Both are guarded to only fire on `in_review` questions. New "قائمة المراجعة" admin tab shows stem/options/label with an inline comment box per item. `QuestionEditor` gained a "إرسال للمراجعة" (submit for review) action on drafts, closing the loop — previously `in_review` was reachable only as a dead-end filter with no way to enter or leave it from the UI. |
 | ADM-030/031 **destination-first import** | ❌ | Current import still requires a `label_id` column per row in the uploaded file — opposite of the spec's destination-selected-in-wizard model |
 | ADM-032–034 template, 3-stage import, no partial commit | ✅ | Matches current (label-per-row) design |
 | ADM-040–044 solution performance | ✅ | Built this session (p-value/discrimination/flags); missing: distractor-distribution UI, explanation 👍/👎 counts, problem-report counts, correct-rate-over-time chart, per-student answer list |
