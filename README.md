@@ -325,17 +325,34 @@ Built directly against `docs/wathb-srs.md`'s gap analysis (`docs/srs-gap-analysi
   today's result stay visible; everything diagnostic is locked* — the
   strongest pull toward conversion among the boundary's options. Revisit if
   product wants a lighter restriction.
+- **ADM-030/031 — destination-first bulk import**: the admin now picks
+  Test → Section → Area → Label in a cascading picker before ever uploading
+  a file; every row in the CSV lands in that one destination. The template
+  and per-row validation no longer carry a `label_id` column — the single
+  most common source of import error (mistyped/mismatched taxonomy names)
+  is gone by construction rather than caught by validation.
+- **ADM-085 — suspend + audit log**: a new `AuditLog` table (actor, action,
+  entity, before/after, timestamp) and `User.suspendedAt`/`suspendReason`.
+  `POST /api/admin/users/:id/suspend` (required reason, optional note)
+  revokes every live magic link for that user and is reversible via
+  `POST /api/admin/users/:id/unsuspend` — both logged. Suspension is
+  enforced at every auth entry point (OTP request/verify, magic-link
+  exchange, admin password login), not just the admin UI. Audit logging is
+  also wired into the two actions the SRS explicitly calls out as already
+  built: wire-transfer subscription activation (ADM-073) and OTP fallback
+  usage (ONB-014). Admin screens: a suspend/unsuspend toggle per row on the
+  students list, and a new "سجل التدقيق" (audit log) screen.
 
 ## What's not built yet
 
 Deliberately out of scope for this pass — each is a later phase in the
 spec's own build sequence (§11): the remaining Phase 6 items called out
 just above, plus the Phase 3/4/5 gaps called out earlier in this README,
-plus everything after free-tier in the SRS gap analysis's build order
-(destination-first bulk import redesign, suspend + audit log, the admin
-overview/alerts screen, and the smaller items — per-test language config,
-review queue, step-up OTP, invoicing/ZATCA, discount codes, WABA quality
-dashboard, PDPL export/delete, school comparison-overlay view).
+plus everything after suspend/audit-log in the SRS gap analysis's build
+order (the admin overview/alerts screen, and the smaller items — per-test
+language config, review queue, step-up OTP, invoicing/ZATCA, discount
+codes, WABA quality dashboard, PDPL export/delete, school
+comparison-overlay view, bulk/promotional notification sends).
 
 ## Running it locally
 

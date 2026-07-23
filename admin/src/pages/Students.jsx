@@ -42,6 +42,20 @@ export default function Students() {
     else { setSortBy(field); setSortDir(field === 'name' ? 'asc' : 'desc'); }
   };
 
+  // ADM-085 — required reason, optional note; reversible.
+  const toggleSuspend = async (s) => {
+    if (s.user.status === 'suspended') {
+      await api.unsuspendUser(s.userId);
+      load();
+      return;
+    }
+    const reason = window.prompt('سبب التعليق (إلزامي):');
+    if (!reason || !reason.trim()) return;
+    const note = window.prompt('ملاحظة إضافية (اختياري):') || undefined;
+    await api.suspendUser(s.userId, reason.trim(), note);
+    load();
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الطلاب — {total}</h1>
@@ -83,6 +97,7 @@ export default function Students() {
               <th style={th}>السلسلة</th>
               <SortHeader label="المؤشر المركّب" field="performance" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <SortHeader label="نهاية الاشتراك" field="subscriptionEnd" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <th style={th}>الحالة</th>
             </tr>
           </thead>
           <tbody>
@@ -101,6 +116,18 @@ export default function Students() {
                   )}
                 </td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--mist)' }}>{fmtDate(s.subscriptionEnd)}</span></td>
+                <td style={td}>
+                  <button
+                    onClick={() => toggleSuspend(s)}
+                    title={s.user.status === 'suspended' ? (s.user.suspendReason ?? '') : undefined}
+                    style={{
+                      border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'var(--font-arabic)', fontSize: '12px',
+                      color: s.user.status === 'suspended' ? 'var(--coral)' : 'var(--teal-ink)',
+                    }}
+                  >
+                    {s.user.status === 'suspended' ? 'معلّق — إلغاء التعليق' : 'نشط — تعليق'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

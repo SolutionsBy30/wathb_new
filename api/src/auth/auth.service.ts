@@ -32,6 +32,7 @@ export class AuthService {
     }
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('invalid credentials');
+    if (user.status === 'suspended') throw new UnauthorizedException('account suspended'); // ADM-085
     const token = this.issueSession({ sub: user.id, kind: 'admin' }, 12 * 3600);
     return { token, name: user.name };
   }
@@ -44,6 +45,11 @@ export class AuthService {
     const result = await this.magicLinks.exchange(rawToken, access);
     if (!result.ok) throw new UnauthorizedException(`magic link ${result.reason}`);
     const { link } = result;
+    // ADM-085 — suspending revokes live links, but a link minted by a
+    // scheduled job *after* suspension (e.g. a weekly report) wouldn't be
+    // caught by that alone — check status here too.
+    const subject = await this.prisma.user.findUnique({ where: { id: link.subjectId } });
+    if (subject?.status === 'suspended') throw new UnauthorizedException('account suspended');
     const kind = link.subjectType === 'student' ? 'student' : 'supervisor';
     const ttl = Math.max(60, Math.floor((link.expiresAt.getTime() - Date.now()) / 1000));
     const token = this.issueSession(

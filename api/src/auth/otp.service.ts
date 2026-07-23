@@ -4,6 +4,7 @@ import { createHash, randomInt } from 'crypto';
 import { SubjectType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/channel.interface';
+import { AuditLogService } from '../admin-ops/audit-log.service';
 
 const OTP_TTL_MINUTES = 5;
 const MAX_ATTEMPTS = 5;
@@ -27,6 +28,7 @@ export class OtpService {
     private prisma: PrismaService,
     @Inject(NOTIFICATION_CHANNEL) private channel: NotificationChannel,
     private config: ConfigService,
+    private auditLog: AuditLogService,
   ) {}
 
   /** True only when real WhatsApp Cloud API credentials are configured — see notification-channel.provider.ts's identical check. */
@@ -39,11 +41,27 @@ export class OtpService {
     if (!user || user.role !== subjectType) {
       throw new ForbiddenException('no account found for this mobile number');
     }
+    // ADM-085 — fail before ever generating/sending a code, not after.
+    if (user.status === 'suspended') throw new ForbiddenException('account suspended');
 
     const whatsappConfigured = this.hasWhatsAppConfigured();
     const code = whatsappConfigured ? randomInt(1000, 10000).toString() : FALLBACK_OTP_CODE;
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000);
     await this.prisma.otpCode.create({ data: { mobileE164: mobile, subjectType, codeHash: hashCode(code), expiresAt } });
+
+    // ONB-014 — every use of the fixed fallback value is recorded in the
+    // audit log, not just returned in devCode.
+    if (!whatsappConfigured) {
+      await this.auditLog.record({
+        actorId: null,
+        actorLabel: 'system',
+        action: 'otp.fallback_used',
+        entityType: 'User',
+        entityId: user.id,
+        after: { mobile, subjectType },
+        note: 'WhatsApp channel not configured — fixed fallback OTP code issued',
+      });
+    }
 
     // A misconfigured/failing WhatsApp integration (bad phone number ID,
     // expired token, unapproved template, ...) must never turn into a 500
@@ -86,6 +104,10 @@ export class OtpService {
     }
 
     await this.prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
-    return this.prisma.user.findUniqueOrThrow({ where: { mobileE164: mobile } });
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { mobileE164: mobile } });
+    // Defense in depth — the same account could be suspended between
+    // requestOtp and verifyOtp.
+    if (user.status === 'suspended') throw new UnauthorizedException('account suspended');
+    return user;
   }
 }

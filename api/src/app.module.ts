@@ -11,6 +11,7 @@ import { PeopleModule } from './people/people.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentsModule } from './payments/payments.module';
 import { GeographyModule } from './geography/geography.module';
+import { AdminOpsModule } from './admin-ops/admin-ops.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { GeographyModule } from './geography/geography.module';
     NotificationsModule,
     PaymentsModule,
     GeographyModule,
+    AdminOpsModule,
   ],
   controllers: [AppController],
 })

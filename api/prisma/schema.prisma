@@ -94,6 +94,12 @@ model User {
   // NOT-010 — STOP/إيقاف is honored instantly and permanently: set once,
   // never auto-cleared. Every outbound send path must check this first.
   whatsappOptedOutAt DateTime?
+  // ADM-085 — suspension is reversible and logged (see AuditLog), unlike
+  // the STOP opt-out above. status flips to "suspended"/"active"; every
+  // auth entry point (OTP request/verify, magic-link exchange, admin
+  // login) checks status, and suspending revokes all live magic links.
+  suspendedAt      DateTime?
+  suspendReason    String?
   createdAt        DateTime  @default(now())
 
   student    Student?
@@ -604,4 +610,25 @@ model Subscription {
   createdAt            DateTime           @default(now())
 
   @@map("subscriptions")
+}
+
+// ADM-085 — full audit trail of admin actions: manual/wire-transfer
+// activations, suspensions, and any use of the OTP fallback (ONB-014).
+// actorLabel is denormalized (name/email at the time of the action) so the
+// log stays readable even if the actor account is later changed or removed.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actorLabel String
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

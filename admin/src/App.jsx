@@ -12,6 +12,7 @@ import SolutionPerformance from './pages/SolutionPerformance';
 import Geography from './pages/Geography';
 import Students from './pages/Students';
 import Supervisors from './pages/Supervisors';
+import AuditLog from './pages/AuditLog';
 
 const NAV = [
   { id: 'taxonomy', label: 'الاختبارات والتصنيف' },
@@ -24,6 +25,7 @@ const NAV = [
   { id: 'supervisors', label: 'المشرفون' },
   { id: 'packages', label: 'الباقات والتسعير' },
   { id: 'subscriptions', label: 'الاشتراكات' },
+  { id: 'auditLog', label: 'سجل التدقيق' },
 ];
 
 export default function App() {
@@ -92,6 +94,7 @@ export default function App() {
         {tab === 'supervisors' && <Supervisors />}
         {tab === 'packages' && <Packages tests={tests} />}
         {tab === 'subscriptions' && <Subscriptions />}
+        {tab === 'auditLog' && <AuditLog />}
       </main>
     </div>
   );

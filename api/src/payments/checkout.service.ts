@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider.interface';
+import { AuditLogService } from '../admin-ops/audit-log.service';
 
 @Injectable()
 export class CheckoutService {
@@ -9,6 +10,7 @@ export class CheckoutService {
     private prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER) private provider: PaymentProvider,
     private config: ConfigService,
+    private auditLog: AuditLogService,
   ) {}
 
   /** True only when no real Paymob credentials are configured — see payment-provider.module.ts's identical check. */
@@ -84,7 +86,7 @@ export class CheckoutService {
     const endsAt = new Date(startsAt);
     endsAt.setUTCMonth(endsAt.getUTCMonth() + pkg.durationMonths);
 
-    return this.prisma.subscription.create({
+    const subscription = await this.prisma.subscription.create({
       data: {
         studentId,
         packageId,
@@ -96,5 +98,20 @@ export class CheckoutService {
       },
       include: { package: true },
     });
+
+    // ADM-073 — every manual activation is written to the audit log with
+    // the acting administrator, the amount, and the reference.
+    const admin = await this.prisma.user.findUnique({ where: { id: adminUserId }, select: { name: true, email: true } });
+    await this.auditLog.record({
+      actorId: adminUserId,
+      actorLabel: admin?.email ?? admin?.name ?? adminUserId,
+      action: 'subscription.activate_wire_transfer',
+      entityType: 'Subscription',
+      entityId: subscription.id,
+      after: { studentId, packageId, priceSnapshotHalalas: pkg.priceHalalas, paymentRef: subscription.paymentRef },
+      note: `wire transfer activation for student ${studentId}`,
+    });
+
+    return subscription;
   }
 }

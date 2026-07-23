@@ -78,6 +78,11 @@ export const api = {
   searchStudent: (mobile) => request(`/admin/students/search?mobile=${encodeURIComponent(mobile)}`),
   activateWireTransfer: (studentId, packageId) => request('/admin/subscriptions/activate-wire-transfer', { method: 'POST', body: { studentId, packageId } }),
 
+  // ADM-085 — suspension + audit log
+  suspendUser: (userId, reason, note) => request(`/admin/users/${userId}/suspend`, { method: 'POST', body: { reason, note } }),
+  unsuspendUser: (userId) => request(`/admin/users/${userId}/unsuspend`, { method: 'POST' }),
+  auditLog: () => request('/admin/audit-log'),
+
   // Solution performance (§4.5.2)
   refreshQuestionStats: () => request('/admin/questions/refresh-stats', { method: 'POST' }),
 
