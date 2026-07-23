@@ -110,6 +110,18 @@ export default function Explanations({ result, onContinue }) {
               {q.timedOut && (
                 <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>انتهى الوقت قبل الإجابة.</span>
               )}
+              {(q.cohortMeanTimeMs != null || q.cohortAccuracy != null) && (
+                <div style={{ display: 'flex', gap: '14px', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+                  {q.cohortMeanTimeMs != null && (
+                    <span>
+                      وقتك {Math.round(q.timeTakenMs / 1000)}ث مقابل متوسط الطلاب {Math.round(q.cohortMeanTimeMs / 1000)}ث
+                    </span>
+                  )}
+                  {q.cohortAccuracy != null && (
+                    <span>دقة الطلاب لهذا السؤال: {Math.round(q.cohortAccuracy * 100)}%</span>
+                  )}
+                </div>
+              )}
               {q.answerId && <ExplanationFeedback answerId={q.answerId} />}
             </div>
           );

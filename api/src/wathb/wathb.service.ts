@@ -2,9 +2,13 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { WathbGenerationService } from './wathb-generation.service';
 import { anyActiveCovers } from '../payments/subscription.util';
+import { MIN_SAMPLE_FOR_REPORTING } from '../reports/reports.service';
 
 const DEFAULT_BUNDLE_SIZE = 5;
 const TIMEOUT_GRACE_MS = 3000;
+// STU-009 — spec's recommended idle window before an unfinished Wathb
+// closes as partial.
+const IDLE_WINDOW_MINUTES = 30;
 
 function ladderStep(current: number, questionDifficulty: number, isCorrect: boolean): number {
   if (isCorrect && questionDifficulty >= current) return Math.min(5, current + 1);
@@ -244,8 +248,19 @@ export class WathbService {
     });
     const byQuestion = new Map(finalAnswers.map((a) => [a.questionId, a]));
 
+    // STU-011 — per-question cohort time/accuracy comparison on the review
+    // screen. Reuses QuestionStats (already computed for ADM-040's
+    // solution-performance screen) rather than a separate live aggregation;
+    // same MIN_SAMPLE_FOR_REPORTING gate as every other cohort figure in
+    // this app, so a thin cohort never produces a misleadingly precise number.
+    const versionIds = wathb.questions.map((wq) => wq.questionVersion.id);
+    const stats = await this.prisma.questionStats.findMany({ where: { questionVersionId: { in: versionIds } } });
+    const statsByVersion = new Map(stats.map((s) => [s.questionVersionId, s]));
+
     const questions = wathb.questions.map((wq) => {
       const a = byQuestion.get(wq.questionId)!;
+      const s = statsByVersion.get(wq.questionVersion.id);
+      const cohortReady = !!s && s.nServed >= MIN_SAMPLE_FOR_REPORTING;
       return {
         position: wq.position,
         // STU-012 — the review screen needs this to attach a 👍/👎 rating or
@@ -260,9 +275,12 @@ export class WathbService {
         selectedKey: a.selectedKey,
         isCorrect: a.isCorrect,
         timedOut: a.timedOut,
+        timeTakenMs: a.timeTakenMs,
         labelId: wq.question.labelId,
         labelNameAr: wq.question.label.nameAr,
         explanationRating: a.explanationRating,
+        cohortMeanTimeMs: cohortReady ? s!.meanTimeMs : null,
+        cohortAccuracy: cohortReady && s!.pValue != null ? s!.pValue : null,
       };
     });
 
@@ -273,6 +291,36 @@ export class WathbService {
       correctCount: questions.filter((q) => q.isCorrect).length,
       questions,
     };
+  }
+
+  /**
+   * STU-009 — "after a defined idle window (recommended 30 minutes) the
+   * Wathb is closed as partial and only answered questions count." Unlike
+   * complete()'s interruption handling (which force-answers every
+   * unanswered question as timed-out so the bundle is fully scored),
+   * closing as partial leaves unanswered questions unanswered — there is
+   * no Answer row for them at all, so a report or stats query over
+   * completed/partial Wathbs naturally only ever sees what was actually
+   * answered. Streak/lastCompletedOn are deliberately left untouched: the
+   * student didn't finish, so the day shouldn't read as completed.
+   */
+  async closeIdleWathbs(now: Date = new Date()) {
+    const cutoff = new Date(now.getTime() - IDLE_WINDOW_MINUTES * 60_000);
+    const candidates = await this.prisma.wathb.findMany({
+      where: { status: 'opened', openedAt: { lt: cutoff } },
+      select: { id: true, openedAt: true, answers: { select: { answeredAt: true } } },
+    });
+
+    let closed = 0;
+    for (const w of candidates) {
+      const lastActivity = w.answers.length > 0
+        ? new Date(Math.max(...w.answers.map((a) => a.answeredAt.getTime())))
+        : w.openedAt;
+      if (!lastActivity || lastActivity > cutoff) continue; // answered recently — not idle yet
+      await this.prisma.wathb.update({ where: { id: w.id }, data: { status: 'partial' } });
+      closed++;
+    }
+    return { checked: candidates.length, closed };
   }
 
   /** STU-012 — one-tap 👍/👎 on the explanation shown for a served answer. */
