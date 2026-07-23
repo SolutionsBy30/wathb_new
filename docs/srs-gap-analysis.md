@@ -75,7 +75,7 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 | FRE-001–008 **free tier** | ❌ | **Entirely missing.** No package feature flags, no 1-Wathb/day cap, no partial-report blur, no locked-invite state |
 | ADM-080/081 notification log | ✅ | |
 | ADM-082 manual individual send w/ fresh link | ✅ | `send/:studentId` |
-| ADM-083 bulk/promotional send to filtered audience | ❌ | Only "send all due" exists, not an audience-filtered campaign tool |
+| ADM-083 bulk/promotional send to filtered audience | ✅ | `POST /admin/notifications/campaign/preview` (recipient count + sample, no dispatch) and `.../campaign/send`, filterable by package, subscription status, region/city/school, and inactivity (days since last completed Wathb). Respects opt-out, the same 2/day frequency cap as the automated job, and — found and fixed during live testing — a same-day repeat campaign to an already-messaged student now degrades to a counted skip instead of a 500 (the `(userId, kind, scheduledFor)` unique index that guards the daily job's own idempotency was also silently colliding on the second campaign send). Records cost estimate + full result breakdown in the audit log. New "إرسال جماعي لجمهور مُصفّى" panel on the notifications admin screen. |
 | ADM-084 WABA quality/cost dashboard | ❌ | Not built |
 | ADM-085 suspend + audit log | ❌ | Not built — no `audit_log` table, no suspend action anywhere |
 
@@ -102,7 +102,7 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 | NOT-008 idempotent nightly plan, UTC storage | ✅ | `plan_day` idempotent per `(student, date)`; admin-triggered not cron |
 | NOT-009 paused/expired/suspended/skip/quiet-hour handling, retry ladder | 🟡 | Skip-days ✅; suspended state doesn't exist; no retry ladder |
 | NOT-010 frequency caps, STOP opt-out | 🟡 | 2/day cap ✅ (`MAX_STUDENT_MESSAGES_PER_DAY`); **no STOP/إيقاف keyword handling at all** |
-| NOT-011 admin manual + bulk send | 🟡 | Manual ✅; bulk/filtered-campaign ❌ |
+| NOT-011 admin manual + bulk send | ✅ | Manual ✅ (`send/:studentId`); bulk/filtered-campaign ✅ (ADM-083, this pass) — both share the same opt-out check and frequency cap as automated sends |
 | NOT-012 channel abstraction | ✅ | `NotificationChannel` interface, Console/WhatsApp adapters |
 
 ## §4 Data model

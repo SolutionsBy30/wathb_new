@@ -1,8 +1,12 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { WeeklyReportService } from './weekly-report.service';
+import { CampaignService } from './campaign.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { CurrentSession } from '../auth/current-session.decorator';
+import { SessionPayload } from '../auth/auth.types';
 import { TriggerDateDto } from './dto/trigger.dto';
+import { CampaignAudienceDto, CampaignSendDto } from './dto/campaign.dto';
 
 function resolveDate(forDate?: string, defaultOffsetDays = 0): Date {
   if (forDate) return new Date(forDate);
@@ -27,6 +31,7 @@ export class NotificationsController {
   constructor(
     private notifications: NotificationsService,
     private weeklyReports: WeeklyReportService,
+    private campaigns: CampaignService,
   ) {}
 
   @Get()
@@ -59,5 +64,18 @@ export class NotificationsController {
   @Post('weekly-reports')
   sendWeeklyReports(@Body() dto: TriggerDateDto) {
     return this.weeklyReports.sendAllDueWeeklyReports(resolveDate(dto.forDate));
+  }
+
+  // ADM-083 — bulk/filtered campaign send. Preview is a read-only dry run of
+  // the same audience filter used by send, so the admin sees the recipient
+  // count before anything goes out.
+  @Post('campaign/preview')
+  previewCampaign(@Body() dto: CampaignAudienceDto) {
+    return this.campaigns.previewAudience(dto);
+  }
+
+  @Post('campaign/send')
+  sendCampaign(@Body() dto: CampaignSendDto, @CurrentSession() session: SessionPayload) {
+    return this.campaigns.send(dto, session.sub);
   }
 }

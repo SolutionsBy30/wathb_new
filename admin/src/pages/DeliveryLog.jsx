@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import Campaign from './Campaign';
 
 const STATUS_COLOR = { scheduled: 'var(--mist)', sent: 'var(--lime)', delivered: 'var(--teal-ink)', read: 'var(--teal-ink)', failed: 'var(--coral)' };
 const STATUS_LABEL = { scheduled: 'مجدول', sent: 'أُرسل', delivered: 'تم التسليم', read: 'قُرئ', failed: 'فشل' };
@@ -58,6 +59,8 @@ export default function DeliveryLog() {
         بدون بيانات اعتماد واتساب حقيقية، الإرسال يُسجَّل في الطرفية فقط (ConsoleChannel).
       </p>
       {message && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--teal-ink)' }}>{message}</p>}
+
+      <Campaign />
 
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>

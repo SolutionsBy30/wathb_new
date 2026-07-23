@@ -73,6 +73,8 @@ export const api = {
   deliveryLog: () => request('/admin/notifications'),
   planDayAll: () => request('/admin/notifications/plan-day', { method: 'POST', body: {} }),
   sendDueAll: (forDate) => request(`/admin/notifications/send-due${forDate ? `?forDate=${forDate}` : ''}`, { method: 'POST' }),
+  previewCampaign: (filter) => request('/admin/notifications/campaign/preview', { method: 'POST', body: filter }),
+  sendCampaign: (dto) => request('/admin/notifications/campaign/send', { method: 'POST', body: dto }),
 
   listPackages: () => request('/admin/packages'),
   createPackage: (dto) => request('/admin/packages', { method: 'POST', body: dto }),

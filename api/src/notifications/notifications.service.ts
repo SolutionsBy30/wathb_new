@@ -8,7 +8,10 @@ import { decideSendChannel, resolveSlotForDay } from './reactive-scheduler';
 
 const DEFAULT_BUNDLE_SIZE = 5;
 // Never more than 2 messages/day to a student — spec §7.4 frequency cap.
-const MAX_STUDENT_MESSAGES_PER_DAY = 2;
+// Exported so admin-initiated sends (campaigns, manual resends) enforce the
+// exact same cap as the automated daily job — NOT-011 requires both paths
+// to "pass through the same... frequency caps... as automated messages."
+export const MAX_STUDENT_MESSAGES_PER_DAY = 2;
 
 function dayKey(d: Date): Date {
   const out = new Date(d);
