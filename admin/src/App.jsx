@@ -84,7 +84,7 @@ export default function App() {
             onDone={() => setEditingQuestionId(undefined)}
           />
         )}
-        {tab === 'import' && <BulkImport />}
+        {tab === 'import' && <BulkImport tests={tests} />}
         {tab === 'solutionPerf' && <SolutionPerformance tests={tests} />}
         {tab === 'students' && <Students />}
         {tab === 'geography' && <Geography />}

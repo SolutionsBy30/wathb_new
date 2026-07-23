@@ -19,10 +19,19 @@ export interface ImportRow {
   errors: string[];
 }
 
+interface ImportDestination {
+  labelId: string;
+  labelNameAr: string;
+  areaNameAr: string;
+  sectionNameAr: string;
+  testNameAr: string;
+}
+
 interface ImportJob {
   id: string;
   createdAt: number;
   rows: ImportRow[];
+  destination: ImportDestination;
 }
 
 const OPTION_KEYS = ['a', 'b', 'c', 'd', 'e'];
@@ -46,7 +55,10 @@ export class BulkImportService {
     }
   }
 
-  private parseRow(raw: Record<string, string>, rowIndex: number): ImportRow {
+  // ADM-030/031 — destination-first: the label is chosen once in the wizard
+  // before upload, never read from a per-row column, so the template stays
+  // narrow and mistyped/mismatched taxonomy names can't happen.
+  private parseRow(raw: Record<string, string>, rowIndex: number, labelId: string): ImportRow {
     const options: { key: string; text: string }[] = [];
     for (let i = 0; i < 5; i++) {
       const text = (raw[`option_${i + 1}`] ?? '').trim();
@@ -56,7 +68,7 @@ export class BulkImportService {
     const correctKey = correctIdx >= 1 && correctIdx <= options.length ? OPTION_KEYS[correctIdx - 1] : '';
     return {
       rowIndex,
-      labelId: (raw['label_id'] ?? '').trim(),
+      labelId,
       type: (raw['type'] ?? 'mcq_single').trim() || 'mcq_single',
       difficulty: parseInt(raw['difficulty'] ?? '3', 10) || 3,
       timeLimitS: raw['time_limit_s'] ? parseInt(raw['time_limit_s'], 10) : null,
@@ -70,11 +82,6 @@ export class BulkImportService {
   }
 
   private async validateRows(rows: ImportRow[]): Promise<void> {
-    const labelIds = [...new Set(rows.map((r) => r.labelId).filter(Boolean))];
-    const validLabels = new Set(
-      (await this.prisma.label.findMany({ where: { id: { in: labelIds } }, select: { id: true } })).map((l) => l.id),
-    );
-
     const seenHashes = new Map<string, number>(); // hash -> first rowIndex, to catch in-file duplicates
     const dbHashes = new Set(
       (await this.prisma.question.findMany({ where: {}, select: { stemHash: true } })).map((q) => q.stemHash),
@@ -82,8 +89,6 @@ export class BulkImportService {
 
     for (const row of rows) {
       row.errors = [];
-      if (!row.labelId) row.errors.push('missing label_id');
-      else if (!validLabels.has(row.labelId)) row.errors.push('label_id does not match any known label');
       if (row.difficulty < 1 || row.difficulty > 5) row.errors.push('difficulty must be 1..5');
       if (!row.stem) row.errors.push('missing stem');
       if (row.options.length < 2) row.errors.push('needs at least 2 options');
@@ -103,18 +108,36 @@ export class BulkImportService {
     }
   }
 
-  async createJob(csvBuffer: Buffer) {
+  async createJob(csvBuffer: Buffer, labelId: string) {
     this.gc();
+    const label = await this.prisma.label.findUnique({
+      where: { id: labelId },
+      include: { area: { include: { section: { include: { test: true } } } } },
+    });
+    if (!label) throw new BadRequestException('destination label not found');
+    if (label.isRetired) throw new BadRequestException('destination label is retired');
+
     let records: Record<string, string>[];
     try {
       records = parse(csvBuffer, { columns: true, skip_empty_lines: true, trim: true });
     } catch (e: any) {
       throw new BadRequestException(`could not parse CSV: ${e.message}`);
     }
-    const rows = records.map((r, i) => this.parseRow(r, i));
+    const rows = records.map((r, i) => this.parseRow(r, i, labelId));
     await this.validateRows(rows);
 
-    const job: ImportJob = { id: randomUUID(), createdAt: Date.now(), rows };
+    const job: ImportJob = {
+      id: randomUUID(),
+      createdAt: Date.now(),
+      rows,
+      destination: {
+        labelId: label.id,
+        labelNameAr: label.nameAr,
+        areaNameAr: label.area.nameAr,
+        sectionNameAr: label.area.section.nameAr,
+        testNameAr: label.area.section.test.nameAr,
+      },
+    };
     this.jobs.set(job.id, job);
     return this.report(job);
   }
@@ -123,6 +146,7 @@ export class BulkImportService {
     const errorCount = job.rows.filter((r) => r.errors.length > 0).length;
     return {
       jobId: job.id,
+      destination: job.destination,
       totalRows: job.rows.length,
       validRows: job.rows.length - errorCount,
       errorRows: errorCount,

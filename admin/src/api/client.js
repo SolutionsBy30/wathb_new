@@ -57,9 +57,10 @@ export const api = {
   bulkRetire: (ids) => request('/admin/questions/bulk-retire', { method: 'POST', body: { ids } }),
   findSimilar: (stem) => request(`/admin/questions/similar?stem=${encodeURIComponent(stem)}`),
 
-  importCsv: (file) => {
+  importCsv: (file, labelId) => {
     const form = new FormData();
     form.append('file', file);
+    form.append('labelId', labelId);
     return request('/admin/questions/import', { method: 'POST', body: form, isForm: true });
   },
   patchImportRow: (jobId, rowIndex, patch) => request(`/admin/questions/import/${jobId}/rows/${rowIndex}`, { method: 'PATCH', body: patch }),

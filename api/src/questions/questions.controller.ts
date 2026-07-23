@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -73,8 +74,9 @@ export class QuestionsController {
 
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
-  importCsv(@UploadedFile() file: Express.Multer.File) {
-    return this.bulkImport.createJob(file.buffer);
+  importCsv(@UploadedFile() file: Express.Multer.File, @Body('labelId') labelId: string) {
+    if (!labelId) throw new BadRequestException('labelId is required — select a destination before uploading (ADM-030)');
+    return this.bulkImport.createJob(file.buffer, labelId);
   }
 
   @Patch('import/:jobId/rows/:rowIndex')
