@@ -13,6 +13,13 @@ const DEFAULT_BUNDLE_SIZE = 5;
 // to "pass through the same... frequency caps... as automated messages."
 export const MAX_STUDENT_MESSAGES_PER_DAY = 2;
 
+// NOT-009 — retry/fallback ladder: back off 15m, then 1h, then 4h before
+// giving up. A notification that's still failing after the ladder is
+// exhausted (nextRetryAt left null) is what "repeatedly undelivered"
+// means for admin surfacing, not a single one-off failure.
+const RETRY_LADDER_MINUTES = [15, 60, 240];
+export const MAX_RETRY_ATTEMPTS = RETRY_LADDER_MINUTES.length;
+
 function dayKey(d: Date): Date {
   const out = new Date(d);
   out.setUTCHours(0, 0, 0, 0);
@@ -103,6 +110,11 @@ export class NotificationsService {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: 'opted_out' } });
       return { skipped: 'opted_out' as const };
     }
+    // NOT-009 — "the scheduler shall handle... suspended... states."
+    if (student.user.status === 'suspended') {
+      await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'skipped', error: 'suspended' } });
+      return { skipped: 'suspended' as const };
+    }
     if (!student.user.mobileE164) {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: 'no mobile number on file' } });
       return { failed: true as const };
@@ -113,12 +125,32 @@ export class NotificationsService {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: 'no wathb planned for this day' } });
       return { failed: true as const };
     }
+    // NOT-009 — "already-completed" states: the student did today's Wathb
+    // on their own before the reminder fired, so the nudge is now moot.
+    if (wathb.status === 'completed' || wathb.status === 'partial') {
+      await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'skipped', error: 'already_completed' } });
+      return { skipped: 'already_completed' as const };
+    }
 
-    const waSession = await this.prisma.waSession.findUnique({ where: { userId: studentId } });
-    const slot = resolveSlotForDay(scheduledFor, student.notifSlotStartHour, student.notifSlotEndHour);
+    return this.attemptSend(student, wathb, notif.id, 0);
+  }
+
+  /**
+   * Shared by the initial send and every retry — resolves the channel
+   * decision and performs the actual send, then either marks the
+   * notification sent or schedules the next rung of the retry ladder.
+   */
+  private async attemptSend(
+    student: { userId: string; notifSlotStartHour: number; notifSlotEndHour: number; user: { name: string; mobileE164: string | null } },
+    wathb: { id: string; scheduledFor: Date },
+    notifId: string,
+    retryCount: number,
+  ) {
+    const waSession = await this.prisma.waSession.findUnique({ where: { userId: student.userId } });
+    const slot = resolveSlotForDay(wathb.scheduledFor, student.notifSlotStartHour, student.notifSlotEndHour);
     const decision = decideSendChannel(waSession?.lastInboundAt ?? null, slot);
 
-    const { token } = await this.magicLinks.mint({ subjectId: studentId, subjectType: 'student', purpose: 'wathb', targetId: wathb.id });
+    const { token } = await this.magicLinks.mint({ subjectId: student.userId, subjectType: 'student', purpose: 'wathb', targetId: wathb.id });
     const appUrl = this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
     const url = `${appUrl}/#magic=${token}`;
 
@@ -126,27 +158,38 @@ export class NotificationsService {
       const result =
         decision.channelType === 'template'
           ? await this.channel.sendTemplate({
-              to: student.user.mobileE164,
+              to: student.user.mobileE164!,
               templateName: this.config.get('WHATSAPP_TEMPLATE_DAILY_WATHB', 'daily_wathb_reminder'),
               languageCode: 'ar',
               bodyParams: [student.user.name, url],
             })
-          : await this.channel.sendFreeform({ to: student.user.mobileE164, text: `وثبتك اليومية جاهزة، ${student.user.name}: ${url}` });
+          : await this.channel.sendFreeform({ to: student.user.mobileE164!, text: `وثبتك اليومية جاهزة، ${student.user.name}: ${url}` });
 
       await this.prisma.notification.update({
-        where: { id: notif.id },
+        where: { id: notifId },
         data: {
           channel: decision.channelType === 'template' ? 'whatsapp_template' : 'whatsapp_freeform',
           status: 'sent',
           sentAt: new Date(),
           waMessageId: result.providerMessageId,
           wasBillable: decision.billable,
+          nextRetryAt: null,
         },
       });
       return { sent: true as const, channelType: decision.channelType, billable: decision.billable };
     } catch (e: any) {
-      await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: e.message } });
-      return { failed: true as const, error: e.message };
+      const nextAttempt = retryCount + 1;
+      const exhausted = nextAttempt > MAX_RETRY_ATTEMPTS;
+      await this.prisma.notification.update({
+        where: { id: notifId },
+        data: {
+          status: 'failed',
+          error: e.message,
+          retryCount: nextAttempt,
+          nextRetryAt: exhausted ? null : new Date(Date.now() + RETRY_LADDER_MINUTES[retryCount] * 60_000),
+        },
+      });
+      return { failed: true as const, error: e.message, retriesExhausted: exhausted };
     }
   }
 
@@ -155,6 +198,45 @@ export class NotificationsService {
     const results = [];
     for (const s of students) results.push({ studentId: s.userId, ...(await this.sendDailyWathbNotification(s.userId, forDate)) });
     return results;
+  }
+
+  /**
+   * NOT-009 — admin-triggered stand-in for the retry-ladder cron: reattempt
+   * every notification whose next rung is due, same manual-trigger pattern
+   * as plan_day/send_notification (no real scheduler in this sandbox).
+   */
+  async processRetries(now: Date = new Date()) {
+    const due = await this.prisma.notification.findMany({
+      where: { status: 'failed', nextRetryAt: { lte: now }, retryCount: { lt: MAX_RETRY_ATTEMPTS } },
+      include: { user: { include: { student: true } } },
+    });
+
+    const results = [];
+    for (const notif of due) {
+      const student = notif.user.student;
+      if (!student) continue; // retry ladder only covers student-facing notifications today
+      const wathb = await this.prisma.wathb.findUnique({ where: { studentId_scheduledFor: { studentId: student.userId, scheduledFor: notif.scheduledFor } } });
+      if (!wathb) continue;
+      const result = await this.attemptSend(
+        { userId: student.userId, notifSlotStartHour: student.notifSlotStartHour, notifSlotEndHour: student.notifSlotEndHour, user: { name: notif.user.name, mobileE164: notif.user.mobileE164 } },
+        wathb,
+        notif.id,
+        notif.retryCount,
+      );
+      results.push({ notificationId: notif.id, ...result });
+    }
+    return { attempted: results.length, results };
+  }
+
+  /** NOT-009 — "surfacing repeatedly undelivered numbers to the admin console." */
+  async repeatedlyUndelivered() {
+    const rows = await this.prisma.notification.findMany({
+      where: { status: 'failed', retryCount: { gte: MAX_RETRY_ATTEMPTS } },
+      include: { user: { select: { name: true, mobileE164: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return rows;
   }
 
   async deliveryLog(limit = 100) {

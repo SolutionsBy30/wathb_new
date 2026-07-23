@@ -534,6 +534,9 @@ enum NotificationStatus {
   delivered
   read
   failed
+  // NOT-009 — a neutral outcome (suspended user, already-completed Wathb)
+  // is not a delivery failure and shouldn't read as one in the log.
+  skipped
 }
 
 model Notification {
@@ -555,9 +558,13 @@ model Notification {
   status       NotificationStatus   @default(scheduled)
   error        String?
   createdAt    DateTime             @default(now())
+  // NOT-009 — retry/fallback ladder for undelivered messages.
+  retryCount   Int                  @default(0)
+  nextRetryAt  DateTime?
 
   // Idempotency key (spec §7.3) — a duplicate daily message is a trust-destroying bug.
   @@unique([userId, kind, scheduledFor])
+  @@index([status, nextRetryAt])
   @@map("notifications")
 }
 

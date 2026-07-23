@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import Campaign from './Campaign';
 
-const STATUS_COLOR = { scheduled: 'var(--mist)', sent: 'var(--lime)', delivered: 'var(--teal-ink)', read: 'var(--teal-ink)', failed: 'var(--coral)' };
-const STATUS_LABEL = { scheduled: 'مجدول', sent: 'أُرسل', delivered: 'تم التسليم', read: 'قُرئ', failed: 'فشل' };
+const STATUS_COLOR = { scheduled: 'var(--mist)', sent: 'var(--lime)', delivered: 'var(--teal-ink)', read: 'var(--teal-ink)', failed: 'var(--coral)', skipped: 'var(--mist)' };
+const STATUS_LABEL = { scheduled: 'مجدول', sent: 'أُرسل', delivered: 'تم التسليم', read: 'قُرئ', failed: 'فشل', skipped: 'تم التجاوز' };
 const CHANNEL_LABEL = { whatsapp_template: 'قالب (مدفوع محتمل)', whatsapp_freeform: 'رسالة مفتوحة (مجاني)', console: 'وحدة تحكم (تجريبي)' };
 
 function todayPlusOne() {
@@ -14,11 +14,28 @@ function todayPlusOne() {
 
 export default function DeliveryLog() {
   const [rows, setRows] = useState([]);
+  const [undelivered, setUndelivered] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
 
-  const load = () => api.deliveryLog().then(setRows);
+  const load = () => {
+    api.deliveryLog().then(setRows);
+    api.undeliveredNotifications().then(setUndelivered);
+  };
   useEffect(() => { load(); }, []);
+
+  const runProcessRetries = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await api.processRetries();
+      const sent = res.results.filter((r) => r.sent).length;
+      setMessage(`محاولة إعادة الإرسال: ${sent} من ${res.attempted} نجحت.`);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const runPlanDay = async () => {
     setBusy(true);
@@ -52,6 +69,7 @@ export default function DeliveryLog() {
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={runPlanDay} disabled={busy} style={btnStyle}>تشغيل plan_day (غداً)</button>
           <button onClick={runSendDue} disabled={busy} style={btnStyle}>تشغيل send_notification (غداً)</button>
+          <button onClick={runProcessRetries} disabled={busy} style={btnStyle}>معالجة إعادة المحاولات</button>
         </div>
       </div>
       <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
@@ -59,6 +77,24 @@ export default function DeliveryLog() {
         بدون بيانات اعتماد واتساب حقيقية، الإرسال يُسجَّل في الطرفية فقط (ConsoleChannel).
       </p>
       {message && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--teal-ink)' }}>{message}</p>}
+
+      {undelivered.length > 0 && (
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--coral)' }}>
+            أرقام يتكرر تعذر توصيلها ({undelivered.length})
+          </h2>
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
+            استنفدت محاولات الإعادة (سلّم إعادة المحاولة الكامل) — يحتاج تحقق يدوي من الرقم.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {undelivered.slice(0, 20).map((n) => (
+              <span key={n.id} style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>
+                {n.user?.name} — {n.user?.mobileE164} — {n.error}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Campaign />
 

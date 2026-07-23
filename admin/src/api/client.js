@@ -78,6 +78,8 @@ export const api = {
   sendDueAll: (forDate) => request(`/admin/notifications/send-due${forDate ? `?forDate=${forDate}` : ''}`, { method: 'POST' }),
   previewCampaign: (filter) => request('/admin/notifications/campaign/preview', { method: 'POST', body: filter }),
   sendCampaign: (dto) => request('/admin/notifications/campaign/send', { method: 'POST', body: dto }),
+  processRetries: () => request('/admin/notifications/process-retries', { method: 'POST' }),
+  undeliveredNotifications: () => request('/admin/notifications/undelivered'),
 
   listPackages: () => request('/admin/packages'),
   createPackage: (dto) => request('/admin/packages', { method: 'POST', body: dto }),

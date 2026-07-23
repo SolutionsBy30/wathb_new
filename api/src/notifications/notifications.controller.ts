@@ -54,6 +54,18 @@ export class NotificationsController {
     return this.notifications.sendDueForAllStudents(resolveDate(forDate));
   }
 
+  // NOT-009 — admin-triggered retry-ladder pass + the "repeatedly
+  // undelivered numbers" surfaced to the admin console.
+  @Post('process-retries')
+  processRetries() {
+    return this.notifications.processRetries();
+  }
+
+  @Get('undelivered')
+  undelivered() {
+    return this.notifications.repeatedlyUndelivered();
+  }
+
   @Post('send/:studentId')
   sendOne(@Param('studentId') studentId: string, @Query('forDate') forDate?: string) {
     return this.notifications.sendDailyWathbNotification(studentId, resolveDate(forDate));
