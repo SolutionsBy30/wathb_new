@@ -83,6 +83,10 @@ export const api = {
   unsuspendUser: (userId) => request(`/admin/users/${userId}/unsuspend`, { method: 'POST' }),
   auditLog: () => request('/admin/audit-log'),
 
+  // ADM-001/002 — overview KPIs + alerts feed
+  overviewKpis: () => request('/admin/overview/kpis'),
+  overviewAlerts: () => request('/admin/overview/alerts'),
+
   // Solution performance (§4.5.2)
   refreshQuestionStats: () => request('/admin/questions/refresh-stats', { method: 'POST' }),
 

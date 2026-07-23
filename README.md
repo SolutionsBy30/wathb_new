@@ -342,14 +342,31 @@ Built directly against `docs/wathb-srs.md`'s gap analysis (`docs/srs-gap-analysi
   built: wire-transfer subscription activation (ADM-073) and OTP fallback
   usage (ONB-014). Admin screens: a suspend/unsuspend toggle per row on the
   students list, and a new "سجل التدقيق" (audit log) screen.
+- **ADM-001/002/003 — admin overview + alerts + grouped nav**: the admin
+  console previously had no landing screen at all. `GET
+  /api/admin/overview/kpis` returns active subscriptions, MRR in SAR
+  (summed from each active subscription's price snapshot divided by its
+  package's duration, not the sticker price), a 30-day Wathb completion
+  rate, and a bank-health score — the percentage of non-retired labels
+  with at least 10 published questions, a defensible stand-in for
+  ADM-026's fuller "months-of-runway" model that this codebase doesn't
+  have a demand curve for yet. `GET /api/admin/overview/alerts` covers
+  all four categories ADM-002 asks for at minimum: thin labels (same
+  10-question floor), questions with negative discrimination (possible
+  wrong answer key), non-discriminating questions (p-value outside
+  15–95%, the same thresholds the solution-performance screen already
+  flags), and magic-link sharing anomalies (a link accessed from ≥3
+  distinct IPs in the last 7 days, per NFR-007 — flagged for human review,
+  never auto-banned). The nav is now grouped per ADM-003 (Overview /
+  المحتوى / المستخدمون / الأعمال / النظام) with Overview as the default tab.
 
 ## What's not built yet
 
 Deliberately out of scope for this pass — each is a later phase in the
 spec's own build sequence (§11): the remaining Phase 6 items called out
 just above, plus the Phase 3/4/5 gaps called out earlier in this README,
-plus everything after suspend/audit-log in the SRS gap analysis's build
-order (the admin overview/alerts screen, and the smaller items — per-test
+plus everything after the admin overview/alerts screen in the SRS gap
+analysis's build order — the smaller items: per-test
 language config, review queue, step-up OTP, invoicing/ZATCA, discount
 codes, WABA quality dashboard, PDPL export/delete, school
 comparison-overlay view, bulk/promotional notification sends).

@@ -12,6 +12,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PaymentsModule } from './payments/payments.module';
 import { GeographyModule } from './geography/geography.module';
 import { AdminOpsModule } from './admin-ops/admin-ops.module';
+import { OverviewModule } from './overview/overview.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AdminOpsModule } from './admin-ops/admin-ops.module';
     PaymentsModule,
     GeographyModule,
     AdminOpsModule,
+    OverviewModule,
   ],
   controllers: [AppController],
 })
