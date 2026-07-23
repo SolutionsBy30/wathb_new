@@ -97,7 +97,7 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 |---|---|---|
 | NOT-001/002/003 scoped, hashed, high-entropy | ✅ | |
 | NOT-004 **24-hour link validity** | ❌ | Current TTLs are purpose-specific and **not** 24h: `wathb`=6h, `weekly_report`/`link_invite`=7 days, `renewal`=1h. Contradicts NOT-004 directly — worth a deliberate decision, not silently "fixed" to 24h, since the 6h Wathb TTL was itself a documented choice (end-of-slot + grace). Flagging for explicit confirmation. |
-| NOT-005 revoke on suspend/expiry/mobile-change, step-up | ❌ | No suspend, no step-up |
+| NOT-005 revoke on suspend/expiry/mobile-change, step-up | 🟡 | Revoke-on-suspend ✅ (ADM-085), revoke-on-expiry ✅ (`CheckoutService.sweepExpiredSubscriptions`, admin-triggered like plan_day); revoke-on-mobile-change and step-up (STU-029) don't apply yet — neither a mobile-change nor a step-up-gated action exists in the product at all |
 | NOT-006/007 utility template, reactive scheduler | ✅ | `reactive-scheduler.ts`, tested |
 | NOT-008 idempotent nightly plan, UTC storage | ✅ | `plan_day` idempotent per `(student, date)`; admin-triggered not cron |
 | NOT-009 paused/expired/suspended/skip/quiet-hour handling, retry ladder | 🟡 | Skip-days ✅; suspended state doesn't exist; no retry ladder |
@@ -116,7 +116,7 @@ Present: `User/Student/Supervisor/StudentSupervisor`, `Region/City/School` (no `
 | NFR-001 payload/perf budget | 🟡 Not measured/enforced, likely fine at current bundle size |
 | NFR-002 report from materialized stats | ✅ |
 | NFR-003/003a RTL, responsive | ✅ (this session's shell rebuild) |
-| NFR-004/005 magic link security, rate limiting | 🟡 Security properties ✅; **no rate limiting** on OTP/magic-link exchange (README already flags this) |
+| NFR-004/005 magic link security, rate limiting | ✅ Security properties ✅; rate limiting now in place on every auth entry point (`@nestjs/throttler`, 5 req/5min on admin login, OTP request, signup; 10/5min on OTP verify; 20/5min on magic-link exchange) |
 | NFR-005a OTP fallback prod-safety | ❌ No audit log entry, no deploy-time check |
 | NFR-006/006a cohort 403, free-tier server enforcement | 🟡 Cohort 403 ✅; free-tier N/A (doesn't exist) |
 | NFR-007 anti-sharing signal | ❌ Not built |

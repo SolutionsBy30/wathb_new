@@ -54,4 +54,13 @@ export class CheckoutController {
   activateWireTransfer(@Body() dto: ActivateWireTransferDto, @CurrentSession() session: SessionPayload) {
     return this.checkout.activateViaWireTransfer(dto.studentId, dto.packageId, session.sub);
   }
+
+  // NOT-005/NOT-008-style manual trigger standing in for a real cron —
+  // same rationale as plan_day/send_notification/refresh-stats.
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @Post('admin/subscriptions/sweep-expired')
+  sweepExpired() {
+    return this.checkout.sweepExpiredSubscriptions();
+  }
 }

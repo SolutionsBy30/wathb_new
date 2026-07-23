@@ -18,6 +18,8 @@ export default function Subscriptions() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [sweepBusy, setSweepBusy] = useState(false);
+  const [sweepResult, setSweepResult] = useState(null);
 
   useEffect(() => {
     api.paymentStatus().then((s) => setGatewayConfigured(s.gatewayConfigured)).catch(() => {});
@@ -54,9 +56,35 @@ export default function Subscriptions() {
     }
   };
 
+  const sweepExpired = async () => {
+    setSweepBusy(true);
+    setSweepResult(null);
+    try {
+      setSweepResult(await api.sweepExpiredSubscriptions());
+    } finally {
+      setSweepBusy(false);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الاشتراكات</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الاشتراكات</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {sweepResult && (
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
+              {sweepResult.expired > 0 ? `تم إنهاء ${sweepResult.expired} اشتراكاً منتهياً` : 'لا توجد اشتراكات منتهية'}
+            </span>
+          )}
+          <button
+            onClick={sweepExpired}
+            disabled={sweepBusy}
+            style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+          >
+            {sweepBusy ? 'جاري الفحص…' : 'فحص الاشتراكات المنتهية'}
+          </button>
+        </div>
+      </div>
 
       {!gatewayConfigured && (
         <div style={{ background: 'var(--on-indigo-subtle)', borderInlineStart: '3px solid var(--lime)', borderRadius: 'var(--radius-sm)', padding: '14px 16px' }}>

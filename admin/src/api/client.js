@@ -77,6 +77,7 @@ export const api = {
   paymentStatus: () => request('/admin/payment-status'),
   searchStudent: (mobile) => request(`/admin/students/search?mobile=${encodeURIComponent(mobile)}`),
   activateWireTransfer: (studentId, packageId) => request('/admin/subscriptions/activate-wire-transfer', { method: 'POST', body: { studentId, packageId } }),
+  sweepExpiredSubscriptions: () => request('/admin/subscriptions/sweep-expired', { method: 'POST' }),
 
   // ADM-085 — suspension + audit log
   suspendUser: (userId, reason, note) => request(`/admin/users/${userId}/suspend`, { method: 'POST', body: { reason, note } }),

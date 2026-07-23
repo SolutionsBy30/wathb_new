@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider.interface';
 import { AuditLogService } from '../admin-ops/audit-log.service';
+import { MagicLinkService } from '../auth/magic-link.service';
 
 @Injectable()
 export class CheckoutService {
@@ -11,6 +12,7 @@ export class CheckoutService {
     @Inject(PAYMENT_PROVIDER) private provider: PaymentProvider,
     private config: ConfigService,
     private auditLog: AuditLogService,
+    private magicLinks: MagicLinkService,
   ) {}
 
   /** True only when no real Paymob credentials are configured — see payment-provider.module.ts's identical check. */
@@ -113,5 +115,26 @@ export class CheckoutService {
     });
 
     return subscription;
+  }
+
+  /**
+   * NOT-005 — magic links are revoked on subscription expiry, not just on
+   * suspension (ADM-085). Access itself is already gated at read-time
+   * (isSubscriptionCovering checks endsAt), so this only affects any
+   * already-minted, not-yet-used link (e.g. a weekly report sent shortly
+   * before expiry) — those should stop working the moment the subscription
+   * actually lapses, not linger for their own 24h TTL.
+   * No real cron in this sandbox — admin-triggered like plan_day/send_notification.
+   */
+  async sweepExpiredSubscriptions(now: Date = new Date()) {
+    const expired = await this.prisma.subscription.findMany({
+      where: { status: 'active', endsAt: { lt: now } },
+      select: { id: true, studentId: true },
+    });
+    for (const sub of expired) {
+      await this.prisma.subscription.update({ where: { id: sub.id }, data: { status: 'expired' } });
+      await this.magicLinks.revokeAllForSubject(sub.studentId);
+    }
+    return { expired: expired.length };
   }
 }
