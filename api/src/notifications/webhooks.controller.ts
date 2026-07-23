@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
+import { isStopKeyword } from './stop-keyword.util';
 
 // Meta WhatsApp Cloud API webhook — verification handshake + inbound events.
 // https://developers.facebook.com/documentation/business-messaging/whatsapp/overview
@@ -61,10 +62,17 @@ export class WebhooksController {
 
   // A tap on a quick-reply button, or any inbound message, opens the 24h
   // customer-service window — spec §7.2's central insight.
-  private async handleInbound(message: { from: string }) {
+  private async handleInbound(message: { from: string; text?: { body?: string } }) {
     const user = await this.prisma.user.findUnique({ where: { mobileE164: `+${message.from}` } });
     if (!user) return;
     await this.notifications.recordInbound(user.id);
+
+    // NOT-010 — checked on every inbound text, not just a dedicated command
+    // path, since WhatsApp users type STOP as a normal reply.
+    const body = message.text?.body?.trim();
+    if (body && isStopKeyword(body)) {
+      await this.notifications.recordOptOut(user.id);
+    }
   }
 
   private async handleStatus(status: { id: string; status: string; timestamp?: string }) {

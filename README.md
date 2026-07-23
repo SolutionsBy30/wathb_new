@@ -57,7 +57,7 @@ need to change, only how the frontend stores what it returns.
   variety cap, difficulty ladder), pure and unit-tested (12 tests) independent
   of the DB.
 - **Magic links + sessions** (`api/src/auth/`): CSPRNG tokens, hashed at
-  rest, purpose-scoped, TTL per purpose, access-logged.
+  rest, purpose-scoped, uniform 24h TTL (NOT-004), access-logged.
 - **Taxonomy admin** (`api/src/taxonomy/`, `admin/src/pages/Taxonomy.jsx`):
   tree editor, soft-delete/retire semantics.
 - **Question bank** (`api/src/questions/`, `admin/src/pages/QuestionBank.jsx`

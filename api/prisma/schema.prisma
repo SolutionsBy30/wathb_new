@@ -91,6 +91,9 @@ model User {
   timezone         String    @default("Asia/Riyadh")
   status           String    @default("active")
   whatsappOptInAt  DateTime?
+  // NOT-010 — STOP/إيقاف is honored instantly and permanently: set once,
+  // never auto-cleared. Every outbound send path must check this first.
+  whatsappOptedOutAt DateTime?
   createdAt        DateTime  @default(now())
 
   student    Student?

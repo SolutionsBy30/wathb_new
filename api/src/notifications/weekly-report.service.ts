@@ -66,6 +66,7 @@ export class WeeklyReportService {
     if (already) return { skipped: 'already_sent' as const };
 
     const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId }, include: { user: true } });
+    if (student.user.whatsappOptedOutAt) return { skipped: 'opted_out' as const };
     if (!student.user.mobileE164) return { skipped: 'no_mobile' as const };
 
     const { labels, trend } = await this.flattenReportableLabels(studentId);
@@ -110,6 +111,7 @@ export class WeeklyReportService {
 
     const supervisor = await this.prisma.supervisor.findUniqueOrThrow({ where: { userId: supervisorId }, include: { user: true } });
     if (supervisor.weeklyReportMuted) return { skipped: 'muted' as const };
+    if (supervisor.user.whatsappOptedOutAt) return { skipped: 'opted_out' as const };
     if (!supervisor.user.mobileE164) return { skipped: 'no_mobile' as const };
 
     const links = await this.prisma.studentSupervisor.findMany({

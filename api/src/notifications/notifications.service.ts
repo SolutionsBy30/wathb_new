@@ -85,6 +85,10 @@ export class NotificationsService {
     if (sentToday >= MAX_STUDENT_MESSAGES_PER_DAY) return { skipped: 'frequency_cap' as const };
 
     const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId }, include: { user: true } });
+    if (student.user.whatsappOptedOutAt) {
+      await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: 'opted_out' } });
+      return { skipped: 'opted_out' as const };
+    }
     if (!student.user.mobileE164) {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: 'no mobile number on file' } });
       return { failed: true as const };
@@ -154,6 +158,15 @@ export class NotificationsService {
       create: { userId, lastInboundAt: at, windowOpenedAt: at, windowExpiresAt: new Date(at.getTime() + 24 * 3600_000) },
       update: { lastInboundAt: at, windowOpenedAt: at, windowExpiresAt: new Date(at.getTime() + 24 * 3600_000) },
     });
+  }
+
+  /**
+   * NOT-010 — STOP/إيقاف is honored instantly and permanently. Idempotent:
+   * re-texting STOP just keeps the same timestamp rather than erroring.
+   */
+  async recordOptOut(userId: string, at: Date = new Date()) {
+    await this.prisma.user.updateMany({ where: { id: userId, whatsappOptedOutAt: null }, data: { whatsappOptedOutAt: at } });
+    this.logger.log(`user ${userId} opted out of WhatsApp notifications (STOP)`);
   }
 
   async recordDeliveryStatus(waMessageId: string, status: 'delivered' | 'read' | 'failed', at: Date = new Date()) {

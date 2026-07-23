@@ -5,12 +5,16 @@ import { PrismaService } from '../prisma/prisma.service';
 
 // §7.1 — passwordless magic links. The raw token exists only in the URL and
 // in the caller's hands; the DB stores a hash of it, never the token itself.
+// NOT-004: every purpose gets the same flat 24h TTL regardless of what it
+// links to — single-use payment/renewal links are additionally invalidated
+// on first successful use via maxUses=1, not by a shorter expiry.
+const MAGIC_LINK_TTL_SECONDS = 24 * 3600;
 const TTL_SECONDS_BY_PURPOSE: Record<MagicLinkPurpose, number> = {
-  wathb: 6 * 3600, // end of slot window + grace, simplified for dev to a flat 6h
-  weekly_report: 7 * 24 * 3600,
-  supervisor_report: 7 * 24 * 3600,
-  renewal: 3600,
-  link_invite: 7 * 24 * 3600,
+  wathb: MAGIC_LINK_TTL_SECONDS,
+  weekly_report: MAGIC_LINK_TTL_SECONDS,
+  supervisor_report: MAGIC_LINK_TTL_SECONDS,
+  renewal: MAGIC_LINK_TTL_SECONDS,
+  link_invite: MAGIC_LINK_TTL_SECONDS,
 };
 
 function hashToken(raw: string): string {
