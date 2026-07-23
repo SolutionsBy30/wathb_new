@@ -44,7 +44,7 @@ export const api = {
   // has ALLOW_DEV_LOGIN=true.
   requestOtp: (mobile) => request('/auth/otp/request', { method: 'POST', body: { mobile, subjectType: 'supervisor' }, auth: false }),
   verifyOtp: (mobile, code) => request('/auth/otp/verify', { method: 'POST', body: { mobile, subjectType: 'supervisor', code }, auth: false }),
-  signupSupervisor: (mobile, name, type) => request('/auth/signup/supervisor', { method: 'POST', body: { mobile, name, type }, auth: false }),
+  signupSupervisor: (mobile, name, type, whatsappOptIn) => request('/auth/signup/supervisor', { method: 'POST', body: { mobile, name, type, whatsappOptIn }, auth: false }),
 
   // Exchanging a student's supervisor-invite link — not part of login.
   exchangeMagicLink: (token) => request(`/auth/magic/${token}`, { method: 'POST', auth: false }),

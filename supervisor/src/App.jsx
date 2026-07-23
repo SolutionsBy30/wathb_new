@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, getToken, setToken, decodeSession } from './api/client';
 import Login from './pages/Login';
+import LinkExpired from './pages/LinkExpired';
 import AcceptInvite from './pages/AcceptInvite';
 import Dashboard from './pages/Dashboard';
 import StudentReport from './pages/StudentReport';
@@ -25,6 +26,7 @@ export default function App() {
     // #magic=<token> — exchange it for a scoped session, same as the
     // student app, then drop it from the URL (spec §7.1).
     const hashMatch = window.location.hash.match(/^#magic=(.+)$/);
+    let magicLinkFailed = false;
     if (hashMatch) {
       try {
         const { token: sessionToken } = await api.exchangeMagicLink(hashMatch[1]);
@@ -32,11 +34,14 @@ export default function App() {
         window.history.replaceState(null, '', window.location.pathname);
       } catch {
         setToken(null);
+        magicLinkFailed = true;
+        window.history.replaceState(null, '', window.location.pathname);
       }
     }
 
     const token = getToken();
-    if (!token) return setScreen('login');
+    // STU-030 — a friendly reason for landing on login, not a silent drop.
+    if (!token) return setScreen(magicLinkFailed ? 'linkExpired' : 'login');
     const session = decodeSession(token);
     if (session?.purpose === 'link_invite' && session.targetId) {
       setScreen('accept');
@@ -79,11 +84,11 @@ export default function App() {
     }
   };
 
-  const signupSupervisor = async (mobile, name, type) => {
+  const signupSupervisor = async (mobile, name, type, whatsappOptIn) => {
     setLoginBusy(true);
     setLoginError(null);
     try {
-      return await api.signupSupervisor(mobile, name, type);
+      return await api.signupSupervisor(mobile, name, type, whatsappOptIn);
     } catch (e) {
       setLoginError(e.message || 'تعذّر إنشاء الحساب');
       return null;
@@ -119,6 +124,7 @@ export default function App() {
     );
   }
 
+  if (screen === 'linkExpired') return <LinkExpired onGoLogin={() => setScreen('login')} />;
   if (screen === 'login') return <Login onRequestCode={requestOtp} onVerifyCode={verifyOtp} onSignup={signupSupervisor} error={loginError} busy={loginBusy} />;
   if (screen === 'accept') return <AcceptInvite onAccept={handleAccept} busy={acceptBusy} error={acceptError} />;
 

@@ -3,6 +3,7 @@ import './layout.css';
 import { api, getToken, setToken, decodeSession } from '../../api/client';
 import Landing from '../Landing';
 import Login from './screens/Login';
+import LinkExpired from './screens/LinkExpired';
 import GoalSetup from './screens/GoalSetup';
 import Home from './screens/Home';
 import Question from './screens/Question';
@@ -67,6 +68,7 @@ export default function StudentDesktop() {
     // the URL so the raw token doesn't sit in browser history (spec §7.1).
     const hashMatch = window.location.hash.match(/^#magic=(.+)$/);
     let magicPurpose = null;
+    let magicLinkFailed = false;
     if (hashMatch) {
       try {
         const { token: sessionToken } = await api.exchangeMagicLink(hashMatch[1]);
@@ -75,11 +77,16 @@ export default function StudentDesktop() {
         window.history.replaceState(null, '', window.location.pathname);
       } catch {
         setToken(null);
+        magicLinkFailed = true;
+        window.history.replaceState(null, '', window.location.pathname);
       }
     }
 
     if (!getToken()) {
-      setScreen('landing');
+      // STU-030 — a tapped link that's expired, already used, or revoked
+      // gets its own friendly screen with a way back in, not a silent drop
+      // onto the generic landing page.
+      setScreen(magicLinkFailed ? 'linkExpired' : 'landing');
       return;
     }
     try {
@@ -125,11 +132,11 @@ export default function StudentDesktop() {
     }
   };
 
-  const signupStudent = async (mobile, name) => {
+  const signupStudent = async (mobile, name, whatsappOptIn) => {
     setLoginBusy(true);
     setLoginError(null);
     try {
-      return await api.signupStudent(mobile, name);
+      return await api.signupStudent(mobile, name, whatsappOptIn);
     } catch (e) {
       setLoginError(e.message || 'تعذّر إنشاء الحساب');
       return null;
@@ -390,6 +397,16 @@ export default function StudentDesktop() {
 
   if (screen === 'landing') {
     return <Landing onGoLogin={goLogin} onGoSignup={goSignup} />;
+  }
+
+  if (screen === 'linkExpired') {
+    return (
+      <div dir="rtl" className="sd-page">
+        <div className="sd-shell" style={{ alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+          <LinkExpired onGoLogin={goLogin} onGoLanding={goLanding} />
+        </div>
+      </div>
+    );
   }
 
   if (screen === 'login') {

@@ -20,6 +20,7 @@ export default function Login({ onRequestCode, onVerifyCode, onSignup, error, bu
   const [step, setStep] = useState('phone'); // 'phone' | 'otp'
   const [name, setName] = useState('');
   const [local, setLocal] = useState('');
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '']);
   const [phoneError, setPhoneError] = useState(false);
   const [devCode, setDevCode] = useState(null);
@@ -32,12 +33,12 @@ export default function Login({ onRequestCode, onVerifyCode, onSignup, error, bu
       setPhoneError(true);
       return;
     }
-    if (mode === 'signup' && name.trim().length < 2) {
+    if (mode === 'signup' && (name.trim().length < 2 || !whatsappOptIn)) {
       setPhoneError(true);
       return;
     }
     setPhoneError(false);
-    const result = mode === 'signup' ? await onSignup(mobile, name.trim()) : await onRequestCode(mobile);
+    const result = mode === 'signup' ? await onSignup(mobile, name.trim(), whatsappOptIn) : await onRequestCode(mobile);
     if (result) {
       setDevCode(result.devCode ?? null);
       setStep('otp');
@@ -101,7 +102,24 @@ export default function Login({ onRequestCode, onVerifyCode, onSignup, error, bu
               style={{ ...fieldStyle, flex: 1, textAlign: 'right' }}
             />
           </div>
-          {phoneError && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)', fontFamily: 'var(--font-arabic)' }}>أدخل رقم جوال صحيح{mode === 'signup' ? ' واسمك' : ''}.</p>}
+          {mode === 'signup' && (
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={whatsappOptIn}
+                onChange={(e) => setWhatsappOptIn(e.target.checked)}
+                style={{ marginTop: '3px' }}
+              />
+              <span style={{ fontSize: '12px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)', lineHeight: 1.7 }}>
+                أوافق على استلام وثبتي اليومية والتذكيرات عبر واتساب.
+              </span>
+            </label>
+          )}
+          {phoneError && (
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)', fontFamily: 'var(--font-arabic)' }}>
+              {mode === 'signup' && !whatsappOptIn ? 'الموافقة على التواصل عبر واتساب مطلوبة للمتابعة.' : `أدخل رقم جوال صحيح${mode === 'signup' ? ' واسمك' : ''}.`}
+            </p>
+          )}
           {error && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)', fontFamily: 'var(--font-arabic)' }}>{error}</p>}
           <Button variant="primary" fullWidth disabled={busy} onClick={submitPhone}>
             {busy ? 'جاري الإرسال…' : 'إرسال رمز التحقق'}

@@ -63,14 +63,14 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @Post('signup/student')
   async signupStudent(@Body() dto: SignupStudentDto) {
-    await this.accounts.createStudent(dto.mobile, dto.name);
+    await this.accounts.createStudent(dto.mobile, dto.name, new Date());
     return this.otp.requestOtp(dto.mobile, 'student');
   }
 
   @Throttle(AUTH_THROTTLE)
   @Post('signup/supervisor')
   async signupSupervisor(@Body() dto: SignupSupervisorDto) {
-    await this.accounts.createSupervisor(dto.mobile, dto.name, dto.type);
+    await this.accounts.createSupervisor(dto.mobile, dto.name, dto.type, new Date());
     return this.otp.requestOtp(dto.mobile, 'supervisor');
   }
 }

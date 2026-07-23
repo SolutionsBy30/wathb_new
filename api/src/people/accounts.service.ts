@@ -9,18 +9,20 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AccountsService {
   constructor(private prisma: PrismaService) {}
 
-  async createStudent(mobile: string, name: string) {
+  // whatsappOptInAt is left null for admin-created accounts (no self-service
+  // consent step happened) — only public signup captures it.
+  async createStudent(mobile: string, name: string, whatsappOptInAt?: Date) {
     await this.assertMobileFree(mobile);
     return this.prisma.user.create({
-      data: { mobileE164: mobile, name, role: 'student', student: { create: {} } },
+      data: { mobileE164: mobile, name, role: 'student', whatsappOptInAt, student: { create: {} } },
       include: { student: true },
     });
   }
 
-  async createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor') {
+  async createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor', whatsappOptInAt?: Date) {
     await this.assertMobileFree(mobile);
     return this.prisma.user.create({
-      data: { mobileE164: mobile, name, role: 'supervisor', supervisor: { create: { type } } },
+      data: { mobileE164: mobile, name, role: 'supervisor', whatsappOptInAt, supervisor: { create: { type } } },
       include: { supervisor: true },
     });
   }

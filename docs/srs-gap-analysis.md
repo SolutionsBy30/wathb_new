@@ -12,7 +12,7 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 | ONB-006 package selection if no active sub | ✅ | `WathbService.today()` gate → Pricing screen |
 | ONB-007 Paymob card/Mada | ✅ | `PaymobProvider`, untested against a live account |
 | ONB-008 wire transfer + manual admin activation | ✅ | `activate-wire-transfer` |
-| ONB-009 WhatsApp opt-in consent artifact | ❌ | `whatsappOptInAt` field exists on `User` but nothing sets/captures it at signup |
+| ONB-009 WhatsApp opt-in consent artifact | ✅ | Explicit checkbox on both student and supervisor signup forms; `@Equals(true)` on `whatsappOptIn` rejects unchecked/omitted at the DTO layer before the request reaches account creation; `User.whatsappOptInAt` is stamped with the consent timestamp. Admin-created accounts (no self-service consent step) correctly leave it null |
 | ONB-010 goal capture (target test/date/score) | 🟡 | `GoalSetupDto` has these fields; UI only collects test + track today, not score/date at onboarding (score is set nowhere yet) |
 | ONB-011 school picker w/ suggest-and-review | ✅ | Built this session — `geography/schools/suggest` |
 | ONB-012 notification-window slot picker at onboarding | 🟡 | Fields exist (`notifSlotStartHour/EndHour`), settable from Profile post-onboarding, not during onboarding itself; no free-tier hide logic (free tier doesn't exist yet) |
@@ -38,7 +38,7 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 | STU-026/027 supervisor invite/revoke, invite-unregistered-number | 🟡 | Invite/revoke ✅; inviting an unregistered number **creates the account directly** rather than sending an invitation WhatsApp message that completes signup — different flow than spec's ONB-027 |
 | STU-028 notification settings | ✅ | Daily window ✅ (built this session); weekly day/hour on supervisor side, not student side |
 | STU-029 step-up OTP for sensitive actions | ❌ | Not built |
-| STU-030 friendly expired/paused states | 🟡 | Pricing screen shows a blocked-message; no dedicated "link expired" screen |
+| STU-030 friendly expired/paused states | ✅ | Pricing screen's blocked-message covers subscription expiry/pause; a new dedicated `LinkExpired` screen (student and supervisor apps) now covers a magic-link exchange that comes back 401 (expired/used/revoked), with a "log in with a verification code" CTA that grants the same access a fresh link would |
 
 ## §3.4 Supervisor console (SUP)
 
