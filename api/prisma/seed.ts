@@ -181,6 +181,23 @@ async function seedQuestions(labels: Record<string, { id: string }>, items: Seed
 }
 
 async function seedPackages(qudurat: { id: string }, tahsili: { id: string }) {
+  // FRE-001 — free, feature-limited package, available at signup without
+  // payment. Flags per FRE-002/004/005/006: no daily WhatsApp send, partial
+  // report, weekly report still on (retention lever), no supervisor linking.
+  const free = await prisma.package.create({
+    data: {
+      nameAr: 'مجاني',
+      nameEn: 'Free',
+      testIds: [qudurat.id],
+      durationMonths: 12,
+      priceHalalas: 0,
+      questionsPerDay: 5,
+      dailyNotificationEnabled: false,
+      reportVisibility: 'partial',
+      weeklyReportEnabled: true,
+      supervisorLinkingAllowed: false,
+    },
+  });
   const monthly = await prisma.package.create({
     data: { nameAr: 'شهر واحد', nameEn: '1 Month', testIds: [qudurat.id], durationMonths: 1, priceHalalas: 4500, questionsPerDay: 5 },
   });
@@ -190,7 +207,7 @@ async function seedPackages(qudurat: { id: string }, tahsili: { id: string }) {
   const yearly = await prisma.package.create({
     data: { nameAr: 'سنة كاملة', nameEn: '12 Months', testIds: [qudurat.id, tahsili.id], durationMonths: 12, priceHalalas: 19000, questionsPerDay: 5 },
   });
-  return { monthly, sixMonth, yearly };
+  return { free, monthly, sixMonth, yearly };
 }
 
 async function seedPeople(qudurat: { id: string }, yearlyPackage: { id: string; priceHalalas: number }, school: { id: string }) {

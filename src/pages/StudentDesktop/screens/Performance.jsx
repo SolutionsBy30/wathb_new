@@ -1,4 +1,5 @@
 import { Bar } from '../../../design-system/components/Bar';
+import { Button } from '../../../design-system/components/Button';
 
 const lineStyle = { borderBottom: '0.5px solid var(--on-indigo-line)' };
 
@@ -18,9 +19,54 @@ function heatmapWeeks(heatmap, weeks = 8) {
   return cells;
 }
 
-export default function Performance({ report }) {
+// FRE-004 — a locked placeholder for a diagnostic section the free tier
+// doesn't unlock. The server never sent real numbers for this section, so
+// there is nothing to blur — this is a lock + upgrade prompt, not CSS blur
+// over real data (NFR-006a).
+function LockedSection({ title, onUpgrade }) {
+  return (
+    <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', textAlign: 'center' }}>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>{title}</h2>
+      <span style={{ fontSize: '22px' }}>🔒</span>
+      <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)', lineHeight: 1.8 }}>
+        متاح في الباقات المدفوعة
+      </p>
+      <Button variant="primary" onClick={onUpgrade} style={{ padding: '8px 20px', fontSize: '12px' }}>ترقية الباقة</Button>
+    </div>
+  );
+}
+
+export default function Performance({ report, onUpgrade }) {
   if (!report) {
     return <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>جاري تحميل الأداء…</p>;
+  }
+
+  if (report.restricted) {
+    return (
+      <>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>لوحتي</h1>
+
+        <div style={{ display: 'flex', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--mist)' }}>الإجمالي (مدى الحياة)</span>
+            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>{report.totals.lifetimeAnswered}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--mist)' }}>هذا الأسبوع</span>
+            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>{report.totals.weekAnswered}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--mist)' }}>سلسلة الوثبات</span>
+            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--lime)' }}>{report.streak.current}</span>
+          </div>
+        </div>
+
+        <LockedSection title="الدقة حسب المجال" onUpgrade={onUpgrade} />
+        <LockedSection title="المؤشر المركّب — اتجاه أسبوعي" onUpgrade={onUpgrade} />
+        <LockedSection title="الاتساق والسرعة مقابل الهدف" onUpgrade={onUpgrade} />
+        <LockedSection title="أخطاء حديثة" onUpgrade={onUpgrade} />
+      </>
+    );
   }
 
   const trend = report.trend.filter((t) => t.accuracy !== null);

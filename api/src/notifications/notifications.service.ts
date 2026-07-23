@@ -36,6 +36,17 @@ export class NotificationsService {
     const student = await this.prisma.student.findUnique({ where: { userId: studentId } });
     if (!student?.targetTestId) return { skipped: 'no_goal' as const };
 
+    // FRE-002 — a free-tier student gets no daily WhatsApp send at all; the
+    // Wathb itself is still generated on-demand when they open the app
+    // (WathbService.today()), so skipping the whole plan/notify pass here
+    // costs them nothing but the proactive nudge.
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { studentId, status: 'active' },
+      include: { package: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (activeSub && !activeSub.package.dailyNotificationEnabled) return { skipped: 'free_tier' as const };
+
     const scheduledFor = dayKey(forDate);
     if (student.skipDays.includes(scheduledFor.getUTCDay())) return { skipped: 'skip_day' as const };
 

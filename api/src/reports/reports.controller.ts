@@ -14,7 +14,11 @@ export class ReportsController {
   @Get('student/:id')
   async studentReport(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
     await this.reports.assertAccess(session, id);
-    return this.reports.getStudentReport(id);
+    // FRE-004 — the partial-report restriction only ever applies to the
+    // student viewing their own data; a supervisor or admin always sees the
+    // full report regardless of the student's package.
+    const restricted = session.kind === 'student' && (await this.reports.isReportRestricted(id));
+    return this.reports.getStudentReport(id, restricted);
   }
 
   // §4.8 — ADMIN ONLY, 403 for student/supervisor (enforced by @RequireSession, not just UI hiding).

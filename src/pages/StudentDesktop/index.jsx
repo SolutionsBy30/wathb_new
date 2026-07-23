@@ -318,6 +318,7 @@ export default function StudentDesktop() {
       totalWrong: report?.totals?.lifetimeWrong ?? 0,
       compositeIndex: report?.compositeIndex ?? null,
       compositeIndexDelta: report?.compositeIndexDelta ?? null,
+      restricted: report?.restricted ?? false,
     };
   }, [report, alreadyDoneToday, completeResult]);
 
@@ -449,7 +450,7 @@ export default function StudentDesktop() {
           {screen === 'complete' && completeVm && (
             <Complete vm={completeVm} goDashboard={goPerformance} backHome={goHome} />
           )}
-          {screen === 'performance' && <Performance report={report} />}
+          {screen === 'performance' && <Performance report={report} onUpgrade={() => goPricing()} />}
           {screen === 'weeklyReport' && <WeeklyReport report={report} onOpenPerformance={goPerformance} />}
           {screen === 'pricing' && (
             <Pricing packages={packages} onSubscribe={subscribeToPackage} blockedMessage={pricingMessage} onBack={goHome} />

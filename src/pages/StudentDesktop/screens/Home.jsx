@@ -30,7 +30,9 @@ export default function Home({ vm, student, goTestPicker }) {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
           <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المؤشر المركّب</span>
-          {vm.compositeIndex === null ? (
+          {vm.restricted ? (
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>🔒 للباقات المدفوعة</span>
+          ) : vm.compositeIndex === null ? (
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>قيد الجمع</span>
           ) : (
             <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>

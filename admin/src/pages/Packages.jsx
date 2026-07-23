@@ -8,12 +8,32 @@ function halalasToSar(h) {
   return (h / 100).toFixed(2);
 }
 
+function FlagBadge({ active, onClick, label }) {
+  return (
+    <button
+      onClick={onClick}
+      title={active ? `${label} — مفعّل` : `${label} — موقوف`}
+      style={{
+        border: 'none', cursor: 'pointer', padding: '3px 8px', borderRadius: '999px', fontFamily: 'var(--font-arabic)', fontSize: '10px',
+        background: active ? 'var(--indigo)' : 'transparent', boxShadow: active ? 'none' : 'inset 0 0 0 0.5px var(--on-indigo-line)',
+        color: active ? 'var(--teal-ink)' : 'var(--mist)',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function NewPackageForm({ tests, onCreated }) {
   const [nameAr, setNameAr] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [testIds, setTestIds] = useState([]);
   const [durationMonths, setDurationMonths] = useState(1);
   const [priceSar, setPriceSar] = useState('');
+  const [dailyNotificationEnabled, setDailyNotificationEnabled] = useState(true);
+  const [reportVisibility, setReportVisibility] = useState('full');
+  const [weeklyReportEnabled, setWeeklyReportEnabled] = useState(true);
+  const [supervisorLinkingAllowed, setSupervisorLinkingAllowed] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,8 +47,10 @@ function NewPackageForm({ tests, onCreated }) {
       await api.createPackage({
         nameAr: nameAr.trim(), nameEn: nameEn.trim(), testIds,
         durationMonths: Number(durationMonths), priceHalalas: Math.round(Number(priceSar) * 100),
+        dailyNotificationEnabled, reportVisibility, weeklyReportEnabled, supervisorLinkingAllowed,
       });
       setNameAr(''); setNameEn(''); setTestIds([]); setDurationMonths(1); setPriceSar('');
+      setDailyNotificationEnabled(true); setReportVisibility('full'); setWeeklyReportEnabled(true); setSupervisorLinkingAllowed(true);
       onCreated();
     } catch (e) {
       setError(e.message);
@@ -60,6 +82,25 @@ function NewPackageForm({ tests, onCreated }) {
         <input style={{ ...fieldStyle, flex: 1 }} type="number" min={1} placeholder="المدة (أشهر)" value={durationMonths} onChange={(e) => setDurationMonths(e.target.value)} />
         <input style={{ ...fieldStyle, flex: 1 }} type="number" min={0} step="0.01" placeholder="السعر (ريال، شامل الضريبة)" value={priceSar} onChange={(e) => setPriceSar(e.target.value)} />
       </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '4px', borderTop: '0.5px solid var(--on-indigo-line)' }}>
+        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>حدود الباقة (لتحديد باقة مجانية محدودة)</span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>
+          <input type="checkbox" checked={dailyNotificationEnabled} onChange={(e) => setDailyNotificationEnabled(e.target.checked)} />
+          إشعار الوثبة اليومية عبر واتساب
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>
+          <input type="checkbox" checked={reportVisibility === 'full'} onChange={(e) => setReportVisibility(e.target.checked ? 'full' : 'partial')} />
+          تقرير أداء كامل (غير محجوب)
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>
+          <input type="checkbox" checked={weeklyReportEnabled} onChange={(e) => setWeeklyReportEnabled(e.target.checked)} />
+          التقرير الأسبوعي
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>
+          <input type="checkbox" checked={supervisorLinkingAllowed} onChange={(e) => setSupervisorLinkingAllowed(e.target.checked)} />
+          السماح بدعوة مشرف
+        </label>
+      </div>
       {error && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)' }}>{error}</p>}
       <Button variant="primary" disabled={busy} onClick={submit}>{busy ? 'جاري الحفظ…' : 'إنشاء الباقة'}</Button>
     </div>
@@ -77,6 +118,11 @@ export default function Packages({ tests }) {
     await load();
   };
 
+  const toggleFlag = async (pkg, key, value) => {
+    await api.updatePackage(pkg.id, { [key]: value });
+    await load();
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الباقات والتسعير</h1>
@@ -91,6 +137,7 @@ export default function Packages({ tests }) {
               <th style={th}>المدة</th>
               <th style={th}>السعر (شامل الضريبة)</th>
               <th style={th}>الاختبارات</th>
+              <th style={th}>الحدود</th>
               <th style={th}>الحالة</th>
             </tr>
           </thead>
@@ -101,6 +148,14 @@ export default function Packages({ tests }) {
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>{p.durationMonths} شهر</span></td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>{halalasToSar(p.priceHalalas)} ريال</span></td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '11px', color: 'var(--mist)' }}>{p.testIds.length}</span></td>
+                <td style={td}>
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', maxWidth: '220px' }}>
+                    <FlagBadge active={p.dailyNotificationEnabled} onClick={() => toggleFlag(p, 'dailyNotificationEnabled', !p.dailyNotificationEnabled)} label="إشعار يومي" />
+                    <FlagBadge active={p.reportVisibility === 'full'} onClick={() => toggleFlag(p, 'reportVisibility', p.reportVisibility === 'full' ? 'partial' : 'full')} label="تقرير كامل" />
+                    <FlagBadge active={p.weeklyReportEnabled} onClick={() => toggleFlag(p, 'weeklyReportEnabled', !p.weeklyReportEnabled)} label="تقرير أسبوعي" />
+                    <FlagBadge active={p.supervisorLinkingAllowed} onClick={() => toggleFlag(p, 'supervisorLinkingAllowed', !p.supervisorLinkingAllowed)} label="دعوة مشرف" />
+                  </div>
+                </td>
                 <td style={td}>
                   <button
                     onClick={() => toggleActive(p)}

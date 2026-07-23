@@ -41,6 +41,19 @@ export class SupervisorsService {
 
   /** Student invites a supervisor by mobile — spec §2: "linking is done by student invite." */
   async invite(studentId: string, mobile: string, name: string, type: 'parent' | 'instructor') {
+    // FRE-006/FRE-007 — server-enforced, not just an omitted button: a
+    // free-tier student cannot add a supervisor at all. The frontend still
+    // renders the invite affordance in a locked state with an upgrade
+    // prompt rather than hiding it, per spec.
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { studentId, status: 'active' },
+      include: { package: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (activeSub && !activeSub.package.supervisorLinkingAllowed) {
+      throw new ForbiddenException('supervisor linking is not available on the free package');
+    }
+
     let supervisorUser = await this.prisma.user.findUnique({ where: { mobileE164: mobile } });
     if (!supervisorUser) {
       supervisorUser = await this.prisma.user.create({

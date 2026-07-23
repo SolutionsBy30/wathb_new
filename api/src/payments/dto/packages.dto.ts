@@ -9,6 +9,11 @@ export class UpsertPackageDto {
   @IsOptional() @IsInt() @Min(1) questionsPerDay?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @IsIn(['public', 'link_only']) visibility?: 'public' | 'link_only';
+  // FRE-007 — the free tier's limits, tunable per package without a code change.
+  @IsOptional() @IsBoolean() dailyNotificationEnabled?: boolean;
+  @IsOptional() @IsIn(['full', 'partial']) reportVisibility?: 'full' | 'partial';
+  @IsOptional() @IsBoolean() weeklyReportEnabled?: boolean;
+  @IsOptional() @IsBoolean() supervisorLinkingAllowed?: boolean;
 }
 
 export class StartCheckoutDto {

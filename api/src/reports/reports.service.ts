@@ -104,7 +104,44 @@ export class ReportsService {
     return out;
   }
 
-  async getStudentReport(studentId: string) {
+  /**
+   * FRE-004/NFR-006a — a free-tier student's own report is partially
+   * visible: full totals/streak, everything diagnostic locked. The blur
+   * boundary itself (SRS §9 open question #13, no recommendation given) is
+   * this project's own default — totals, streak, and today's result stay
+   * visible; accuracy-by-area, the composite index/trend, speed, the
+   * consistency heatmap, and recent mistakes are all withheld, not merely
+   * hidden client-side. Only applies when the *student* is viewing their
+   * own report — a supervisor/admin viewer always sees the full report.
+   */
+  async isReportRestricted(studentId: string): Promise<boolean> {
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { studentId, status: 'active' },
+      include: { package: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return activeSub?.package.reportVisibility === 'partial';
+  }
+
+  // Overloads so callers that don't pass `restricted` (or pass the literal
+  // `false`) keep the full, narrowed return type — only weekly-report and
+  // other internal callers need that; the controller path takes a runtime
+  // boolean and gets the wider union, which is fine since it just forwards
+  // the JSON straight to the HTTP response.
+  async getStudentReport(studentId: string, restricted?: false): Promise<{
+    student: { id: string; name: string };
+    totals: { lifetimeAnswered: number; lifetimeCorrect: number; lifetimeWrong: number; weekAnswered: number; dailyTarget: number };
+    streak: { current: number; lastCompletedOn: Date | null };
+    restricted: boolean;
+    accuracyByArea: any[];
+    compositeIndex: number | null;
+    compositeIndexDelta: number | null;
+    trend: { weekStart: string; accuracy: number | null }[];
+    heatmap: { day: string; count: number }[];
+    recentMistakes: any[];
+  }>;
+  async getStudentReport(studentId: string, restricted: boolean): Promise<Record<string, unknown>>;
+  async getStudentReport(studentId: string, restricted = false) {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentId },
       include: { user: true },
@@ -184,7 +221,7 @@ export class ReportsService {
       heatmapByDay.set(day, (heatmapByDay.get(day) ?? 0) + 1);
     }
 
-    return {
+    const base = {
       student: { id: student.userId, name: student.user.name },
       totals: {
         lifetimeAnswered,
@@ -194,6 +231,13 @@ export class ReportsService {
         dailyTarget: DEFAULT_DAILY_TARGET,
       },
       streak: { current: student.currentStreak, lastCompletedOn: student.lastCompletedOn },
+      restricted,
+    };
+    // FRE-004/NFR-006a — diagnostic sections are simply absent from the
+    // response body, not just hidden client-side, for a restricted viewer.
+    if (restricted) return base;
+    return {
+      ...base,
       accuracyByArea,
       compositeIndex,
       compositeIndexDelta,

@@ -69,6 +69,16 @@ export class WeeklyReportService {
     if (student.user.whatsappOptedOutAt) return { skipped: 'opted_out' as const };
     if (!student.user.mobileE164) return { skipped: 'no_mobile' as const };
 
+    // FRE-005/FRE-007 — driven by the package flag, not a hardcoded
+    // free-tier check; today's seeded free package leaves this on (the
+    // weekly report is the tier's primary retention/conversion lever).
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { studentId, status: 'active' },
+      include: { package: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (activeSub && !activeSub.package.weeklyReportEnabled) return { skipped: 'package_disabled' as const };
+
     const { labels, trend } = await this.flattenReportableLabels(studentId);
     const { strength, weakness } = pickTopStrengthWeakness(labels, MIN_SAMPLE_FOR_REPORTING);
     const delta = compositeDelta(trend);

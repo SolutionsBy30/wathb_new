@@ -550,6 +550,15 @@ enum PackageVisibility {
   link_only
 }
 
+enum ReportVisibility {
+  full
+  partial
+}
+
+// §3.13 FRE-007 — every free-tier limit is a package feature flag, enforced
+// server-side at the API layer, never a code-level "is this the free
+// package" special case. A paid package simply carries the unrestricted
+// defaults below.
 model Package {
   id              String            @id @default(uuid())
   nameAr          String
@@ -560,6 +569,10 @@ model Package {
   questionsPerDay Int               @default(5)
   isActive        Boolean           @default(true)
   visibility      PackageVisibility @default(public)
+  dailyNotificationEnabled  Boolean           @default(true) // FRE-002
+  reportVisibility          ReportVisibility  @default(full) // FRE-004
+  weeklyReportEnabled       Boolean           @default(true) // FRE-005
+  supervisorLinkingAllowed  Boolean           @default(true) // FRE-006
   createdAt       DateTime          @default(now())
 
   subscriptions Subscription[]

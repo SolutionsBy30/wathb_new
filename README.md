@@ -284,11 +284,58 @@ above is built, the overlay isn't), and the geography admin screen's light
 dark theme for internal consistency rather than re-theming ~8 already-working
 screens.
 
+### Phase 7 — SRS v1.1 conformance pass
+
+Built directly against `docs/wathb-srs.md`'s gap analysis (`docs/srs-gap-analysis.md`), in the build order that document lays out:
+
+- **SEL-001 — single section per Wathb**: the selection engine now picks one
+  section per day (`selectSectionForDay`, weighted by weakness/coverage/
+  recency, same technique as label selection) and scopes that day's label
+  draw to it, instead of mixing labels across sections in one bundle.
+  `generatePlacement()` is unchanged — placement stays cross-section by
+  design for cold-start coverage.
+- **Composite index** (spec §1.3.1, STU-001/SUP-003/ADM-050): a 0–100
+  headline number combining accuracy across areas weighted by each area's
+  section weight, gated by the same `MIN_SAMPLE_FOR_REPORTING` floor as
+  everywhere else. Shown with a week-over-week trend arrow on the student
+  home/performance screens, the supervisor dashboard cards/table, and
+  sortable on the admin students list (`?sortBy=performance`).
+- **NOT-004 — uniform 24h magic links**: every link purpose now expires 24h
+  after issue (previously purpose-varied: 6h/7d/7d/1h/7d).
+- **NOT-010 — STOP/إيقاف opt-out**: `users.whatsapp_opted_out_at`, set the
+  instant an inbound WhatsApp message's text matches a STOP keyword
+  (English or Arabic), checked before every outbound send path (daily
+  Wathb, both weekly reports). Never auto-cleared.
+- **Free tier** (spec §3.13, FRE-001–008): a `Package` now carries four
+  feature flags — `dailyNotificationEnabled`, `reportVisibility`
+  (`full`/`partial`), `weeklyReportEnabled`, `supervisorLinkingAllowed` —
+  enforced server-side, not just hidden in the UI: `planDayForStudent` skips
+  the whole plan/notify pass for a `dailyNotificationEnabled: false`
+  package; `GET /api/report/student/:id` omits every diagnostic field
+  (accuracy-by-area, composite index/trend, heatmap, recent mistakes) from
+  the response body entirely when the *student themself* is viewing a
+  `partial`-visibility report — a supervisor or admin viewer always sees
+  the full report regardless of the student's tier; the supervisor-invite
+  endpoint 403s outright when `supervisorLinkingAllowed` is `false`. A seed
+  free package ships with the SRS's stated defaults (no daily notification,
+  partial report, weekly report on, no supervisor linking).
+  **Documented default, not an SRS recommendation**: the SRS explicitly
+  leaves the free-tier blur boundary open (§9 open question #13, "no
+  recommendation given"). This pass draws the line at *totals, streak, and
+  today's result stay visible; everything diagnostic is locked* — the
+  strongest pull toward conversion among the boundary's options. Revisit if
+  product wants a lighter restriction.
+
 ## What's not built yet
 
 Deliberately out of scope for this pass — each is a later phase in the
 spec's own build sequence (§11): the remaining Phase 6 items called out
-just above, plus the Phase 3/4/5 gaps called out earlier in this README.
+just above, plus the Phase 3/4/5 gaps called out earlier in this README,
+plus everything after free-tier in the SRS gap analysis's build order
+(destination-first bulk import redesign, suspend + audit log, the admin
+overview/alerts screen, and the smaller items — per-test language config,
+review queue, step-up OTP, invoicing/ZATCA, discount codes, WABA quality
+dashboard, PDPL export/delete, school comparison-overlay view).
 
 ## Running it locally
 
