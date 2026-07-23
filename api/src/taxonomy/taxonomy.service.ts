@@ -34,7 +34,12 @@ export class TaxonomyService {
   }
 
   updateTest(id: string, dto: Partial<UpsertTestDto>) {
-    return this.prisma.test.update({ where: { id }, data: dto });
+    // ADM-012 — language is chosen once at creation, never edited: every
+    // name and question beneath the test is authored assuming a fixed
+    // content language, so changing it later would silently mismatch
+    // existing content against a new direction/language expectation.
+    const { language, ...editable } = dto;
+    return this.prisma.test.update({ where: { id }, data: editable });
   }
 
   async createSection(testId: string, dto: UpsertSectionDto) {

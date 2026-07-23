@@ -212,14 +212,26 @@ model StudentSupervisor {
 }
 
 model Test {
-  id       String    @id @default(uuid())
+  id       String       @id @default(uuid())
   nameAr   String
   nameEn   String
-  isActive Boolean   @default(true)
+  // ADM-012 — chosen once at creation; governs the language/direction of
+  // every section/area/label name and every question stem/option/
+  // explanation authored beneath this test. nameAr/nameEn above are just
+  // the admin-facing bilingual labels for the test itself and are
+  // unrelated to this — a Qiyas test is still called both things in the
+  // admin nav regardless of which language its content is authored in.
+  language ContentLanguage @default(ar)
+  isActive Boolean         @default(true)
   sections Section[]
   students Student[]
 
   @@map("tests")
+}
+
+enum ContentLanguage {
+  ar
+  en
 }
 
 model Section {

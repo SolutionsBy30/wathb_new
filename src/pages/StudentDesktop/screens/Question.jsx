@@ -13,7 +13,7 @@ export default function Question({ vm, selectOption, confirmAnswer }) {
           <div key={i} style={dot} />
         ))}
       </div>
-      <div style={{ maxWidth: '640px' }}>
+      <div dir={vm.contentDir} style={{ maxWidth: '640px' }}>
         <QuestionCard
           question={vm.currentStem}
           options={vm.currentOptions}

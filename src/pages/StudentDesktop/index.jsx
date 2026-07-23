@@ -344,6 +344,10 @@ export default function StudentDesktop() {
       currentOptions: q.options.map((o) => o.text),
       selectedIndex,
       confirmDisabled: selectedIndex === null,
+      // ADM-012 — content direction follows the test's configured language;
+      // only the question stem/options flip, not the surrounding app chrome
+      // (spec: "Arabic RTL is the default layout direction, not a theme").
+      contentDir: wathb.contentLanguage === 'en' ? 'ltr' : 'rtl',
     };
   }, [wathb, qIndex, timeLeft, selectedIndex]);
 

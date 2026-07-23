@@ -98,15 +98,20 @@ export default function Explanations({ result, onContinue }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '640px' }}>
         {result.questions.map((q) => {
           const correctText = (q.options || []).find((o) => o.key === q.correctKey)?.text ?? q.correctKey;
+          // ADM-012 — the stem/explanation follow the test's content
+          // language; the surrounding chrome (question number, timers) stays app-RTL.
+          const contentDir = result.contentLanguage === 'en' ? 'ltr' : 'rtl';
           return (
             <div key={q.position} style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: '16px', ...lineStyle }}>
               <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>سؤال {q.position + 1}</span>
-              <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--sand)', lineHeight: 1.8 }}>{q.stem}</p>
-              <AnswerState
-                status={q.isCorrect ? 'correct' : 'wrong'}
-                correctAnswer={correctText}
-                reason={q.explanation}
-              />
+              <p dir={contentDir} style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--sand)', lineHeight: 1.8 }}>{q.stem}</p>
+              <div dir={contentDir}>
+                <AnswerState
+                  status={q.isCorrect ? 'correct' : 'wrong'}
+                  correctAnswer={correctText}
+                  reason={q.explanation}
+                />
+              </div>
               {q.timedOut && (
                 <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>انتهى الوقت قبل الإجابة.</span>
               )}

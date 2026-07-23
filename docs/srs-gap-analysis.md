@@ -58,7 +58,7 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 | ADM-001/002 overview + alerts | ❌ | No overview screen at all in the current admin app (nav starts at taxonomy) |
 | ADM-003 grouped nav | 🟡 | Flat nav list, ungrouped |
 | ADM-010/011 taxonomy tree | ✅ | |
-| ADM-012 **per-test language setting** | ❌ | `Test` has no `language` field; everything assumes Arabic |
+| ADM-012 **per-test language setting** | 🟡 | `Test.language` (`ContentLanguage` enum, ar/en, defaults `ar` for existing tests) chosen at creation, immutable afterward (`updateTest` strips it from the update payload — "chosen at creation" per spec). Wired into `WathbService.today()`/`complete()` as `contentLanguage`, which the student app uses to set `dir` on the question stem/options/explanation specifically — the app chrome stays Arabic RTL regardless (spec: "RTL is the default layout direction, not a theme"). Not yet done: no enforcement that a test's taxonomy/question content actually matches its declared language (nothing stops authoring English stems under an `ar` test), and the admin/supervisor apps don't yet flip content direction the same way the student app does. |
 | ADM-013 composite weight, drag-reorder, soft-delete | 🟡 | `sort` field exists, no drag UI; retire exists for labels/questions |
 | ADM-020–023 question bank + editor | ✅ | |
 | ADM-024 versioning | ✅ | |

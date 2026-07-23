@@ -33,6 +33,34 @@ function InlineAdd({ placeholder1, placeholder2, onAdd }) {
   );
 }
 
+const LANGUAGE_LABEL = { ar: 'عربي', en: 'English' };
+
+// ADM-012 — a small dedicated form (not the generic InlineAdd) since test
+// creation needs the extra language selector the other taxonomy levels don't.
+function NewTestForm({ onAdd, onCancel }) {
+  const [ar, setAr] = useState('');
+  const [en, setEn] = useState('');
+  const [language, setLanguage] = useState('ar');
+  return (
+    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+      <input style={input} placeholder="اسم الاختبار (عربي)" value={ar} onChange={(e) => setAr(e.target.value)} />
+      <input style={input} placeholder="Test name (EN)" value={en} onChange={(e) => setEn(e.target.value)} />
+      <select value={language} onChange={(e) => setLanguage(e.target.value)} style={{ ...input, width: 'auto' }}>
+        <option value="ar">عربي (RTL)</option>
+        <option value="en">English (LTR)</option>
+      </select>
+      <button
+        disabled={!ar.trim() || !en.trim()}
+        onClick={async () => { await onAdd(ar.trim(), en.trim(), language); setAr(''); setEn(''); }}
+        style={{ border: 'none', background: 'var(--lime)', color: 'var(--lime-ink)', borderRadius: '999px', padding: '6px 12px', fontFamily: 'var(--font-arabic)', fontSize: '11px', cursor: 'pointer' }}
+      >
+        حفظ
+      </button>
+      <button onClick={onCancel} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontSize: '11px' }}>إلغاء</button>
+    </div>
+  );
+}
+
 export default function Taxonomy({ tests, onTestsChanged }) {
   const [testId, setTestId] = useState(null);
   const [tree, setTree] = useState(null);
@@ -59,9 +87,11 @@ export default function Taxonomy({ tests, onTestsChanged }) {
               fontFamily: 'var(--font-arabic)', fontSize: '13px',
               background: testId === t.id ? 'var(--lime)' : 'var(--on-indigo-subtle)',
               color: testId === t.id ? 'var(--lime-ink)' : 'var(--sand)',
+              display: 'flex', alignItems: 'center', gap: '6px',
             }}
           >
             {t.nameAr}
+            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '10px', opacity: 0.7 }}>{LANGUAGE_LABEL[t.language] ?? t.language}</span>
           </button>
         ))}
         {!newTestOpen && (
@@ -70,15 +100,14 @@ export default function Taxonomy({ tests, onTestsChanged }) {
           </button>
         )}
         {newTestOpen && (
-          <InlineAdd
-            placeholder1="اسم الاختبار (عربي)"
-            placeholder2="Test name (EN)"
-            onAdd={async (ar, en) => {
-              const created = await api.createTest({ nameAr: ar, nameEn: en });
+          <NewTestForm
+            onAdd={async (ar, en, language) => {
+              const created = await api.createTest({ nameAr: ar, nameEn: en, language });
               await onTestsChanged();
               setTestId(created.id);
               setNewTestOpen(false);
             }}
+            onCancel={() => setNewTestOpen(false)}
           />
         )}
       </div>

@@ -91,6 +91,10 @@ export class WathbService {
     const answeredIds = new Set(answered.map((a) => a.questionId));
     const currentPosition = wathb.questions.find((q) => !answeredIds.has(q.questionId))?.position ?? null;
 
+    // ADM-012 — content direction follows the test's configured language,
+    // not a fixed app-wide RTL assumption (spec §1.3.1/NFR-003).
+    const test = await this.prisma.test.findUniqueOrThrow({ where: { id: student.targetTestId }, select: { language: true } });
+
     return {
       wathbId: wathb.id,
       bundleType: wathb.bundleType,
@@ -98,6 +102,7 @@ export class WathbService {
       currentPosition,
       totalQuestions: wathb.questions.length,
       answeredCount: answeredIds.size,
+      contentLanguage: test.language,
       questions: wathb.questions.map(publicQuestion),
     };
   }
@@ -284,11 +289,17 @@ export class WathbService {
       };
     });
 
+    // ADM-012 — same content-direction signal as today(), for the review screen.
+    const test = student.targetTestId
+      ? await this.prisma.test.findUnique({ where: { id: student.targetTestId }, select: { language: true } })
+      : null;
+
     return {
       wathbId,
       streak: newStreak,
       total: questions.length,
       correctCount: questions.filter((q) => q.isCorrect).length,
+      contentLanguage: test?.language ?? 'ar',
       questions,
     };
   }

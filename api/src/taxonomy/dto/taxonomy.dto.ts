@@ -3,6 +3,10 @@ import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from 'clas
 export class UpsertTestDto {
   @IsString() nameAr!: string;
   @IsString() nameEn!: string;
+  // ADM-012 — chosen once at creation; not editable afterward (see
+  // TaxonomyService.createTest) since sections/areas/labels/questions
+  // beneath the test are authored assuming a fixed content language.
+  @IsOptional() @IsIn(['ar', 'en']) language?: 'ar' | 'en';
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
