@@ -48,7 +48,7 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 | SUP-003 card vs. table by count, needs-attention ordering | ✅ | `Dashboard.jsx` (`family_card` / `instructor_table`) |
 | SUP-004/005 shared report, MIN_SAMPLE | ✅ | Enhanced this session with label/speed detail |
 | SUP-006 notification prefs | ✅ | |
-| SUP-007 accept/reject pending invite | 🟡 | Accept ✅ (`AcceptInvite.jsx`); **no reject**, and no persistent "pending invites" nav tab — only reachable via the magic link itself, not browsable within a logged-in session |
+| SUP-007 accept/reject pending invite | ✅ | `GET /supervisors/me/invites` (browsable list, not just the magic link), `POST .../accept`, `POST .../reject`. `revokedAt` set without ever having `acceptedAt` reads as "rejected" — no new status column. Both endpoints now mutually guard against contradictory state (a rejected invite can't later be accepted, and vice versa) after live testing surfaced that the initial version let `acceptInvite` succeed on an already-rejected invite, producing a row with both `acceptedAt` and `revokedAt` set. `PendingInvites.jsx` + nav badge in the supervisor app. |
 | SUP-008 supervisor pays on behalf of student | ❌ | Not built — checkout is student-session-only |
 
 ## §3.5–3.14 Admin console (ADM)

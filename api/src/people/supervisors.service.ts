@@ -83,7 +83,33 @@ export class SupervisorsService {
     const link = await this.prisma.studentSupervisor.findUnique({ where: { id: studentSupervisorId } });
     if (!link) throw new NotFoundException('invite not found');
     if (link.supervisorId !== supervisorId) throw new ForbiddenException();
+    // A rejected invite is revoked without ever having been accepted — that
+    // must stay a dead end, not something a later accept call can revive
+    // into the contradictory "accepted and revoked" state.
+    if (link.revokedAt) throw new BadRequestException('invite was rejected or revoked');
     return this.prisma.studentSupervisor.update({ where: { id: studentSupervisorId }, data: { acceptedAt: new Date() } });
+  }
+
+  // SUP-007 — reject reuses revokedAt (a link that's revoked without ever
+  // having been accepted reads unambiguously as "rejected"), so no new
+  // status column is needed alongside the existing accept/revoke pair.
+  async rejectInvite(supervisorId: string, studentSupervisorId: string) {
+    const link = await this.prisma.studentSupervisor.findUnique({ where: { id: studentSupervisorId } });
+    if (!link) throw new NotFoundException('invite not found');
+    if (link.supervisorId !== supervisorId) throw new ForbiddenException();
+    if (link.acceptedAt) throw new BadRequestException('invite was already accepted — use revoke instead');
+    if (link.revokedAt) throw new BadRequestException('invite was already rejected');
+    return this.prisma.studentSupervisor.update({ where: { id: studentSupervisorId }, data: { revokedAt: new Date() } });
+  }
+
+  // SUP-007 — pending invites shall be browsable within a logged-in
+  // session, not only reachable by tapping the original magic link.
+  async listPendingInvites(supervisorId: string) {
+    return this.prisma.studentSupervisor.findMany({
+      where: { supervisorId, acceptedAt: null, revokedAt: null },
+      include: { student: { include: { user: true } } },
+      orderBy: { id: 'desc' },
+    });
   }
 
   /** Consent is explicit and revocable by the student — spec §2. */

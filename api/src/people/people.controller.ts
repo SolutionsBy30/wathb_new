@@ -103,9 +103,21 @@ export class PeopleController {
   }
 
   @RequireSession('supervisor')
+  @Get('supervisors/me/invites')
+  listInvites(@CurrentSession() session: SessionPayload) {
+    return this.supervisors.listPendingInvites(session.sub);
+  }
+
+  @RequireSession('supervisor')
   @Post('supervisors/me/invites/:id/accept')
   accept(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
     return this.supervisors.acceptInvite(session.sub, id);
+  }
+
+  @RequireSession('supervisor')
+  @Post('supervisors/me/invites/:id/reject')
+  reject(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
+    return this.supervisors.rejectInvite(session.sub, id);
   }
 
   @RequireSession('supervisor')

@@ -6,6 +6,7 @@ import AcceptInvite from './pages/AcceptInvite';
 import Dashboard from './pages/Dashboard';
 import StudentReport from './pages/StudentReport';
 import Preferences from './pages/Preferences';
+import PendingInvites from './pages/PendingInvites';
 
 export default function App() {
   const [screen, setScreen] = useState('loading');
@@ -15,10 +16,20 @@ export default function App() {
   const [acceptError, setAcceptError] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [report, setReport] = useState(null);
+  const [pendingInvites, setPendingInvites] = useState([]);
 
   const loadDashboard = async () => {
     setDashboard(await api.dashboard());
     setScreen('dashboard');
+  };
+
+  const loadPendingInvites = async () => {
+    setPendingInvites(await api.listPendingInvites());
+  };
+
+  const openPendingInvites = async () => {
+    await loadPendingInvites();
+    setScreen('invites');
   };
 
   const bootstrap = async () => {
@@ -49,6 +60,7 @@ export default function App() {
     }
     try {
       await loadDashboard();
+      loadPendingInvites().catch(() => {}); // badge count only — non-fatal if it fails
     } catch {
       setToken(null);
       setScreen('login');
@@ -139,6 +151,17 @@ export default function App() {
           لوحتي
         </button>
         <button
+          onClick={openPendingInvites}
+          style={{ border: 'none', background: 'transparent', color: screen === 'invites' ? 'var(--sand)' : 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}
+        >
+          الدعوات المعلّقة
+          {pendingInvites.length > 0 && (
+            <span style={{ background: 'var(--lime)', color: 'var(--lime-ink)', borderRadius: '999px', fontSize: '10px', fontFamily: 'var(--font-latin)', padding: '1px 6px' }}>
+              {pendingInvites.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setScreen('preferences')}
           style={{ border: 'none', background: 'transparent', color: screen === 'preferences' ? 'var(--sand)' : 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
         >
@@ -155,6 +178,14 @@ export default function App() {
         {screen === 'dashboard' && <Dashboard data={dashboard} onOpenStudent={openStudent} />}
         {screen === 'report' && <StudentReport report={report} onBack={() => setScreen('dashboard')} />}
         {screen === 'preferences' && <Preferences />}
+        {screen === 'invites' && (
+          <PendingInvites
+            invites={pendingInvites}
+            onAccept={async (id) => { await api.acceptInvite(id); setDashboard(await api.dashboard()); }}
+            onReject={api.rejectInvite}
+            onRefresh={loadPendingInvites}
+          />
+        )}
       </main>
     </div>
   );
