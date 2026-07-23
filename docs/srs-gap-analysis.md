@@ -49,7 +49,7 @@ Status of the codebase (`SolutionsBy30/wathb_new`, branch `claude/ui-language-re
 | SUP-004/005 shared report, MIN_SAMPLE | ✅ | Enhanced this session with label/speed detail |
 | SUP-006 notification prefs | ✅ | |
 | SUP-007 accept/reject pending invite | ✅ | `GET /supervisors/me/invites` (browsable list, not just the magic link), `POST .../accept`, `POST .../reject`. `revokedAt` set without ever having `acceptedAt` reads as "rejected" — no new status column. Both endpoints now mutually guard against contradictory state (a rejected invite can't later be accepted, and vice versa) after live testing surfaced that the initial version let `acceptInvite` succeed on an already-rejected invite, producing a row with both `acceptedAt` and `revokedAt` set. `PendingInvites.jsx` + nav badge in the supervisor app. |
-| SUP-008 supervisor pays on behalf of student | ❌ | Not built — checkout is student-session-only |
+| SUP-008 supervisor pays on behalf of student | ✅ | `POST /checkout/start-for-student` (supervisor session) requires an accepted, non-revoked link to the target student — the same trust boundary as every other supervisor-to-student action — verified live: rejected before acceptance and for an unrelated student, succeeded once accepted. `Subscription.payerId/payerType` record who actually paid; the payment provider gets the payer's own name/mobile (they receive the receipt), while the subscription itself stays the student's. Supervisor dashboard gets a "الدفع نيابة عنه" button (both card and table views) opening a package picker that redirects to checkout, same pattern as the student app's own Pricing screen. Admin student detail shows a "الدافع" column. |
 
 ## §3.5–3.14 Admin console (ADM)
 

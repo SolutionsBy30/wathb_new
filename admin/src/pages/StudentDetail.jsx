@@ -94,7 +94,7 @@ export default function StudentDetail({ studentId, onBack }) {
           <p style={{ margin: 0, ...muted }}>لا يوجد اشتراكات.</p>
         ) : (
           <table style={tableStyle}>
-            <thead><tr style={theadRow}><th style={th}>الباقة</th><th style={th}>الحالة</th><th style={th}>المبلغ</th><th style={th}>البداية</th><th style={th}>النهاية</th><th style={th}>مرجع الدفع</th></tr></thead>
+            <thead><tr style={theadRow}><th style={th}>الباقة</th><th style={th}>الحالة</th><th style={th}>المبلغ</th><th style={th}>البداية</th><th style={th}>النهاية</th><th style={th}>مرجع الدفع</th><th style={th}>الدافع</th></tr></thead>
             <tbody>
               {subscriptions.map((s) => (
                 <tr key={s.id} style={trBorder}>
@@ -104,6 +104,8 @@ export default function StudentDetail({ studentId, onBack }) {
                   <td style={td}><span style={cellLatin}>{fmtDate(s.startsAt)}</span></td>
                   <td style={td}><span style={cellLatin}>{fmtDate(s.endsAt)}</span></td>
                   <td style={td}><span style={cellLatin}>{s.paymentRef ?? '—'}</span></td>
+                  {/* SUP-008 — who actually paid, when it wasn't the student themself. */}
+                  <td style={td}><span style={cellArabic}>{s.payerType === 'supervisor' ? 'مشرف' : 'الطالب'}</span></td>
                 </tr>
               ))}
             </tbody>

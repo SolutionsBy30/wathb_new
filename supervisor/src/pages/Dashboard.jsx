@@ -6,7 +6,7 @@ function daysUntil(dateStr) {
   return days >= 0 ? days : null;
 }
 
-function StudentCard({ s, onOpen }) {
+function StudentCard({ s, onOpen, onPay }) {
   const countdown = daysUntil(s.testDate);
   return (
     <div
@@ -72,21 +72,33 @@ function StudentCard({ s, onOpen }) {
       {countdown !== null && (
         <span style={{ fontSize: '11px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>الاختبار خلال {countdown} يوماً</span>
       )}
-      <button
-        onClick={() => onOpen(s.studentId)}
-        style={{
-          width: '100%', minHeight: '40px', borderRadius: '999px', border: 'none', cursor: 'pointer',
-          background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--sand)',
-          fontFamily: 'var(--font-arabic)', fontSize: '13px', fontWeight: 500,
-        }}
-      >
-        عرض التقرير
-      </button>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button
+          onClick={() => onOpen(s.studentId)}
+          style={{
+            flex: 1, minHeight: '40px', borderRadius: '999px', border: 'none', cursor: 'pointer',
+            background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--sand)',
+            fontFamily: 'var(--font-arabic)', fontSize: '13px', fontWeight: 500,
+          }}
+        >
+          عرض التقرير
+        </button>
+        <button
+          onClick={() => onPay(s.studentId, s.name)}
+          style={{
+            flex: 1, minHeight: '40px', borderRadius: '999px', border: 'none', cursor: 'pointer',
+            background: 'var(--lime)', color: 'var(--lime-ink)',
+            fontFamily: 'var(--font-arabic)', fontSize: '13px', fontWeight: 500,
+          }}
+        >
+          الدفع نيابة عنه
+        </button>
+      </div>
     </div>
   );
 }
 
-export default function Dashboard({ data, onOpenStudent }) {
+export default function Dashboard({ data, onOpenStudent, onPayForStudent }) {
   if (!data) return null;
 
   if (data.viewMode === 'family_card') {
@@ -94,7 +106,7 @@ export default function Dashboard({ data, onOpenStudent }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>لوحتي</h1>
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          {data.students.map((s) => <StudentCard key={s.studentId} s={s} onOpen={onOpenStudent} />)}
+          {data.students.map((s) => <StudentCard key={s.studentId} s={s} onOpen={onOpenStudent} onPay={onPayForStudent} />)}
         </div>
         {data.students.length === 0 && <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>لا يوجد طلاب مرتبطون بعد.</p>}
       </div>
@@ -115,6 +127,7 @@ export default function Dashboard({ data, onOpenStudent }) {
               <th style={th}>هذا الأسبوع</th>
               <th style={th}>المؤشر المركّب</th>
               <th style={th}>أضعف مجال</th>
+              <th style={th}></th>
             </tr>
           </thead>
           <tbody>
@@ -141,6 +154,14 @@ export default function Dashboard({ data, onOpenStudent }) {
                   {s.topWeakness ? (
                     <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>{s.topWeakness.nameAr} ({Math.round(s.topWeakness.accuracy * 100)}%)</span>
                   ) : <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>قيد الجمع</span>}
+                </td>
+                <td style={td} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => onPayForStudent(s.studentId, s.name)}
+                    style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: '999px', background: 'var(--lime)', color: 'var(--lime-ink)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+                  >
+                    الدفع نيابة عنه
+                  </button>
                 </td>
               </tr>
             ))}

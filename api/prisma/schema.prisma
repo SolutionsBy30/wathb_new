@@ -669,6 +669,11 @@ model Subscription {
   status               SubscriptionStatus @default(pending)
   paymentRef           String?
   createdAt            DateTime           @default(now())
+  // SUP-008 — "the payer relationship shall be supported in subscription
+  // and payment flows." Null means the student paid for themself, the
+  // existing default; a supervisor checkout sets both fields.
+  payerId              String?
+  payerType            SubjectType?
 
   @@map("subscriptions")
 }

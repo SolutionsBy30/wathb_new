@@ -4,7 +4,7 @@ import { CheckoutService } from './checkout.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
-import { StartCheckoutDto, ActivateWireTransferDto } from './dto/packages.dto';
+import { StartCheckoutDto, StartCheckoutForStudentDto, ActivateWireTransferDto } from './dto/packages.dto';
 
 @Controller()
 export class CheckoutController {
@@ -15,6 +15,16 @@ export class CheckoutController {
   @Post('checkout/start')
   start(@Body() dto: StartCheckoutDto, @CurrentSession() session: SessionPayload) {
     return this.checkout.startCheckout(session.sub, dto.packageId);
+  }
+
+  // SUP-008 — a supervisor pays on behalf of a linked (accepted, not
+  // revoked) student. Authorization is enforced in the service, not just
+  // the UI, matching every other supervisor-to-student action in this app.
+  @UseGuards(SessionGuard)
+  @RequireSession('supervisor')
+  @Post('checkout/start-for-student')
+  startForStudent(@Body() dto: StartCheckoutForStudentDto, @CurrentSession() session: SessionPayload) {
+    return this.checkout.startCheckoutForLinkedStudent(session.sub, dto.studentId, dto.packageId);
   }
 
   @UseGuards(SessionGuard)

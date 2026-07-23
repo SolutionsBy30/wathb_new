@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import StudentReport from './pages/StudentReport';
 import Preferences from './pages/Preferences';
 import PendingInvites from './pages/PendingInvites';
+import PayForStudent from './pages/PayForStudent';
 
 export default function App() {
   const [screen, setScreen] = useState('loading');
@@ -17,6 +18,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState(null);
   const [report, setReport] = useState(null);
   const [pendingInvites, setPendingInvites] = useState([]);
+  const [payTarget, setPayTarget] = useState(null); // { studentId, studentName }
 
   const loadDashboard = async () => {
     setDashboard(await api.dashboard());
@@ -128,6 +130,11 @@ export default function App() {
     setScreen('report');
   };
 
+  const openPayForStudent = (studentId, studentName) => {
+    setPayTarget({ studentId, studentName });
+    setScreen('pay');
+  };
+
   if (screen === 'loading') {
     return (
       <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -175,8 +182,11 @@ export default function App() {
         </button>
       </header>
       <main style={{ padding: '24px', maxWidth: '760px', margin: '0 auto' }}>
-        {screen === 'dashboard' && <Dashboard data={dashboard} onOpenStudent={openStudent} />}
+        {screen === 'dashboard' && <Dashboard data={dashboard} onOpenStudent={openStudent} onPayForStudent={openPayForStudent} />}
         {screen === 'report' && <StudentReport report={report} onBack={() => setScreen('dashboard')} />}
+        {screen === 'pay' && payTarget && (
+          <PayForStudent studentId={payTarget.studentId} studentName={payTarget.studentName} onBack={() => setScreen('dashboard')} />
+        )}
         {screen === 'preferences' && <Preferences />}
         {screen === 'invites' && (
           <PendingInvites

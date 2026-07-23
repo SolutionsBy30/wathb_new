@@ -20,6 +20,11 @@ export class StartCheckoutDto {
   @IsString() packageId!: string;
 }
 
+export class StartCheckoutForStudentDto {
+  @IsString() studentId!: string;
+  @IsString() packageId!: string;
+}
+
 export class ActivateWireTransferDto {
   @IsString() studentId!: string;
   @IsString() packageId!: string;

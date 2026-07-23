@@ -20,17 +20,33 @@ export class CheckoutService {
     return !(this.config.get('PAYMOB_SECRET_KEY') && this.config.get('PAYMOB_PUBLIC_KEY') && this.config.get('PAYMOB_INTEGRATION_ID'));
   }
 
-  async startCheckout(studentId: string, packageId: string) {
+  /**
+   * SUP-008 — payer is optional and defaults to the student paying for
+   * themself (the original, still-supported path). When a supervisor pays
+   * on behalf of a linked student, the checkout provider gets the payer's
+   * own name/mobile (they're the one completing the transaction and
+   * receiving the receipt), while the subscription itself is still the
+   * student's — payerId/payerType record who actually paid.
+   */
+  async startCheckout(studentId: string, packageId: string, payer?: { id: string; type: 'supervisor' }) {
     const pkg = await this.prisma.package.findUnique({ where: { id: packageId } });
     if (!pkg || !pkg.isActive) throw new NotFoundException('package not found or inactive');
 
     const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId }, include: { user: true } });
-    if (!student.user.mobileE164) throw new BadRequestException('no mobile number on file');
+    const payerUser = payer ? await this.prisma.user.findUniqueOrThrow({ where: { id: payer.id } }) : student.user;
+    if (!payerUser.mobileE164) throw new BadRequestException('no mobile number on file');
 
     // Price snapshot at purchase time — spec §4.5: a later price change must
     // never touch this subscription once it's paid for.
     const subscription = await this.prisma.subscription.create({
-      data: { studentId, packageId, priceSnapshotHalalas: pkg.priceHalalas, status: 'pending' },
+      data: {
+        studentId,
+        packageId,
+        priceSnapshotHalalas: pkg.priceHalalas,
+        status: 'pending',
+        payerId: payer?.id,
+        payerType: payer?.type,
+      },
     });
 
     const studentAppUrl = this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
@@ -38,13 +54,30 @@ export class CheckoutService {
       amountHalalas: pkg.priceHalalas,
       currency: 'SAR',
       merchantOrderId: subscription.id,
-      customerName: student.user.name,
-      customerMobile: student.user.mobileE164,
+      customerName: payerUser.name,
+      customerMobile: payerUser.mobileE164,
       successRedirectUrl: `${studentAppUrl}/#subscription=success`,
     });
 
     await this.prisma.subscription.update({ where: { id: subscription.id }, data: { paymentRef: providerRef } });
     return { subscriptionId: subscription.id, checkoutUrl };
+  }
+
+  /**
+   * SUP-008 — the supervisor-facing entry point. Requires an accepted,
+   * non-revoked link to the student (the same trust boundary that gates
+   * every other supervisor-to-student action in this app), so a
+   * supervisor can only ever pay for a student who has actually accepted
+   * their invite, never an arbitrary studentId.
+   */
+  async startCheckoutForLinkedStudent(supervisorId: string, studentId: string, packageId: string) {
+    const link = await this.prisma.studentSupervisor.findUnique({
+      where: { studentId_supervisorId: { studentId, supervisorId } },
+    });
+    if (!link || !link.acceptedAt || link.revokedAt) {
+      throw new BadRequestException('no accepted supervisor link to this student');
+    }
+    return this.startCheckout(studentId, packageId, { id: supervisorId, type: 'supervisor' });
   }
 
   /** Idempotent — a webhook or dev-complete hit twice must not double-extend the subscription. */
