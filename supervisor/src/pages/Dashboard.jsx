@@ -20,6 +20,22 @@ function StudentCard({ s, onOpen }) {
         <span style={{ fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--lime)' }}>🔥 {s.streak}</span>
       </div>
 
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>المؤشر المركّب</span>
+        {s.compositeIndex == null ? (
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>قيد الجمع</span>
+        ) : (
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '15px', fontWeight: 500, color: 'var(--sand)' }}>{s.compositeIndex}</span>
+            {s.compositeIndexDelta != null && s.compositeIndexDelta !== 0 && (
+              <span style={{ fontFamily: 'var(--font-latin)', fontSize: '11px', color: s.compositeIndexDelta > 0 ? 'var(--teal-ink)' : 'var(--coral)' }}>
+                {s.compositeIndexDelta > 0 ? '↑' : '↓'} {Math.abs(Math.round(s.compositeIndexDelta * 100))}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: '18px', background: 'var(--indigo)', borderRadius: 'var(--radius-sm)', padding: '10px 14px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <span style={{ fontSize: '10px', color: 'var(--mist)' }}>إجمالي الأسئلة</span>
@@ -97,6 +113,7 @@ export default function Dashboard({ data, onOpenStudent }) {
               <th style={th}>الاسم</th>
               <th style={th}>السلسلة</th>
               <th style={th}>هذا الأسبوع</th>
+              <th style={th}>المؤشر المركّب</th>
               <th style={th}>أضعف مجال</th>
             </tr>
           </thead>
@@ -106,6 +123,20 @@ export default function Dashboard({ data, onOpenStudent }) {
                 <td style={td}><span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>{s.name}</span></td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--lime)' }}>{s.streak}</span></td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--sand)' }}>{s.weekAnswered}</span></td>
+                <td style={td}>
+                  {s.compositeIndex == null ? (
+                    <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>قيد الجمع</span>
+                  ) : (
+                    <span style={{ fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--sand)' }}>
+                      {s.compositeIndex}
+                      {s.compositeIndexDelta != null && s.compositeIndexDelta !== 0 && (
+                        <span style={{ color: s.compositeIndexDelta > 0 ? 'var(--teal-ink)' : 'var(--coral)' }}>
+                          {' '}{s.compositeIndexDelta > 0 ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </td>
                 <td style={td}>
                   {s.topWeakness ? (
                     <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>{s.topWeakness.nameAr} ({Math.round(s.topWeakness.accuracy * 100)}%)</span>

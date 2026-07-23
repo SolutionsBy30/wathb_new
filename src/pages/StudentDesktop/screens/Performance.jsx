@@ -44,6 +44,19 @@ export default function Performance({ report }) {
           <span style={{ fontSize: '11px', color: 'var(--mist)' }}>سلسلة الوثبات</span>
           <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--lime)' }}>{report.streak.current}</span>
         </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--mist)' }}>المؤشر المركّب</span>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>
+              {report.compositeIndex === null ? '—' : report.compositeIndex}
+            </span>
+            {report.compositeIndexDelta !== null && report.compositeIndexDelta !== 0 && (
+              <span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: report.compositeIndexDelta > 0 ? 'var(--teal-ink)' : 'var(--coral)' }}>
+                {report.compositeIndexDelta > 0 ? '↑' : '↓'} {Math.abs(Math.round(report.compositeIndexDelta * 100))}
+              </span>
+            )}
+          </span>
+        </div>
       </div>
 
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
@@ -80,7 +93,7 @@ export default function Performance({ report }) {
 
       <div className="sd-card-grid" style={{ gap: '20px' }}>
         <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>اتجاه الأداء — أسبوعياً</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المؤشر المركّب — اتجاه أسبوعي</h2>
           {trend.length === 0 ? (
             <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد بيانات كافية بعد.</p>
           ) : (

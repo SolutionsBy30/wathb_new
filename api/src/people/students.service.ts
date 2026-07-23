@@ -2,34 +2,93 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from './accounts.service';
 import { GoalSetupDto } from './dto/people.dto';
+import { ReportsService } from '../reports/reports.service';
+
+export type AdminStudentSort = 'name' | 'subscriptionEnd' | 'performance' | 'createdAt';
 
 @Injectable()
 export class StudentsService {
   constructor(
     private prisma: PrismaService,
     private accounts: AccountsService,
+    private reports: ReportsService,
   ) {}
 
   createStudent(mobile: string, name: string) {
     return this.accounts.createStudent(mobile, name);
   }
 
-  /** A9 in the spec — admin students list. Paginated, optional name/mobile search. */
-  async adminList(search?: string, offset = 0, limit = 50) {
-    const where = search
-      ? { user: { OR: [{ name: { contains: search, mode: 'insensitive' as const } }, { mobileE164: { contains: search } }] } }
-      : {};
-    const [total, items] = await this.prisma.$transaction([
-      this.prisma.student.count({ where }),
-      this.prisma.student.findMany({
-        where,
-        skip: offset,
-        take: limit,
-        orderBy: { user: { createdAt: 'desc' } },
-        include: { user: true, targetTest: true, school: { include: { city: true } } },
-      }),
-    ]);
-    return { total, items };
+  /**
+   * ADM-050 — admin students list. Filterable by school/city, sortable by
+   * name/subscription end date/performance (composite index). Composite
+   * index and subscription end date aren't stored columns, so a sort by
+   * either fetches the full filtered set and sorts/paginates in memory
+   * rather than pushing the sort into Prisma — a documented, pragmatic
+   * limit fine at today's data volumes (same trade-off as the cohort
+   * report's live-computed aggregation).
+   */
+  async adminList(search?: string, offset = 0, limit = 50, sortBy: AdminStudentSort = 'createdAt', sortDir: 'asc' | 'desc' = 'desc', schoolId?: string, cityId?: string) {
+    const where = {
+      ...(search ? { user: { OR: [{ name: { contains: search, mode: 'insensitive' as const } }, { mobileE164: { contains: search } }] } } : {}),
+      ...(schoolId ? { schoolId } : {}),
+      ...(cityId ? { school: { cityId } } : {}),
+    };
+
+    if (sortBy === 'createdAt') {
+      const [total, items] = await this.prisma.$transaction([
+        this.prisma.student.count({ where }),
+        this.prisma.student.findMany({
+          where,
+          skip: offset,
+          take: limit,
+          orderBy: { user: { createdAt: sortDir } },
+          include: {
+            user: true,
+            targetTest: true,
+            school: { include: { city: true } },
+            subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
+            _count: { select: { answers: true } },
+          },
+        }),
+      ]);
+      const ids = items.map((s) => s.userId);
+      const compositeIndexById = await this.reports.getCompositeIndexBulk(ids);
+      return {
+        total,
+        items: items.map((s) => ({ ...s, compositeIndex: compositeIndexById.get(s.userId) ?? null, subscriptionEnd: s.subscriptions[0]?.endsAt ?? null })),
+      };
+    }
+
+    const all = await this.prisma.student.findMany({
+      where,
+      include: {
+        user: true,
+        targetTest: true,
+        school: { include: { city: true } },
+        subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
+        _count: { select: { answers: true } },
+      },
+    });
+    const compositeIndexById = await this.reports.getCompositeIndexBulk(all.map((s) => s.userId));
+    const withComposite = all.map((s) => ({ ...s, compositeIndex: compositeIndexById.get(s.userId) ?? null, subscriptionEnd: s.subscriptions[0]?.endsAt ?? null }));
+
+    const dir = sortDir === 'asc' ? 1 : -1;
+    withComposite.sort((a, b) => {
+      if (sortBy === 'name') return dir * a.user.name.localeCompare(b.user.name, 'ar');
+      if (sortBy === 'subscriptionEnd') {
+        if (!a.subscriptionEnd && !b.subscriptionEnd) return 0;
+        if (!a.subscriptionEnd) return 1; // nulls last regardless of direction
+        if (!b.subscriptionEnd) return -1;
+        return dir * (a.subscriptionEnd.getTime() - b.subscriptionEnd.getTime());
+      }
+      // performance (composite index)
+      if (a.compositeIndex === null && b.compositeIndex === null) return 0;
+      if (a.compositeIndex === null) return 1;
+      if (b.compositeIndex === null) return -1;
+      return dir * (a.compositeIndex - b.compositeIndex);
+    });
+
+    return { total: withComposite.length, items: withComposite.slice(offset, offset + limit) };
   }
 
   setSchool(studentId: string, schoolId: string | null) {

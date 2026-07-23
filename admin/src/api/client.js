@@ -93,7 +93,16 @@ export const api = {
   cohortReport: (type, id) => request(`/report/cohort?type=${type}&id=${id}`),
 
   // Students & supervisors (A9)
-  listStudents: (search) => request(`/admin/students${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  listStudents: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.search) q.set('search', params.search);
+    if (params.sortBy) q.set('sortBy', params.sortBy);
+    if (params.sortDir) q.set('sortDir', params.sortDir);
+    if (params.schoolId) q.set('schoolId', params.schoolId);
+    if (params.cityId) q.set('cityId', params.cityId);
+    const qs = q.toString();
+    return request(`/admin/students${qs ? `?${qs}` : ''}`);
+  },
   setStudentSchool: (studentId, schoolId) => request(`/admin/students/${studentId}/school`, { method: 'PATCH', body: { schoolId } }),
   listSupervisors: () => request('/admin/supervisors'),
 };

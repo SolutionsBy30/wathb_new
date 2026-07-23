@@ -1,6 +1,8 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionPayload } from '../auth/auth.types';
+import { computeCompositeIndex, LabelStatForComposite } from './composite-index.util';
+import { compositeDelta } from './weekly-report.util';
 
 // Statistical honesty requirement, spec §5.2: never render a percentage for
 // an area/label with fewer than this many answers.
@@ -41,6 +43,67 @@ export class ReportsService {
     throw new ForbiddenException();
   }
 
+  /**
+   * §1.3.1 — weekly composite index (accuracy weighted by each answer's
+   * section weight, not a raw answer-count average). Shared by the 8-week
+   * trend chart and any short trend/delta lookup (weekly report, supervisor
+   * dashboard, admin list).
+   */
+  private async weightedWeeklyTrend(studentId: string, weeks: number) {
+    const rows = await this.prisma.$queryRaw<{ week: Date; weightSum: number; weightedCorrect: number }[]>`
+      SELECT date_trunc('week', a."answeredAt") as week,
+             SUM(sec.weight)::float as "weightSum",
+             SUM(CASE WHEN a."isCorrect" THEN sec.weight ELSE 0 END)::float as "weightedCorrect"
+      FROM answers a
+      JOIN questions q ON q.id = a."questionId"
+      JOIN labels l ON l.id = q."labelId"
+      JOIN areas ar ON ar.id = l."areaId"
+      JOIN sections sec ON sec.id = ar."sectionId"
+      WHERE a."studentId" = ${studentId}
+      GROUP BY week
+      ORDER BY week DESC
+      LIMIT ${weeks}
+    `;
+    return rows
+      .map((r) => ({ weekStart: r.week.toISOString().slice(0, 10), accuracy: r.weightSum > 0 ? r.weightedCorrect / r.weightSum : null }))
+      .reverse();
+  }
+
+  /** Lightweight composite-index + week-over-week delta lookup — used where the full report would be overkill (supervisor cards, admin list). */
+  async getCompositeSummary(studentId: string): Promise<{ compositeIndex: number | null; delta: number | null }> {
+    const stats = await this.prisma.studentLabelStat.findMany({
+      where: { studentId },
+      include: { label: { include: { area: { include: { section: true } } } } },
+    });
+    const forComposite: LabelStatForComposite[] = stats.map((s) => ({
+      nAnswered: s.nAnswered,
+      nCorrect: s.nCorrect,
+      areaId: s.label.areaId,
+      sectionWeight: s.label.area.section.weight,
+    }));
+    const compositeIndex = computeCompositeIndex(forComposite, MIN_SAMPLE_FOR_REPORTING);
+    const trend = await this.weightedWeeklyTrend(studentId, 2);
+    return { compositeIndex, delta: compositeDelta(trend) };
+  }
+
+  /** Same as getCompositeSummary but for many students in one pass (admin list) — one query instead of N. */
+  async getCompositeIndexBulk(studentIds: string[]): Promise<Map<string, number | null>> {
+    if (studentIds.length === 0) return new Map();
+    const stats = await this.prisma.studentLabelStat.findMany({
+      where: { studentId: { in: studentIds } },
+      include: { label: { include: { area: { include: { section: true } } } } },
+    });
+    const byStudent = new Map<string, LabelStatForComposite[]>();
+    for (const s of stats) {
+      const arr = byStudent.get(s.studentId) ?? [];
+      arr.push({ nAnswered: s.nAnswered, nCorrect: s.nCorrect, areaId: s.label.areaId, sectionWeight: s.label.area.section.weight });
+      byStudent.set(s.studentId, arr);
+    }
+    const out = new Map<string, number | null>();
+    for (const id of studentIds) out.set(id, computeCompositeIndex(byStudent.get(id) ?? [], MIN_SAMPLE_FOR_REPORTING));
+    return out;
+  }
+
   async getStudentReport(studentId: string) {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentId },
@@ -66,16 +129,7 @@ export class ReportsService {
         take: 3,
         include: { questionVersion: true },
       }),
-      this.prisma.$queryRaw<{ week: Date; total: bigint; correct: bigint }[]>`
-        SELECT date_trunc('week', "answeredAt") as week,
-               count(*)::bigint as total,
-               count(*) FILTER (WHERE "isCorrect")::bigint as correct
-        FROM answers
-        WHERE "studentId" = ${studentId}
-        GROUP BY week
-        ORDER BY week DESC
-        LIMIT 8
-      `,
+      this.weightedWeeklyTrend(studentId, HEATMAP_WEEKS),
       this.prisma.wathb.findMany({
         where: {
           studentId,
@@ -86,11 +140,11 @@ export class ReportsService {
       }),
     ]);
 
-    const byArea = new Map<string, { areaId: string; nameAr: string; nameEn: string; nAnswered: number; nCorrect: number; meanTimeMsSum: number; targetSSum: number; labels: any[] }>();
+    const byArea = new Map<string, { areaId: string; nameAr: string; nameEn: string; nAnswered: number; nCorrect: number; meanTimeMsSum: number; targetSSum: number; weight: number; labels: any[] }>();
     for (const s of labelStats) {
       const area = s.label.area;
       if (!byArea.has(area.id)) {
-        byArea.set(area.id, { areaId: area.id, nameAr: area.nameAr, nameEn: area.nameEn, nAnswered: 0, nCorrect: 0, meanTimeMsSum: 0, targetSSum: 0, labels: [] });
+        byArea.set(area.id, { areaId: area.id, nameAr: area.nameAr, nameEn: area.nameEn, nAnswered: 0, nCorrect: 0, meanTimeMsSum: 0, targetSSum: 0, weight: area.section.weight, labels: [] });
       }
       const bucket = byArea.get(area.id)!;
       bucket.nAnswered += s.nAnswered;
@@ -117,6 +171,12 @@ export class ReportsService {
       labels: a.labels,
     }));
 
+    const compositeIndex = computeCompositeIndex(
+      [...byArea.values()].map((a) => ({ nAnswered: a.nAnswered, nCorrect: a.nCorrect, areaId: a.areaId, sectionWeight: a.weight })),
+      MIN_SAMPLE_FOR_REPORTING,
+    );
+    const compositeIndexDelta = compositeDelta(trend);
+
     const heatmapByDay = new Map<string, number>();
     for (const w of heatmap) {
       if (!w.completedAt) continue;
@@ -135,14 +195,9 @@ export class ReportsService {
       },
       streak: { current: student.currentStreak, lastCompletedOn: student.lastCompletedOn },
       accuracyByArea,
-      trend: trend
-        .map((t) => ({
-          weekStart: t.week.toISOString().slice(0, 10),
-          total: Number(t.total),
-          correct: Number(t.correct),
-          accuracy: Number(t.total) > 0 ? Number(t.correct) / Number(t.total) : null,
-        }))
-        .reverse(),
+      compositeIndex,
+      compositeIndexDelta,
+      trend,
       heatmap: [...heatmapByDay.entries()].map(([day, count]) => ({ day, count })),
       recentMistakes: recentMistakes.map((m) => ({
         stem: m.questionVersion.stem,

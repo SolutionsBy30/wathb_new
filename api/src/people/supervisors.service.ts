@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MagicLinkService } from '../auth/magic-link.service';
-import { MIN_SAMPLE_FOR_REPORTING } from '../reports/reports.service';
+import { MIN_SAMPLE_FOR_REPORTING, ReportsService } from '../reports/reports.service';
 import { AccountsService } from './accounts.service';
 
 @Injectable()
@@ -10,6 +10,7 @@ export class SupervisorsService {
     private prisma: PrismaService,
     private magicLinks: MagicLinkService,
     private accounts: AccountsService,
+    private reports: ReportsService,
   ) {}
 
   createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor') {
@@ -105,6 +106,7 @@ export class SupervisorsService {
         });
         const totalAnswered = stats.reduce((sum, s) => sum + s.nAnswered, 0);
         const totalCorrect = stats.reduce((sum, s) => sum + s.nCorrect, 0);
+        const { compositeIndex, delta: compositeIndexDelta } = await this.reports.getCompositeSummary(link.studentId);
         return {
           studentId: link.studentId,
           name: link.student.user.name,
@@ -115,6 +117,8 @@ export class SupervisorsService {
           totalCorrect,
           totalWrong: totalAnswered - totalCorrect,
           testDate: link.student.testDate,
+          compositeIndex,
+          compositeIndexDelta,
           topStrength: strongest ? { nameAr: strongest.label.nameAr, nameEn: strongest.label.nameEn, accuracy: strongest.nCorrect / strongest.nAnswered } : null,
           topWeakness: weakest ? { nameAr: weakest.label.nameAr, nameEn: weakest.label.nameEn, accuracy: weakest.nCorrect / weakest.nAnswered } : null,
         };

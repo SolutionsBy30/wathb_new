@@ -28,6 +28,22 @@ export default function Home({ vm, student, goTestPicker }) {
           <StreakStrip days={vm.streakDays} style={{ width: '100%', height: '26px' }} />
         </div>
 
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المؤشر المركّب</span>
+          {vm.compositeIndex === null ? (
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>قيد الجمع</span>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+              <span style={{ fontFamily: 'var(--font-latin)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>{vm.compositeIndex}</span>
+              {vm.compositeIndexDelta !== null && vm.compositeIndexDelta !== 0 && (
+                <span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: vm.compositeIndexDelta > 0 ? 'var(--teal-ink)' : 'var(--coral)' }}>
+                  {vm.compositeIndexDelta > 0 ? '↑' : '↓'} {Math.abs(Math.round(vm.compositeIndexDelta * 100))}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+
         <RuleSpark surface="dark" />
 
         <div style={{ display: 'flex', gap: '20px', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>

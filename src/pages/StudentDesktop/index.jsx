@@ -316,6 +316,8 @@ export default function StudentDesktop() {
       totalAnswered: report?.totals?.lifetimeAnswered ?? 0,
       totalCorrect: report?.totals?.lifetimeCorrect ?? 0,
       totalWrong: report?.totals?.lifetimeWrong ?? 0,
+      compositeIndex: report?.compositeIndex ?? null,
+      compositeIndexDelta: report?.compositeIndexDelta ?? null,
     };
   }, [report, alreadyDoneToday, completeResult]);
 

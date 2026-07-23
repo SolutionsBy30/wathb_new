@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { StudentsService } from './students.service';
+import { AdminStudentSort, StudentsService } from './students.service';
 import { SupervisorsService } from './supervisors.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
@@ -34,8 +34,24 @@ export class PeopleController {
 
   @RequireSession('admin')
   @Get('admin/students')
-  adminListStudents(@Query('search') search?: string, @Query('offset') offset?: string, @Query('limit') limit?: string) {
-    return this.students.adminList(search, offset ? Number(offset) : undefined, limit ? Number(limit) : undefined);
+  adminListStudents(
+    @Query('search') search?: string,
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: AdminStudentSort,
+    @Query('sortDir') sortDir?: 'asc' | 'desc',
+    @Query('schoolId') schoolId?: string,
+    @Query('cityId') cityId?: string,
+  ) {
+    return this.students.adminList(
+      search,
+      offset ? Number(offset) : undefined,
+      limit ? Number(limit) : undefined,
+      sortBy,
+      sortDir,
+      schoolId,
+      cityId,
+    );
   }
 
   @RequireSession('admin')

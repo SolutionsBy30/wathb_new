@@ -4,9 +4,10 @@ import { SupervisorsService } from './supervisors.service';
 import { PeopleController } from './people.controller';
 import { AuthModule } from '../auth/auth.module';
 import { AccountsModule } from './accounts.module';
+import { ReportsModule } from '../reports/reports.module';
 
 @Module({
-  imports: [AuthModule, AccountsModule],
+  imports: [AuthModule, AccountsModule, ReportsModule],
   providers: [StudentsService, SupervisorsService],
   controllers: [PeopleController],
 })
