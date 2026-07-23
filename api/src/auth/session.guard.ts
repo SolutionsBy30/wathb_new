@@ -19,7 +19,20 @@ export class SessionGuard implements CanActivate {
     if (!token) throw new UnauthorizedException('missing session token');
 
     const session = this.auth.verifySession(token);
-    const allowedKinds = this.reflector.get<SessionKind[]>('sessionKinds', ctx.getHandler()) ?? [];
+    // getAllAndOverride checks the handler first, falling back to the
+    // controller class — a plain .get(key, ctx.getHandler()) (the previous
+    // code here) silently ignores class-level @RequireSession() entirely,
+    // since SetMetadata attaches to whichever target it decorates and a
+    // method-scoped lookup never sees class-scoped metadata. That left
+    // every controller relying solely on a class-level @RequireSession
+    // (QuestionsController, NotificationsController, OverviewController,
+    // AdminOpsController — all admin-only; WathbController — student-only)
+    // open to ANY authenticated session, of any role — confirmed live: a
+    // student OTP token could call GET /admin/questions and get a 200 with
+    // the full bank. Method-level metadata still wins where both are
+    // present, so controllers that already mix roles per-route (e.g.
+    // PeopleController) are unaffected by this fix.
+    const allowedKinds = this.reflector.getAllAndOverride<SessionKind[]>('sessionKinds', [ctx.getHandler(), ctx.getClass()]) ?? [];
     if (allowedKinds.length > 0 && !allowedKinds.includes(session.kind)) {
       throw new UnauthorizedException('session not permitted for this route');
     }
