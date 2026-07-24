@@ -118,3 +118,18 @@
     max-width: 1080px;
   }
 }
+
+/* NFR-014 — visually hidden but still reachable by screen readers, for
+   the timer's aria-live announcement (the countdown must not be a
+   color/visual-only signal). */
+.sd-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

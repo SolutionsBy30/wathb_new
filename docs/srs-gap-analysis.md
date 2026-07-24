@@ -124,7 +124,7 @@ Present: `User/Student/Supervisor/StudentSupervisor`, `Region/City/School` (no `
 | NFR-009 VAT invoicing | ❌ Not built |
 | NFR-010 Meta policy compliance (categories, opt-out) | 🟡 Categories used correctly; opt-out missing |
 | NFR-011/012/013 statistical honesty, server timing, plain-language metrics | ✅ / ✅ / 🟡 (plain-language wording from §1.3.1 not literally used in admin UI copy yet) |
-| NFR-014 accessibility | ❌ Not addressed |
+| NFR-014 accessibility | 🟡 Countdown is no longer color/visual-only: a visually-hidden `aria-live="assertive"` region announces "متبقٍ نصف الوقت"/"متبقٍ ربع الوقت" once each at 50%/25% of the question timer, keyed off the actual countdown value so it can't drift out of sync — verified the threshold arithmetic fires exactly once per crossing across the realistic 10–60s timer range. Tap targets already meet the ≥44px guideline (`QuestionCard` options are 48px, `Button` ~44px) — no change needed. Contrast: spot-checked the core dark-mode pairs actually rendered today (coral/mist/lime text on indigo, lime-ink on lime) — all measure 5.9:1–12.9:1, comfortably above the 4.5:1 AA threshold. One latent defect found: `--text-on-light-muted` (mist-on-sand, reserved for the not-yet-built print/light-mode surfaces — weekly-report PDFs, invoices) computes at ~2.3:1, a real AA failure if that token is ever used as-is; flagged here rather than fixed blind since nothing renders it yet. No screen-reader pass beyond the timer, and no keyboard-navigation audit, done this round. |
 | NFR-015/016 idempotent sends, UTC storage | ✅ |
 
 ## §9 Open product questions — adopting the SRS's own recommendations as defaults

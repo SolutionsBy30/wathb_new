@@ -27,6 +27,11 @@ export default function StudentDesktop() {
   const [qIndex, setQIndex] = useState(0);
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [timeTotal, setTimeTotal] = useState(0);
+  // NFR-014 — the countdown must not be the only signal; a screen-reader
+  // announcement fires once at 50% and once at 25% of the time remaining.
+  const [timerAnnouncement, setTimerAnnouncement] = useState('');
+  const announcedThresholdsRef = useRef(new Set());
   const [wathbError, setWathbError] = useState(null);
   const [alreadyDoneToday, setAlreadyDoneToday] = useState(false);
   const [completeResult, setCompleteResult] = useState(null);
@@ -181,6 +186,9 @@ export default function StudentDesktop() {
   const startTimerFor = useCallback((seconds, onExpire) => {
     stopTimer();
     setTimeLeft(seconds);
+    setTimeTotal(seconds);
+    announcedThresholdsRef.current = new Set();
+    setTimerAnnouncement('');
     timerRef.current = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
@@ -192,6 +200,22 @@ export default function StudentDesktop() {
       });
     }, 1000);
   }, [stopTimer]);
+
+  // NFR-014 — fires once per threshold per question, keyed off the actual
+  // countdown value rather than a separate timer, so it can never drift
+  // out of sync with what's on screen.
+  useEffect(() => {
+    if (!timeTotal) return;
+    const half = Math.round(timeTotal / 2);
+    const quarter = Math.round(timeTotal / 4);
+    if (timeLeft === half && !announcedThresholdsRef.current.has('half')) {
+      announcedThresholdsRef.current.add('half');
+      setTimerAnnouncement('متبقٍ نصف الوقت');
+    } else if (timeLeft === quarter && !announcedThresholdsRef.current.has('quarter')) {
+      announcedThresholdsRef.current.add('quarter');
+      setTimerAnnouncement('متبقٍ ربع الوقت');
+    }
+  }, [timeLeft, timeTotal]);
 
   const submitAnswer = useCallback(async (wathbId, position, selectedKey, allQuestions) => {
     if (submittingRef.current) return;
@@ -456,6 +480,8 @@ export default function StudentDesktop() {
 
   return (
     <div dir="rtl" className="sd-page">
+      {/* NFR-014 — the timer's 50%/25% announcement; visually hidden, always mounted so it's never missed by a screen reader. */}
+      <div className="sd-sr-only" role="status" aria-live="assertive">{timerAnnouncement}</div>
       <div className="sd-shell">
         <div className={`sd-screen${showBottomNav ? '' : ' sd-screen-tight'}`}>
           {wathbError && (
