@@ -9,6 +9,15 @@ function formatDate(d) {
 const SUB_STATUS_LABEL = { active: 'نشط', pending: 'بانتظار الدفع', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
 const SUB_STATUS_COLOR = { active: 'var(--teal-ink)', pending: 'var(--mist)', expired: 'var(--coral)', cancelled: 'var(--coral)', refunded: 'var(--coral)' };
 const TRACK_LABEL = { scientific: 'علمي', humanities: 'أدبي' };
+const DAYS = [
+  { id: 0, label: 'الأحد' },
+  { id: 1, label: 'الاثنين' },
+  { id: 2, label: 'الثلاثاء' },
+  { id: 3, label: 'الأربعاء' },
+  { id: 4, label: 'الخميس' },
+  { id: 5, label: 'الجمعة' },
+  { id: 6, label: 'السبت' },
+];
 
 export default function Profile({ student, subscription, onManageSubscription, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
   // FRE-006 — shown locked with an upgrade prompt, not hidden, when the
@@ -22,8 +31,22 @@ export default function Profile({ student, subscription, onManageSubscription, s
 
   const [startHour, setStartHour] = useState(student?.notifSlotStartHour ?? 18);
   const [endHour, setEndHour] = useState(student?.notifSlotEndHour ?? 20);
+  // ONB-012 — skipDays was always in the schema but never actually settable
+  // by anyone until now; the same day-chip toggle also seeds the onboarding
+  // step (NotificationSlotSetup.jsx).
+  const [skipDays, setSkipDays] = useState(new Set(student?.skipDays ?? [5]));
   const [notifBusy, setNotifBusy] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
+
+  const toggleSkipDay = (id) => {
+    setSkipDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setNotifSaved(false);
+      return next;
+    });
+  };
 
   const submit = async () => {
     if (!name.trim() || !mobile.trim()) return;
@@ -36,7 +59,7 @@ export default function Profile({ student, subscription, onManageSubscription, s
     setNotifBusy(true);
     setNotifSaved(false);
     try {
-      await api.setNotificationPrefs({ notifSlotStartHour: Number(startHour), notifSlotEndHour: Number(endHour) });
+      await api.setNotificationPrefs({ notifSlotStartHour: Number(startHour), notifSlotEndHour: Number(endHour), skipDays: [...skipDays] });
       setNotifSaved(true);
     } finally {
       setNotifBusy(false);
@@ -165,6 +188,25 @@ export default function Profile({ student, subscription, onManageSubscription, s
             <select value={endHour} onChange={(e) => setEndHour(e.target.value)} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}>
               {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}
             </select>
+          </div>
+        </div>
+        <div>
+          <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>إيقاف التذكير في أيام معيّنة</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {DAYS.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => toggleSkipDay(d.id)}
+                style={{
+                  border: 'none', cursor: 'pointer', padding: '7px 12px', borderRadius: '999px',
+                  fontFamily: 'var(--font-arabic)', fontSize: '11px',
+                  background: skipDays.has(d.id) ? 'var(--coral)' : 'var(--indigo)',
+                  color: skipDays.has(d.id) ? 'var(--indigo)' : 'var(--sand)',
+                }}
+              >
+                {d.label}
+              </button>
+            ))}
           </div>
         </div>
         <Button variant="primary" style={{ alignSelf: 'flex-start' }} disabled={notifBusy} onClick={saveNotifPrefs}>

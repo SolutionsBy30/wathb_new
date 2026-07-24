@@ -5,6 +5,7 @@ import Landing from '../Landing';
 import Login from './screens/Login';
 import LinkExpired from './screens/LinkExpired';
 import GoalSetup from './screens/GoalSetup';
+import NotificationSlotSetup from './screens/NotificationSlotSetup';
 import InviteSupervisorPrompt from './screens/InviteSupervisorPrompt';
 import Home from './screens/Home';
 import Question from './screens/Question';
@@ -41,6 +42,7 @@ export default function StudentDesktop() {
   const [inviteError, setInviteError] = useState(null);
   const [onboardingInviteBusy, setOnboardingInviteBusy] = useState(false);
   const [onboardingInviteError, setOnboardingInviteError] = useState(null);
+  const [notifSlotBusy, setNotifSlotBusy] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const [packages, setPackages] = useState([]);
   const [pricingMessage, setPricingMessage] = useState(null);
@@ -178,14 +180,26 @@ export default function StudentDesktop() {
       const me = await api.me();
       setStudent(me);
       await loadReport(me.userId);
-      // ONB-013 — a one-time, skippable "invite a supervisor?" prompt sits
-      // between goal-setup and Home; it never reappears once passed, since
+      // ONB-012 — hidden entirely (not just locked) for free-package
+      // students, who receive no daily WhatsApp notification at all
+      // (Package.dailyNotificationEnabled), straight on to the ONB-013
+      // invite prompt. Neither screen ever reappears once passed, since
       // targetTestId being set is what routes bootstrap() straight to home.
-      setScreen('supervisorInvite');
+      setScreen(subscription?.package?.dailyNotificationEnabled === false ? 'supervisorInvite' : 'notifSlot');
     } catch (e) {
       setLoginError(e.message);
     } finally {
       setGoalBusy(false);
+    }
+  };
+
+  const submitNotifSlot = async (dto) => {
+    setNotifSlotBusy(true);
+    try {
+      await api.setNotificationPrefs(dto);
+    } finally {
+      setNotifSlotBusy(false);
+      setScreen('supervisorInvite');
     }
   };
 
@@ -491,6 +505,22 @@ export default function StudentDesktop() {
       <div dir="rtl" className="sd-page">
         <div className="sd-shell sd-screen sd-screen-tight" style={{ justifyContent: 'center' }}>
           <GoalSetup tests={tests} onSubmit={handleGoalSubmit} busy={goalBusy} />
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'notifSlot') {
+    return (
+      <div dir="rtl" className="sd-page">
+        <div className="sd-shell sd-screen sd-screen-tight" style={{ justifyContent: 'center' }}>
+          <NotificationSlotSetup
+            initialStartHour={student?.notifSlotStartHour}
+            initialEndHour={student?.notifSlotEndHour}
+            initialSkipDays={student?.skipDays}
+            onSubmit={submitNotifSlot}
+            busy={notifSlotBusy}
+          />
         </div>
       </div>
     );
