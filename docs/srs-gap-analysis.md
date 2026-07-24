@@ -117,7 +117,7 @@ Present: `User/Student/Supervisor/StudentSupervisor`, `Region/City/School` (+ `C
 | NFR-002 report from materialized stats | ✅ |
 | NFR-003/003a RTL, responsive | ✅ (this session's shell rebuild) |
 | NFR-004/005 magic link security, rate limiting | ✅ Security properties ✅; rate limiting now in place on every auth entry point (`@nestjs/throttler`, 5 req/5min on admin login, OTP request, signup; 10/5min on OTP verify; 20/5min on magic-link exchange) |
-| NFR-005a OTP fallback prod-safety | 🟡 Correcting a stale claim — an audit log entry (`otp.fallback_used`) is written every time (see ONB-014 above); still no deploy-time/boot-time check preventing the fallback from being reachable in production, only the per-request env-var gate |
+| NFR-005a OTP fallback prod-safety | ✅ An audit log entry (`otp.fallback_used`) is written every time (see ONB-014 above), and `assertOtpFallbackNotReachableInProduction` (`api/src/otp-fallback-guard.util.ts`, called from `main.ts` at boot) now refuses to start the API when `NODE_ENV=production` and WhatsApp isn't configured, unless `ALLOW_OTP_FALLBACK_IN_PRODUCTION=true` is set as a deliberate override. Verified live: boots normally in dev, throws and exits before listening under `NODE_ENV=production` without WhatsApp credentials. |
 | NFR-006/006a cohort 403, free-tier server enforcement | 🟡 Cohort 403 ✅; free tier now exists (FRE-001–008) and its restrictions (partial report, locked invite, notification gating) are server-enforced, not just UI-hidden — see FRE-001–008 above for the one known gap (`questionsPerDay` cap not read anywhere) |
 | NFR-007 anti-sharing signal | ❌ Not built |
 | NFR-008 PDPL (consent, export/delete, retention) | ❌ Not built |

@@ -2,8 +2,10 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { assertOtpFallbackNotReachableInProduction } from './otp-fallback-guard.util';
 
 async function bootstrap() {
+  assertOtpFallbackNotReachableInProduction(process.env);
   const app = await NestFactory.create(AppModule, { rawBody: true });
   app.enableCors({ origin: true, credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
