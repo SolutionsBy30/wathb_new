@@ -1,8 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { MagicLinkService } from '../auth/magic-link.service';
 import { MIN_SAMPLE_FOR_REPORTING, ReportsService } from '../reports/reports.service';
 import { AccountsService } from './accounts.service';
+import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/channel.interface';
 
 @Injectable()
 export class SupervisorsService {
@@ -11,6 +13,8 @@ export class SupervisorsService {
     private magicLinks: MagicLinkService,
     private accounts: AccountsService,
     private reports: ReportsService,
+    @Inject(NOTIFICATION_CHANNEL) private channel: NotificationChannel,
+    private config: ConfigService,
   ) {}
 
   createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor') {
@@ -55,6 +59,15 @@ export class SupervisorsService {
     }
 
     let supervisorUser = await this.prisma.user.findUnique({ where: { mobileE164: mobile } });
+    // STU-027 — an unregistered number gets a real account created right
+    // away rather than a separate "pending invite" record: the magic link
+    // below already logs them straight into it and lands on the accept/
+    // decline screen (supervisor/src/App.jsx), which functionally *is* "signup
+    // completion, automatically establishing the pending link" — there's no
+    // separate form to fill in. What was actually missing (fixed here) is
+    // that the invitation was never sent anywhere; it only ever existed in
+    // the API response.
+    const wasUnregistered = !supervisorUser;
     if (!supervisorUser) {
       supervisorUser = await this.prisma.user.create({
         data: { mobileE164: mobile, name, role: 'supervisor', supervisor: { create: { type } } },
@@ -76,7 +89,38 @@ export class SupervisorsService {
       targetId: link.id,
     });
 
-    return { studentSupervisorId: link.id, inviteToken: magicLink.token, expiresAt: magicLink.expiresAt };
+    // STU-027 — "the system shall send that number a WhatsApp invitation
+    // message containing a magic link." Only for the newly-created branch:
+    // an already-registered supervisor instead sees it as a pending invite
+    // in their own console (SupervisorsService.listPendingInvites) per spec,
+    // with no separate message pushed at them.
+    let delivered = false;
+    if (wasUnregistered) {
+      const appUrl = this.config.get<string>('SUPERVISOR_APP_URL', 'http://localhost:5175/supervisor');
+      const url = `${appUrl}/#magic=${magicLink.token}`;
+      try {
+        // A dedicated Utility-category template is required here, not
+        // free-form — this is the first-ever contact with this number, so
+        // there is no open customer-service window yet (spec §7.2), same
+        // reasoning as OTP's first-time-login send (auth/otp.service.ts).
+        // No config-gate needed: the injected channel is already the safe
+        // ConsoleChannel dev stand-in when WhatsApp isn't configured, same
+        // as every other outbound send in this codebase.
+        await this.channel.sendTemplate({
+          to: mobile,
+          templateName: this.config.get('WHATSAPP_TEMPLATE_SUPERVISOR_INVITE', 'wathb_supervisor_invite'),
+          languageCode: 'ar',
+          bodyParams: [name, url],
+        });
+        delivered = true;
+      } catch {
+        // Non-fatal — the account and pending link already exist; a failed
+        // send shouldn't fail the whole invite request (mirrors OTP's
+        // tolerant delivery-failure handling).
+      }
+    }
+
+    return { studentSupervisorId: link.id, inviteToken: magicLink.token, expiresAt: magicLink.expiresAt, delivered };
   }
 
   async acceptInvite(supervisorId: string, studentSupervisorId: string) {
