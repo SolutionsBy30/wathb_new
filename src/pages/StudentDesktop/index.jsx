@@ -5,6 +5,7 @@ import Landing from '../Landing';
 import Login from './screens/Login';
 import LinkExpired from './screens/LinkExpired';
 import GoalSetup from './screens/GoalSetup';
+import InviteSupervisorPrompt from './screens/InviteSupervisorPrompt';
 import Home from './screens/Home';
 import Question from './screens/Question';
 import Explanations from './screens/Explanations';
@@ -38,6 +39,8 @@ export default function StudentDesktop() {
   const [supervisors, setSupervisors] = useState([]);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState(null);
+  const [onboardingInviteBusy, setOnboardingInviteBusy] = useState(false);
+  const [onboardingInviteError, setOnboardingInviteError] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [packages, setPackages] = useState([]);
   const [pricingMessage, setPricingMessage] = useState(null);
@@ -175,12 +178,33 @@ export default function StudentDesktop() {
       const me = await api.me();
       setStudent(me);
       await loadReport(me.userId);
-      setScreen('home');
+      // ONB-013 — a one-time, skippable "invite a supervisor?" prompt sits
+      // between goal-setup and Home; it never reappears once passed, since
+      // targetTestId being set is what routes bootstrap() straight to home.
+      setScreen('supervisorInvite');
     } catch (e) {
       setLoginError(e.message);
     } finally {
       setGoalBusy(false);
     }
+  };
+
+  const submitOnboardingInvite = async (mobile, name, type) => {
+    setOnboardingInviteBusy(true);
+    setOnboardingInviteError(null);
+    try {
+      await api.inviteSupervisor(mobile, name, type);
+      setScreen('home');
+    } catch (e) {
+      setOnboardingInviteError(e.message);
+    } finally {
+      setOnboardingInviteBusy(false);
+    }
+  };
+
+  const skipOnboardingInvite = () => {
+    setOnboardingInviteError(null);
+    setScreen('home');
   };
 
   const startTimerFor = useCallback((seconds, onExpire) => {
@@ -467,6 +491,23 @@ export default function StudentDesktop() {
       <div dir="rtl" className="sd-page">
         <div className="sd-shell sd-screen sd-screen-tight" style={{ justifyContent: 'center' }}>
           <GoalSetup tests={tests} onSubmit={handleGoalSubmit} busy={goalBusy} />
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'supervisorInvite') {
+    return (
+      <div dir="rtl" className="sd-page">
+        <div className="sd-shell sd-screen sd-screen-tight" style={{ justifyContent: 'center' }}>
+          <InviteSupervisorPrompt
+            onInvite={submitOnboardingInvite}
+            onSkip={skipOnboardingInvite}
+            busy={onboardingInviteBusy}
+            error={onboardingInviteError}
+            locked={subscription?.package?.supervisorLinkingAllowed === false}
+            onManageSubscription={() => goPricing()}
+          />
         </div>
       </div>
     );
