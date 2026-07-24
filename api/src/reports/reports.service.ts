@@ -275,11 +275,22 @@ export class ReportsService {
           ? { school: { cityId: id } }
           : { school: { city: { regionId: id } } };
 
+    // ADM-062 — a display name for the comparison-overlay legend; harmless
+    // to compute for the single-cohort view too.
+    const entity =
+      type === 'school'
+        ? await this.prisma.school.findUnique({ where: { id }, select: { nameAr: true, nameEn: true } })
+        : type === 'city'
+          ? await this.prisma.city.findUnique({ where: { id }, select: { nameAr: true, nameEn: true } })
+          : await this.prisma.region.findUnique({ where: { id }, select: { nameAr: true, nameEn: true } });
+    const nameAr = entity?.nameAr ?? null;
+    const nameEn = entity?.nameEn ?? null;
+
     const students = await this.prisma.student.findMany({ where: studentWhere, select: { userId: true } });
     const studentIds = students.map((s) => s.userId);
 
     if (studentIds.length === 0) {
-      return { gated: true, studentCount: 0, totalAnswered: 0, cohortType: type, cohortId: id };
+      return { gated: true, studentCount: 0, totalAnswered: 0, cohortType: type, cohortId: id, nameAr, nameEn };
     }
 
     const totalAnswered = await this.prisma.answer.count({ where: { studentId: { in: studentIds } } });
@@ -287,7 +298,7 @@ export class ReportsService {
     // Guardrail #1 (§4.8): below the floor, return the roster and raw counts
     // — never a rate. "17 subscribed students at this school", not a %.
     if (studentIds.length < MIN_COHORT_STUDENTS || totalAnswered < MIN_COHORT_ANSWERS) {
-      return { gated: true, studentCount: studentIds.length, totalAnswered, cohortType: type, cohortId: id };
+      return { gated: true, studentCount: studentIds.length, totalAnswered, cohortType: type, cohortId: id, nameAr, nameEn };
     }
 
     const labelStats = await this.prisma.studentLabelStat.findMany({
@@ -315,9 +326,23 @@ export class ReportsService {
       gated: false,
       cohortType: type,
       cohortId: id,
+      nameAr,
+      nameEn,
       studentCount: studentIds.length,
       totalAnswered,
       accuracyByArea,
     };
+  }
+
+  /**
+   * ADM-062 — school/city comparison-overlay: the same per-cohort
+   * accuracy-by-area profile as getCohortReport, computed once per id so
+   * the admin screen can plot them together. Deliberately not a ranking —
+   * per ADM-065 cohort analytics shall never rank schools — just parallel
+   * profiles side by side; ordering in the response is the order the ids
+   * were requested in, not a performance sort.
+   */
+  async compareCohorts(type: 'school' | 'city' | 'region', ids: string[]) {
+    return Promise.all(ids.map((id) => this.getCohortReport(type, id)));
   }
 }

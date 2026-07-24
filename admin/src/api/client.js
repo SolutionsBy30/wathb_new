@@ -115,6 +115,18 @@ export const api = {
   approveSchool: (id) => request(`/admin/geography/schools/${id}/approve`, { method: 'POST' }),
   rejectSchool: (id) => request(`/admin/geography/schools/${id}`, { method: 'DELETE' }),
   cohortReport: (type, id) => request(`/report/cohort?type=${type}&id=${id}`),
+  compareCohorts: (type, ids) => request(`/report/cohort/compare?type=${type}&ids=${ids.join(',')}`),
+
+  adminListRegions: () => request('/admin/geography/regions'),
+  adminListCities: (regionId) => request(`/admin/geography/cities${regionId ? `?regionId=${regionId}` : ''}`),
+  updateRegion: (id, dto) => request(`/admin/geography/regions/${id}`, { method: 'POST', body: dto }),
+  setRegionActive: (id, isActive) => request(`/admin/geography/regions/${id}/active`, { method: 'POST', body: { isActive } }),
+  updateCity: (id, dto) => request(`/admin/geography/cities/${id}`, { method: 'POST', body: dto }),
+  setCityActive: (id, isActive) => request(`/admin/geography/cities/${id}/active`, { method: 'POST', body: { isActive } }),
+  addCityAlias: (id, alias) => request(`/admin/geography/cities/${id}/aliases`, { method: 'POST', body: { alias } }),
+  removeCityAlias: (aliasId) => request(`/admin/geography/cities/aliases/${aliasId}`, { method: 'DELETE' }),
+  updateSchool: (id, dto) => request(`/admin/geography/schools/${id}`, { method: 'POST', body: dto }),
+  mergeSchools: (sourceId, targetId) => request('/admin/geography/schools/merge', { method: 'POST', body: { sourceId, targetId } }),
   studentReport: (id) => request(`/report/student/${id}`),
 
   // Students & supervisors (A9)

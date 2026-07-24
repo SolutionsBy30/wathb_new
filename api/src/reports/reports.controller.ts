@@ -27,4 +27,11 @@ export class ReportsController {
   cohortReport(@Query('type') type: 'school' | 'city' | 'region', @Query('id') id: string) {
     return this.reports.getCohortReport(type, id);
   }
+
+  // ADM-062 — comparison-overlay: the same cohort profile for several ids at once.
+  @RequireSession('admin')
+  @Get('cohort/compare')
+  compareCohorts(@Query('type') type: 'school' | 'city' | 'region', @Query('ids') ids: string) {
+    return this.reports.compareCohorts(type, ids.split(',').filter(Boolean));
+  }
 }
