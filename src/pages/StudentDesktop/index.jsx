@@ -578,6 +578,7 @@ export default function StudentDesktop() {
               student={student}
               subscription={subscription}
               onManageSubscription={() => goPricing()}
+              onSubscriptionChanged={loadSubscription}
               supervisors={supervisors}
               onInvite={inviteSupervisor}
               onRevoke={revokeSupervisor}

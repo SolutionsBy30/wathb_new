@@ -5,6 +5,18 @@ import { SessionKind } from './auth.types';
 
 export const RequireSession = (...kinds: SessionKind[]) => SetMetadata('sessionKinds', kinds);
 
+// STU-029 — "sensitive account actions ... shall require step-up
+// authentication via a fresh OTP." A step-up-elevated session is only valid
+// for a short window after re-verification (AuthController.stepUpVerify),
+// not for the session's whole remaining 24h lifetime — otherwise "fresh OTP"
+// would mean nothing after the first use.
+export const RequireStepUp = () => SetMetadata('requireStepUp', true);
+export const STEP_UP_VALIDITY_SECONDS = 10 * 60;
+
+export function isStepUpFresh(stepUpAt: number | undefined, now: number): boolean {
+  return !!stepUpAt && now - stepUpAt <= STEP_UP_VALIDITY_SECONDS * 1000;
+}
+
 @Injectable()
 export class SessionGuard implements CanActivate {
   constructor(
@@ -36,6 +48,14 @@ export class SessionGuard implements CanActivate {
     if (allowedKinds.length > 0 && !allowedKinds.includes(session.kind)) {
       throw new UnauthorizedException('session not permitted for this route');
     }
+
+    const needsStepUp = this.reflector.getAllAndOverride<boolean>('requireStepUp', [ctx.getHandler(), ctx.getClass()]) ?? false;
+    // A distinct message (checked by the frontend) — this must read as
+    // "verify again", not "log in again" like a plain expired/missing session.
+    if (needsStepUp && !isStepUpFresh(session.stepUpAt, Date.now())) {
+      throw new UnauthorizedException('step-up verification required');
+    }
+
     req.session = session;
     return true;
   }

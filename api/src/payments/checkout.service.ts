@@ -105,6 +105,43 @@ export class CheckoutService {
   }
 
   /**
+   * STU-029/STU-025 — "viewing payment history" behind step-up auth. There's
+   * no separate Invoice/Payment model (see gap-analysis §4) — every purchase
+   * or renewal is its own Subscription row already carrying what a payment
+   * history needs: price paid at the time (priceSnapshotHalalas, immune to
+   * later package price changes), status, and dates.
+   */
+  async myPaymentHistory(studentId: string) {
+    return this.prisma.subscription.findMany({
+      where: { studentId },
+      orderBy: { createdAt: 'desc' },
+      include: { package: true },
+    });
+  }
+
+  /**
+   * STU-029 — subscription cancellation is one of the three sensitive
+   * actions requiring step-up auth. Cancelling stops the subscription from
+   * covering access immediately (mirrors sweepExpiredSubscriptions' revoke
+   * of any live magic links) rather than just marking status and leaving
+   * endsAt/access untouched until the period would have lapsed anyway —
+   * "cancel" should mean cancel, not "stop auto-renewing".
+   */
+  async cancelSubscription(studentId: string) {
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { studentId, status: 'active' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!subscription) throw new NotFoundException('no active subscription to cancel');
+    const cancelled = await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: 'cancelled', endsAt: new Date() },
+    });
+    await this.magicLinks.revokeAllForSubject(studentId);
+    return cancelled;
+  }
+
+  /**
    * Manual activation path for when Paymob isn't configured yet (or a
    * student simply paid by bank transfer instead of card) — an admin
    * confirms the transfer happened and activates the subscription directly.

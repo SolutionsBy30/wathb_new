@@ -1,10 +1,20 @@
 import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
-import { api } from '../../../api/client';
+import { api, decodeSession, getToken, setToken } from '../../../api/client';
 
 function formatDate(d) {
   return d ? new Date(d).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
 }
+
+function formatSar(halalas) {
+  return `${(halalas / 100).toLocaleString('ar-SA-u-nu-latn')} ر.س`;
+}
+
+// STU-029 — mirrors STEP_UP_VALIDITY_SECONDS in api/src/auth/session.guard.ts;
+// duplicated rather than shared since there's no shared-config module
+// between the API and this app (same pattern as DEFAULT_BUNDLE_SIZE
+// elsewhere in this codebase).
+const STEP_UP_VALIDITY_MS = 10 * 60 * 1000;
 
 const SUB_STATUS_LABEL = { active: 'نشط', pending: 'بانتظار الدفع', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
 const SUB_STATUS_COLOR = { active: 'var(--teal-ink)', pending: 'var(--mist)', expired: 'var(--coral)', cancelled: 'var(--coral)', refunded: 'var(--coral)' };
@@ -19,7 +29,7 @@ const DAYS = [
   { id: 6, label: 'السبت' },
 ];
 
-export default function Profile({ student, subscription, onManageSubscription, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
+export default function Profile({ student, subscription, onManageSubscription, onSubscriptionChanged, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
   // FRE-006 — shown locked with an upgrade prompt, not hidden, when the
   // active package doesn't allow supervisor linking. Server-enforced too
   // (SupervisorsService.invite throws 403) — this is just the honest UI.
@@ -66,6 +76,58 @@ export default function Profile({ student, subscription, onManageSubscription, s
     }
   };
 
+  // STU-029 — step-up auth via a fresh OTP for sensitive actions (viewing
+  // payment history, cancelling a subscription). pendingAction tracks which
+  // one triggered the step-up modal, so the same fresh-OTP UI serves both.
+  const [pendingAction, setPendingAction] = useState(null); // null | 'history' | 'cancel'
+  const [stepUpCode, setStepUpCode] = useState('');
+  const [stepUpBusy, setStepUpBusy] = useState(false);
+  const [stepUpError, setStepUpError] = useState(null);
+  const [paymentHistory, setPaymentHistory] = useState(null);
+  const [cancelDone, setCancelDone] = useState(false);
+
+  const hasFreshStepUp = () => {
+    const session = decodeSession(getToken());
+    return !!session?.stepUpAt && Date.now() - session.stepUpAt <= STEP_UP_VALIDITY_MS;
+  };
+
+  const runSensitiveAction = async (action) => {
+    if (action === 'history') setPaymentHistory(await api.myPaymentHistory());
+    else if (action === 'cancel') {
+      await api.cancelSubscription();
+      setCancelDone(true);
+      onSubscriptionChanged?.();
+    }
+  };
+
+  const requestSensitiveAction = async (action) => {
+    setStepUpError(null);
+    if (hasFreshStepUp()) {
+      await runSensitiveAction(action);
+      return;
+    }
+    setPendingAction(action);
+    setStepUpCode('');
+    const mobile = student?.user?.mobileE164 ?? student?.mobileE164;
+    if (mobile) await api.requestOtp(mobile).catch(() => {});
+  };
+
+  const submitStepUp = async () => {
+    if (!pendingAction || !stepUpCode.trim()) return;
+    setStepUpBusy(true);
+    setStepUpError(null);
+    try {
+      const { token } = await api.stepUpVerify(stepUpCode.trim());
+      setToken(token);
+      await runSensitiveAction(pendingAction);
+      setPendingAction(null);
+    } catch (e) {
+      setStepUpError(e.message);
+    } finally {
+      setStepUpBusy(false);
+    }
+  };
+
   return (
     <>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>ملفي</h1>
@@ -102,6 +164,68 @@ export default function Profile({ student, subscription, onManageSubscription, s
           {subscription?.status === 'active' ? 'تجديد الاشتراك الآن' : 'اشترك الآن'}
         </Button>
       </div>
+
+      {/* STU-029 — payment history + cancellation are both behind step-up
+          auth (a fresh OTP), not just the existing session. */}
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '360px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <Button variant="secondary" onClick={() => requestSensitiveAction('history')}>عرض سجل المدفوعات</Button>
+          {subscription?.status === 'active' && !cancelDone && (
+            <button
+              onClick={() => requestSensitiveAction('cancel')}
+              style={{ border: 'none', cursor: 'pointer', padding: '10px 16px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--coral)', color: 'var(--coral)', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+            >
+              إلغاء الاشتراك
+            </button>
+          )}
+        </div>
+        {cancelDone && <p style={{ margin: 0, fontSize: '12px', color: 'var(--teal-ink)' }}>تم إلغاء الاشتراك.</p>}
+        {paymentHistory && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {paymentHistory.length === 0 && <p style={{ margin: 0, fontSize: '12px', color: 'var(--mist)' }}>لا يوجد سجل مدفوعات بعد.</p>}
+            {paymentHistory.map((s) => (
+              <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', paddingBottom: '6px', borderBottom: '0.5px solid var(--on-indigo-line)' }}>
+                <span style={{ fontFamily: 'var(--font-arabic)', color: 'var(--sand)' }}>{s.package?.nameAr}</span>
+                <span style={{ color: SUB_STATUS_COLOR[s.status] }}>{SUB_STATUS_LABEL[s.status]}</span>
+                <span style={{ fontFamily: 'var(--font-latin)', color: 'var(--mist)' }}>{formatSar(s.priceSnapshotHalalas)}</span>
+                <span style={{ fontFamily: 'var(--font-latin)', color: 'var(--mist)' }}>{formatDate(s.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {pendingAction && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-md)', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px', width: '320px', maxWidth: '90%' }}>
+            <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--sand)' }}>
+              {pendingAction === 'cancel' ? 'تأكيد إلغاء الاشتراك' : 'تأكيد عرض سجل المدفوعات'}
+            </h3>
+            <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)', lineHeight: 1.8 }}>
+              أرسلنا رمز تحقق جديداً إلى جوالك — أدخله للمتابعة.
+            </p>
+            <input
+              dir="ltr"
+              value={stepUpCode}
+              onChange={(e) => setStepUpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="0000"
+              style={{ padding: '12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '18px', textAlign: 'center', letterSpacing: '4px' }}
+            />
+            {stepUpError && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)' }}>{stepUpError}</p>}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Button variant="primary" disabled={stepUpBusy || !stepUpCode.trim()} onClick={submitStepUp}>
+                {stepUpBusy ? 'جاري التحقق…' : 'تأكيد'}
+              </Button>
+              <button
+                onClick={() => setPendingAction(null)}
+                style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المشرف وولي الأمر</h2>
       <div className="sd-card-grid" style={{ gap: '20px' }}>

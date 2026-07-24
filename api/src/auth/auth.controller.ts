@@ -1,11 +1,15 @@
-import { Body, Controller, Ip, Param, Post, Headers } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Ip, Param, Post, Headers, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
-import { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
+import { RequestOtpDto, StepUpVerifyDto, VerifyOtpDto } from './dto/otp.dto';
 import { SignupStudentDto, SignupSupervisorDto } from './dto/signup.dto';
 import { AccountsService } from '../people/accounts.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { SessionGuard } from './session.guard';
+import { CurrentSession } from './current-session.decorator';
+import { SessionPayload } from './auth.types';
 
 // NFR-005 — every auth entry point here is a brute-force/abuse surface
 // (password guessing, OTP guessing, magic-link token guessing, spam
@@ -19,6 +23,7 @@ export class AuthController {
     private auth: AuthService,
     private otp: OtpService,
     private accounts: AccountsService,
+    private prisma: PrismaService,
   ) {}
 
   @Throttle(AUTH_THROTTLE)
@@ -72,5 +77,24 @@ export class AuthController {
   async signupSupervisor(@Body() dto: SignupSupervisorDto) {
     await this.accounts.createSupervisor(dto.mobile, dto.name, dto.type, new Date());
     return this.otp.requestOtp(dto.mobile, 'supervisor');
+  }
+
+  // STU-029 — step-up authentication via a fresh OTP for sensitive account
+  // actions (mobile-number change, subscription cancellation, viewing
+  // payment history). The client requests the code the normal way (POST
+  // auth/otp/request against its own already-known mobile), then exchanges
+  // it here for a freshly-elevated session — a new token, not a flag on the
+  // existing one, since the elevation must be a short window (see
+  // STEP_UP_VALIDITY_SECONDS), not last as long as the session itself.
+  @Throttle(AUTH_THROTTLE)
+  @UseGuards(SessionGuard)
+  @Post('step-up/verify')
+  async stepUpVerify(@Body() dto: StepUpVerifyDto, @CurrentSession() session: SessionPayload) {
+    if (session.kind === 'admin') throw new BadRequestException('step-up does not apply to admin sessions');
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: session.sub } });
+    if (!user.mobileE164) throw new BadRequestException('no mobile number on file');
+    await this.otp.verifyOtp(user.mobileE164, session.kind, dto.code);
+    const token = this.auth.issueSession({ sub: session.sub, kind: session.kind, stepUpAt: Date.now() }, 24 * 3600);
+    return { token };
   }
 }

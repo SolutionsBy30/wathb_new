@@ -76,4 +76,11 @@ export const api = {
   listPackages: () => request('/packages', { auth: false }),
   startCheckout: (packageId) => request('/checkout/start', { method: 'POST', body: { packageId } }),
   mySubscription: () => request('/checkout/me'),
+
+  // STU-029 — sensitive actions behind step-up auth (fresh OTP). Request the
+  // code with the existing requestOtp() against the student's own mobile,
+  // then exchange it here for a freshly-elevated session token.
+  stepUpVerify: (code) => request('/auth/step-up/verify', { method: 'POST', body: { code } }),
+  myPaymentHistory: () => request('/checkout/me/history'),
+  cancelSubscription: () => request('/checkout/me/cancel', { method: 'POST' }),
 };

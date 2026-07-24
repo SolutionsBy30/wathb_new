@@ -1,7 +1,7 @@
 import { Body, Controller, ForbiddenException, Get, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { CheckoutService } from './checkout.service';
-import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { RequireSession, RequireStepUp, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 import { StartCheckoutDto, StartCheckoutForStudentDto, ActivateWireTransferDto } from './dto/packages.dto';
@@ -32,6 +32,26 @@ export class CheckoutController {
   @Get('checkout/me')
   mySubscription(@CurrentSession() session: SessionPayload) {
     return this.checkout.myLatestSubscription(session.sub);
+  }
+
+  // STU-029 — "viewing payment history" is one of the three sensitive
+  // actions requiring step-up auth via a fresh OTP, not just a valid
+  // session.
+  @UseGuards(SessionGuard)
+  @RequireSession('student')
+  @RequireStepUp()
+  @Get('checkout/me/history')
+  myPaymentHistory(@CurrentSession() session: SessionPayload) {
+    return this.checkout.myPaymentHistory(session.sub);
+  }
+
+  // STU-029 — subscription cancellation, same step-up requirement.
+  @UseGuards(SessionGuard)
+  @RequireSession('student')
+  @RequireStepUp()
+  @Post('checkout/me/cancel')
+  cancelSubscription(@CurrentSession() session: SessionPayload) {
+    return this.checkout.cancelSubscription(session.sub);
   }
 
   /**
