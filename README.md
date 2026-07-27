@@ -430,7 +430,14 @@ and `WHATSAPP_WEBHOOK_VERIFY_TOKEN` in `api/.env` (see `.env.example`) —
 these need a real Meta WhatsApp Business Platform app. Similarly, set
 `PAYMOB_SECRET_KEY`, `PAYMOB_PUBLIC_KEY`, `PAYMOB_INTEGRATION_ID`, and
 `PAYMOB_HMAC_SECRET` for real Paymob checkout instead of the console
-fallback — these need a real Paymob merchant account.
+fallback — these need a real Paymob merchant account. Note that Paymob runs
+a **separate instance per market** and credentials only authenticate against
+the one that issued them; the provider defaults to KSA
+(`https://ksa.paymob.com`) since this product is Saudi-only, and
+`PAYMOB_BASE_URL` overrides it for another market. Pointing a Saudi account
+at the wrong host returns a 401 reading "Authentication credentials were not
+provided", which misleadingly looks like a missing key rather than a wrong
+host.
 
 ### 4. Trying the WhatsApp flow without real credentials
 
