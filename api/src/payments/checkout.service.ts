@@ -49,18 +49,36 @@ export class CheckoutService {
       },
     });
 
-    const studentAppUrl = this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
+    // Send the payer back to the app they actually started from — a
+    // supervisor paying for a linked student was previously dropped onto the
+    // student app after checkout, where their supervisor session means
+    // nothing and they'd land on a login screen.
+    const returnAppUrl = payer?.type === 'supervisor'
+      ? this.config.get<string>('SUPERVISOR_APP_URL', 'http://localhost:5175/supervisor')
+      : this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
+    const successRedirectUrl = `${returnAppUrl}/#subscription=success`;
+
+    // FRE-001 — a zero-price package has nothing to charge for, so it must
+    // never reach the payment gateway (Paymob rejects a 0 amount outright,
+    // and even where it didn't, bouncing a student through a card form to
+    // pay nothing is wrong). Activate it directly and hand back the same
+    // success URL the paid path returns, so callers need no special case.
+    if (pkg.priceHalalas === 0) {
+      await this.confirmPayment(subscription.id);
+      return { subscriptionId: subscription.id, checkoutUrl: successRedirectUrl, free: true };
+    }
+
     const { checkoutUrl, providerRef } = await this.provider.createCheckout({
       amountHalalas: pkg.priceHalalas,
       currency: 'SAR',
       merchantOrderId: subscription.id,
       customerName: payerUser.name,
       customerMobile: payerUser.mobileE164,
-      successRedirectUrl: `${studentAppUrl}/#subscription=success`,
+      successRedirectUrl,
     });
 
     await this.prisma.subscription.update({ where: { id: subscription.id }, data: { paymentRef: providerRef } });
-    return { subscriptionId: subscription.id, checkoutUrl };
+    return { subscriptionId: subscription.id, checkoutUrl, free: false };
   }
 
   /**

@@ -20,7 +20,14 @@ export default function PayForStudent({ studentId, studentName, onBack }) {
     setBusyId(packageId);
     setError(null);
     try {
-      const { checkoutUrl } = await api.startCheckoutForStudent(studentId, packageId);
+      const { checkoutUrl, free } = await api.startCheckoutForStudent(studentId, packageId);
+      // A zero-price package is already active — no gateway to hand off to,
+      // so go straight back to the dashboard instead of redirecting out.
+      if (free) {
+        setBusyId(null);
+        onBack();
+        return;
+      }
       window.location.href = checkoutUrl;
     } catch (e) {
       setError(e.message);

@@ -41,13 +41,22 @@ export default function Pricing({ packages, onSubscribe, blockedMessage, onBack 
         {packages.map((p) => (
           <div key={p.id} style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '22px', minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '16px', fontWeight: 500, color: 'var(--sand)' }}>{p.nameAr}</span>
-            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '28px', fontWeight: 500, color: 'var(--lime)' }}>
-              {halalasToSar(p.priceHalalas)} <span style={{ fontSize: '14px', color: 'var(--mist)' }}>ريال</span>
-            </span>
-            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>شامل ضريبة القيمة المضافة (15%)</span>
+            {p.priceHalalas === 0 ? (
+              <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '28px', fontWeight: 500, color: 'var(--lime)' }}>مجاناً</span>
+            ) : (
+              <span style={{ fontFamily: 'var(--font-latin)', fontSize: '28px', fontWeight: 500, color: 'var(--lime)' }}>
+                {halalasToSar(p.priceHalalas)} <span style={{ fontSize: '14px', color: 'var(--mist)' }}>ريال</span>
+              </span>
+            )}
+            {/* VAT wording only makes sense on a charge — there's nothing to tax at zero. */}
+            {p.priceHalalas > 0 && (
+              <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>شامل ضريبة القيمة المضافة (15%)</span>
+            )}
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{p.durationMonths} شهر · {p.questionsPerDay} أسئلة يومياً</span>
             <Button variant="primary" disabled={busyId === p.id} onClick={() => subscribe(p.id)}>
-              {busyId === p.id ? 'جاري التحويل…' : 'اشترك الآن'}
+              {busyId === p.id
+                ? (p.priceHalalas === 0 ? 'جاري التفعيل…' : 'جاري التحويل…')
+                : (p.priceHalalas === 0 ? 'ابدأ مجاناً' : 'اشترك الآن')}
             </Button>
           </div>
         ))}

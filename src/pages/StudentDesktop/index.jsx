@@ -314,7 +314,16 @@ export default function StudentDesktop() {
   };
 
   const subscribeToPackage = async (packageId) => {
-    const { checkoutUrl } = await api.startCheckout(packageId);
+    const { checkoutUrl, free } = await api.startCheckout(packageId);
+    // A free package is already active by the time this resolves — there's no
+    // gateway to hand off to, so refresh in place rather than bouncing the
+    // browser through a redirect just to land back where we started.
+    if (free) {
+      await loadSubscription();
+      setPricingMessage(null);
+      setScreen('home');
+      return;
+    }
     window.location.href = checkoutUrl;
   };
 

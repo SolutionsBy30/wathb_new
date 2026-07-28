@@ -46,7 +46,7 @@ export default function Subscriptions() {
     setError(null);
     setSuccess(null);
     try {
-      const sub = await api.activateViaWireTransfer(student.studentId, packageId);
+      const sub = await api.activateWireTransfer(student.studentId, packageId);
       setSuccess(sub);
       setStudent({ ...student, latestSubscription: sub });
     } catch (e) {

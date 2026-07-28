@@ -5,7 +5,10 @@ import leapTrail from '../../design-system/assets/leap-trail-rtl-on-indigo.svg';
 import { api } from '../../api/client';
 
 const SUPERVISOR_APP_URL = import.meta.env.VITE_SUPERVISOR_APP_URL || 'http://localhost:5174/supervisor/';
-const ADMIN_APP_URL = import.meta.env.VITE_ADMIN_APP_URL || 'http://localhost:5175/admin/';
+// The admin console is deliberately not linked from the public landing page —
+// it's staff-only, and advertising its URL to every visitor adds nothing for
+// students while widening the attack surface on the one login that isn't
+// OTP-gated. Admins reach it directly at admin.<domain>.
 
 const FEATURES = [
   { title: 'وثبة يومية بمؤقت', body: 'خمسة أسئلة، مؤقّتة حسب التصنيف، وشرح فوري لكل إجابة خاطئة.' },
@@ -58,7 +61,6 @@ export default function Landing({ onGoLogin, onGoSignup }) {
             <div style={{ position: 'absolute', top: '48px', left: 0, background: 'var(--paper)', borderRadius: 'var(--radius-md)', boxShadow: 'inset 0 0 0 0.5px var(--on-sand-line)', padding: '8px', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '200px', zIndex: 10 }}>
               <button onClick={() => { setMenuOpen(false); onGoLogin(); }} style={menuItemStyle}>دخول / تسجيل الطالب</button>
               <a href={SUPERVISOR_APP_URL} style={menuItemStyle}>دخول ولي الأمر / المشرف</a>
-              <a href={ADMIN_APP_URL} style={menuItemStyle}>دخول الإدارة</a>
             </div>
           )}
         </div>
