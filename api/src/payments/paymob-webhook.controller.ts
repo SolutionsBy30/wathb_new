@@ -1,22 +1,11 @@
 import { BadRequestException, Body, Controller, Logger, Post, Query } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac } from 'crypto';
 import { CheckoutService } from './checkout.service';
+import { computePaymobHmac } from './paymob-hmac.util';
 
-// Paymob "Transaction Processed Callback". Field order for the HMAC is
-// fixed by Paymob's docs — do not reorder. Verification is skipped only
-// when no HMAC secret is configured (dev mode), mirroring the WhatsApp
-// webhook's signature check.
-const HMAC_FIELDS = [
-  'amount_cents', 'created_at', 'currency', 'error_occured', 'has_parent_transaction', 'id',
-  'integration_id', 'is_3d_secure', 'is_auth', 'is_capture', 'is_refunded', 'is_standalone_payment',
-  'is_voided', 'order.id', 'owner', 'pending', 'source_data.pan', 'source_data.sub_type',
-  'source_data.type', 'success',
-];
-
-function getPath(obj: any, path: string) {
-  return path.split('.').reduce((o, k) => o?.[k], obj);
-}
+// Paymob "Transaction Processed Callback" (async server-to-server POST).
+// Verification is skipped only when no HMAC secret is configured (dev
+// mode), mirroring the WhatsApp webhook's signature check.
 
 @Controller('webhooks/paymob')
 export class PaymobWebhookController {
@@ -61,8 +50,6 @@ export class PaymobWebhookController {
     const secret = this.config.get<string>('PAYMOB_HMAC_SECRET');
     if (!secret) return; // dev mode — never the case in production
     if (!hmac) throw new BadRequestException('missing hmac');
-    const concatenated = HMAC_FIELDS.map((f) => String(getPath(transaction, f) ?? '')).join('');
-    const expected = createHmac('sha512', secret).update(concatenated).digest('hex');
-    if (expected !== hmac) throw new BadRequestException('invalid hmac');
+    if (computePaymobHmac(transaction, secret) !== hmac) throw new BadRequestException('invalid hmac');
   }
 }

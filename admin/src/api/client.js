@@ -143,4 +143,9 @@ export const api = {
   studentDetail: (id) => request(`/admin/students/${id}/detail`),
   setStudentSchool: (studentId, schoolId) => request(`/admin/students/${studentId}/school`, { method: 'PATCH', body: { schoolId } }),
   listSupervisors: () => request('/admin/supervisors'),
+
+  listDailyTips: () => request('/admin/daily-tips'),
+  createDailyTip: (textAr) => request('/admin/daily-tips', { method: 'POST', body: { textAr } }),
+  updateDailyTip: (id, dto) => request(`/admin/daily-tips/${id}`, { method: 'POST', body: dto }),
+  deleteDailyTip: (id) => request(`/admin/daily-tips/${id}`, { method: 'DELETE' }),
 };

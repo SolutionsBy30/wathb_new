@@ -120,7 +120,13 @@ export class ReportsService {
       include: { package: true },
       orderBy: { createdAt: 'desc' },
     });
-    return activeSub?.package.reportVisibility === 'partial';
+    // No active plan at all restricts at least as hard as the free tier —
+    // previously this fell through to `false`, so a student whose
+    // subscription expired (or who never had one) saw the FULL report while
+    // a free-tier student saw the partial one. Backwards on both fairness
+    // and incentive: lapsing must never unlock more than staying free does.
+    if (!activeSub) return true;
+    return activeSub.package.reportVisibility === 'partial';
   }
 
   // Overloads so callers that don't pass `restricted` (or pass the literal

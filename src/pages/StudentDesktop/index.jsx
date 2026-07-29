@@ -46,6 +46,7 @@ export default function StudentDesktop() {
   const [subscription, setSubscription] = useState(null);
   const [packages, setPackages] = useState([]);
   const [pricingMessage, setPricingMessage] = useState(null);
+  const [adminTip, setAdminTip] = useState(null);
 
   const timerRef = useRef(null);
   const submittingRef = useRef(false);
@@ -103,15 +104,33 @@ export default function StudentDesktop() {
       const me = await api.me();
       setStudent(me);
       await loadSubscription();
+      // Admin-authored tip of the day — non-fatal; homeVm falls back to the
+      // generated weakest-area tip when none is set.
+      api.dailyTip().then((r) => setAdminTip(r.tip)).catch(() => {});
+      let paymentFailed = false;
       if (window.location.hash === '#subscription=success') {
         // Landed back from a checkout redirect (real Paymob or the dev
         // stand-in) — the subscription is already confirmed server-side by
         // the time this redirect happens.
         window.history.replaceState(null, '', window.location.pathname);
+      } else if (window.location.hash === '#subscription=failed') {
+        // The gateway return reported failure (declined, abandoned, or a
+        // callback that failed verification) — land on pricing with an
+        // honest message, not silently on Home.
+        window.history.replaceState(null, '', window.location.pathname);
+        paymentFailed = true;
       }
       if (!me.targetTestId) {
         setTests(await api.listTests());
         setScreen('goal');
+      } else if (paymentFailed) {
+        setPricingMessage('لم تكتمل عملية الدفع. يمكنك المحاولة مرة أخرى.');
+        try {
+          setPackages(await api.listPackages());
+        } catch {
+          /* non-fatal */
+        }
+        setScreen('pricing');
       } else {
         await loadReport(me.userId);
         // The weekly WhatsApp link (spec S11) lands here, not on Home.
@@ -381,9 +400,13 @@ export default function StudentDesktop() {
     const streakCount = report?.streak?.current ?? 0;
     return {
       homeHeadline: alreadyDoneToday ? 'راح تكون هنا غداً وثبة جديدة.' : 'اختر وثبة اليوم.',
-      dailyTip: worstArea
-        ? { labelName: worstArea.nameAr, text: `دقتك في «${worstArea.nameAr}» ${Math.round(worstArea.accuracy * 100)}% — راجع الشرح بعد كل إجابة خاطئة قبل الانتقال للسؤال التالي.` }
-        : { labelName: 'وثبة اليوم', text: 'أكمل وثبتك اليومية لبناء ملف نقاط القوة والضعف الخاص بك.' },
+      // Admin-authored tip takes precedence (rotates daily, see
+      // api/src/daily-tips); the generated weakest-area tip is the fallback.
+      dailyTip: adminTip
+        ? { labelName: 'وثبة اليوم', text: adminTip.textAr }
+        : worstArea
+          ? { labelName: worstArea.nameAr, text: `دقتك في «${worstArea.nameAr}» ${Math.round(worstArea.accuracy * 100)}% — راجع الشرح بعد كل إجابة خاطئة قبل الانتقال للسؤال التالي.` }
+          : { labelName: 'وثبة اليوم', text: 'أكمل وثبتك اليومية لبناء ملف نقاط القوة والضعف الخاص بك.' },
       weeklyAnswered, weeklyTarget,
       weeklyPct: Math.round((weeklyAnswered / weeklyTarget) * 100),
       alreadyDoneToday,
@@ -398,7 +421,7 @@ export default function StudentDesktop() {
       compositeIndexDelta: report?.compositeIndexDelta ?? null,
       restricted: report?.restricted ?? false,
     };
-  }, [report, alreadyDoneToday, completeResult]);
+  }, [report, alreadyDoneToday, completeResult, adminTip]);
 
   const questionVm = useMemo(() => {
     if (!wathb) return null;

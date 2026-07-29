@@ -60,8 +60,10 @@ export class NotificationsService {
     const scheduledFor = dayKey(forDate);
     if (student.skipDays.includes(scheduledFor.getUTCDay())) return { skipped: 'skip_day' as const };
 
-    const existingWathb = await this.prisma.wathb.findUnique({
-      where: { studentId_scheduledFor: { studentId, scheduledFor } },
+    // Daily planning/notifications only ever concern the planned bundle
+    // (sequence 0) — a paid student's extra same-day bundles are pull, not push.
+    const existingWathb = await this.prisma.wathb.findFirst({
+      where: { studentId, scheduledFor, sequence: 0 },
     });
     if (!existingWathb) {
       const wathb = !student.placementDoneAt
@@ -120,7 +122,7 @@ export class NotificationsService {
       return { failed: true as const };
     }
 
-    const wathb = await this.prisma.wathb.findUnique({ where: { studentId_scheduledFor: { studentId, scheduledFor } } });
+    const wathb = await this.prisma.wathb.findFirst({ where: { studentId, scheduledFor, sequence: 0 } });
     if (!wathb) {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: 'no wathb planned for this day' } });
       return { failed: true as const };
@@ -215,7 +217,7 @@ export class NotificationsService {
     for (const notif of due) {
       const student = notif.user.student;
       if (!student) continue; // retry ladder only covers student-facing notifications today
-      const wathb = await this.prisma.wathb.findUnique({ where: { studentId_scheduledFor: { studentId: student.userId, scheduledFor: notif.scheduledFor } } });
+      const wathb = await this.prisma.wathb.findFirst({ where: { studentId: student.userId, scheduledFor: notif.scheduledFor, sequence: 0 } });
       if (!wathb) continue;
       const result = await this.attemptSend(
         { userId: student.userId, notifSlotStartHour: student.notifSlotStartHour, notifSlotEndHour: student.notifSlotEndHour, user: { name: notif.user.name, mobileE164: notif.user.mobileE164 } },

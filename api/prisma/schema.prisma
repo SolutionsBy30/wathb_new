@@ -384,6 +384,10 @@ model Wathb {
   studentId     String
   student       Student     @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   scheduledFor  DateTime    @db.Date
+  // Paid students may take any number of Wathbs per day; sequence numbers
+  // them within the day (0 = the planned/first bundle — the one the daily
+  // WhatsApp notification links to). Free tier stays capped at sequence 0.
+  sequence      Int         @default(0)
   bundleType    BundleType  @default(standard)
   status        WathbStatus @default(pending)
   openedAt      DateTime?
@@ -393,7 +397,7 @@ model Wathb {
   questions WathbQuestion[]
   answers   Answer[]
 
-  @@unique([studentId, scheduledFor])
+  @@unique([studentId, scheduledFor, sequence])
   @@map("wathbs")
 }
 
@@ -715,4 +719,18 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// The "معلومة تساعدك في وثبة اليوم" tip on the student Home screen —
+// admin-curated rather than generated. All active tips rotate one per
+// calendar day (same tip for every student on a given day); when none are
+// active the client falls back to its generated weakest-area tip.
+model DailyTip {
+  id        String   @id @default(uuid())
+  textAr    String
+  isActive  Boolean  @default(true)
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("daily_tips")
 }

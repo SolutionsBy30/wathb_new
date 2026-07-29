@@ -38,6 +38,12 @@ export default function App() {
     // A tap on a WhatsApp link (invite or weekly report) lands here as
     // #magic=<token> — exchange it for a scoped session, same as the
     // student app, then drop it from the URL (spec §7.1).
+    // Back from a checkout redirect (paying for a linked student) — the
+    // subscription is already confirmed server-side; just clean the URL so
+    // the dashboard load below shows the fresh state.
+    if (/^#subscription=(success|failed)$/.test(window.location.hash)) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
     const hashMatch = window.location.hash.match(/^#magic=(.+)$/);
     let magicLinkFailed = false;
     if (hashMatch) {

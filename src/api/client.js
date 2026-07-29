@@ -55,6 +55,7 @@ export const api = {
   exchangeMagicLink: (token) => request(`/auth/magic/${token}`, { method: 'POST', auth: false }),
 
   listTests: () => request('/tests', { auth: false }),
+  dailyTip: () => request('/daily-tip'),
   me: () => request('/students/me'),
   setGoal: (dto) => request('/students/me/goal', { method: 'PATCH', body: dto }),
   setNotificationPrefs: (dto) => request('/students/me/notification-prefs', { method: 'PATCH', body: dto }),

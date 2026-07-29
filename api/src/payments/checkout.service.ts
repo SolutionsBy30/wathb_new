@@ -49,36 +49,67 @@ export class CheckoutService {
       },
     });
 
-    // Send the payer back to the app they actually started from — a
-    // supervisor paying for a linked student was previously dropped onto the
-    // student app after checkout, where their supervisor session means
-    // nothing and they'd land on a login screen.
-    const returnAppUrl = payer?.type === 'supervisor'
-      ? this.config.get<string>('SUPERVISOR_APP_URL', 'http://localhost:5175/supervisor')
-      : this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
-    const successRedirectUrl = `${returnAppUrl}/#subscription=success`;
-
     // FRE-001 — a zero-price package has nothing to charge for, so it must
     // never reach the payment gateway (Paymob rejects a 0 amount outright,
     // and even where it didn't, bouncing a student through a card form to
     // pay nothing is wrong). Activate it directly and hand back the same
-    // success URL the paid path returns, so callers need no special case.
+    // success URL the paid path produces, so callers need no special case.
     if (pkg.priceHalalas === 0) {
       await this.confirmPayment(subscription.id);
-      return { subscriptionId: subscription.id, checkoutUrl: successRedirectUrl, free: true };
+      return { subscriptionId: subscription.id, checkoutUrl: `${this.appReturnUrl(payer?.type)}/#subscription=success`, free: true };
     }
 
+    // The gateway redirects the payer back through OUR API, not straight to
+    // an app: Paymob appends the transaction outcome (+HMAC) as query params
+    // to this URL, and handleGatewayReturn() below confirms the subscription
+    // from them before bouncing on to the right app. This makes activation
+    // work even when the async server-to-server webhook never arrives (the
+    // exact failure observed in production — dashboard callback unset or
+    // undeliverable), while the webhook remains as reinforcement.
+    const apiUrl = this.config.get<string>('API_PUBLIC_URL', 'http://localhost:4000/api');
     const { checkoutUrl, providerRef } = await this.provider.createCheckout({
       amountHalalas: pkg.priceHalalas,
       currency: 'SAR',
       merchantOrderId: subscription.id,
       customerName: payerUser.name,
       customerMobile: payerUser.mobileE164,
-      successRedirectUrl,
+      successRedirectUrl: `${apiUrl}/checkout/return`,
     });
 
     await this.prisma.subscription.update({ where: { id: subscription.id }, data: { paymentRef: providerRef } });
     return { subscriptionId: subscription.id, checkoutUrl, free: false };
+  }
+
+  /** Which app to land the payer back on — supervisors started from theirs. */
+  private appReturnUrl(payerType?: 'supervisor' | 'student' | null): string {
+    return payerType === 'supervisor'
+      ? this.config.get<string>('SUPERVISOR_APP_URL', 'http://localhost:5175/supervisor')
+      : this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
+  }
+
+  /**
+   * Paymob's Transaction Response Callback — the GET the payer's browser is
+   * redirected through after the hosted checkout. Verifies the outcome and
+   * activates the subscription synchronously, then hands back the app URL
+   * to bounce the payer to. Idempotent alongside the webhook: whichever
+   * lands first activates, the other finds status already 'active'.
+   */
+  async handleGatewayReturn(query: Record<string, string>): Promise<{ redirectUrl: string }> {
+    const subscriptionId = query['merchant_order_id'] || query['special_reference'];
+    const succeeded = query['success'] === 'true';
+
+    const subscription = subscriptionId
+      ? await this.prisma.subscription.findUnique({ where: { id: subscriptionId } })
+      : null;
+    // Can't tell whose flow this was without the subscription — default to
+    // the student app rather than erroring at the payer mid-redirect.
+    const appUrl = this.appReturnUrl(subscription?.payerType ?? undefined);
+
+    if (!subscription || !succeeded) {
+      return { redirectUrl: `${appUrl}/#subscription=failed` };
+    }
+    await this.confirmPayment(subscription.id);
+    return { redirectUrl: `${appUrl}/#subscription=success` };
   }
 
   /**

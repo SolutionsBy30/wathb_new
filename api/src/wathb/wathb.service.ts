@@ -62,8 +62,11 @@ export class WathbService {
     const todayDate = new Date();
     todayDate.setUTCHours(0, 0, 0, 0);
 
-    let wathb = await this.prisma.wathb.findUnique({
-      where: { studentId_scheduledFor: { studentId, scheduledFor: todayDate } },
+    // Latest of today's bundles — sequence 0 is the planned one; paid
+    // students may have gone past it (see below).
+    let wathb = await this.prisma.wathb.findFirst({
+      where: { studentId, scheduledFor: todayDate },
+      orderBy: { sequence: 'desc' },
       include: { questions: WATHB_QUESTIONS_INCLUDE },
     });
 
@@ -73,6 +76,20 @@ export class WathbService {
         : await this.generation.generateDaily(studentId, student.targetTestId, student.track ?? null, DEFAULT_BUNDLE_SIZE);
       if (!wathb) {
         throw new BadRequestException('no eligible questions available today — bank exhausted, contact support');
+      }
+    } else if (wathb.status === 'completed') {
+      // Paid students aren't capped at one Wathb per day — completing one
+      // rolls straight into a fresh bundle (next sequence). The free tier
+      // and unpriced plans keep the 1/day cap (FRE-002), signalled by
+      // returning the completed bundle so the client shows "done today".
+      const paid = subscriptions.some((s) => s.package.priceHalalas > 0 && s.package.testIds.includes(student.targetTestId!));
+      if (paid) {
+        const next = await this.generation.generateDaily(
+          studentId, student.targetTestId, student.track ?? null, DEFAULT_BUNDLE_SIZE, undefined, wathb.sequence + 1,
+        );
+        // Bank exhausted for a follow-up bundle isn't an error — the student
+        // already practised today; fall through with the completed one.
+        if (next) wathb = next;
       }
     }
 
@@ -229,10 +246,17 @@ export class WathbService {
     const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId } });
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
-    const wasYesterday =
-      student.lastCompletedOn &&
-      today.getTime() - new Date(student.lastCompletedOn).setUTCHours(0, 0, 0, 0) === 86400000;
-    const newStreak = wasYesterday || !student.lastCompletedOn ? student.currentStreak + 1 : 1;
+    const lastCompletedDay = student.lastCompletedOn ? new Date(student.lastCompletedOn).setUTCHours(0, 0, 0, 0) : null;
+    const wasYesterday = lastCompletedDay !== null && today.getTime() - lastCompletedDay === 86400000;
+    // A second (or nth) completion on the same day — possible now that paid
+    // students get unlimited daily bundles — must leave the streak alone,
+    // not reset it to 1: one day still counts once.
+    const alreadyToday = lastCompletedDay === today.getTime();
+    const newStreak = alreadyToday
+      ? student.currentStreak
+      : wasYesterday || !student.lastCompletedOn
+        ? student.currentStreak + 1
+        : 1;
 
     await this.prisma.$transaction([
       this.prisma.wathb.update({ where: { id: wathbId }, data: { status: 'completed', completedAt: new Date() } }),

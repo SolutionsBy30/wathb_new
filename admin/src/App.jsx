@@ -7,6 +7,7 @@ import QuestionBank from './pages/QuestionBank';
 import QuestionEditor from './pages/QuestionEditor';
 import ReviewQueue from './pages/ReviewQueue';
 import ProblemReports from './pages/ProblemReports';
+import DailyTips from './pages/DailyTips';
 import BulkImport from './pages/BulkImport';
 import DeliveryLog from './pages/DeliveryLog';
 import Packages from './pages/Packages';
@@ -28,6 +29,7 @@ const NAV_GROUPS = [
       { id: 'bank', label: 'بنك الأسئلة' },
       { id: 'reviewQueue', label: 'قائمة المراجعة' },
       { id: 'problemReports', label: 'بلاغات المشاكل' },
+      { id: 'dailyTips', label: 'نصيحة اليوم' },
       { id: 'import', label: 'استيراد جماعي' },
       { id: 'solutionPerf', label: 'أداء الأسئلة' },
     ],
@@ -132,6 +134,7 @@ export default function App() {
         {tab === 'problemReports' && (
           <ProblemReports onEditQuestion={(id) => { setTab('bank'); setEditingQuestionId(id); }} />
         )}
+        {tab === 'dailyTips' && <DailyTips />}
         {tab === 'import' && <BulkImport tests={tests} />}
         {tab === 'solutionPerf' && <SolutionPerformance tests={tests} />}
         {tab === 'students' && viewingStudentId === null && <Students onOpenStudent={setViewingStudentId} />}

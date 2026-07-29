@@ -88,7 +88,7 @@ export class WathbGenerationService {
     return this.buildWathb(studentId, picks.map((labelId) => ({ labelId, targetDifficulty: 3 })), 'placement', forDate);
   }
 
-  async generateDaily(studentId: string, testId: string, track: 'scientific' | 'humanities' | null, bundleSize: number, forDate?: Date) {
+  async generateDaily(studentId: string, testId: string, track: 'scientific' | 'humanities' | null, bundleSize: number, forDate?: Date, sequence = 0) {
     const labels = await this.eligibleLabels(testId, track);
     if (labels.length === 0) return null;
 
@@ -135,7 +135,7 @@ export class WathbGenerationService {
     const scopedLabels = chosenSectionId ? labelStates.filter((l) => l.sectionId === chosenSectionId) : labelStates;
 
     const picks = selectLabelsForBundle(scopedLabels, { bundleSize });
-    return this.buildWathb(studentId, picks, 'standard', forDate);
+    return this.buildWathb(studentId, picks, 'standard', forDate, sequence);
   }
 
   private async buildWathb(
@@ -143,6 +143,9 @@ export class WathbGenerationService {
     picks: { labelId: string; targetDifficulty: number }[],
     bundleType: 'placement' | 'standard',
     forDate?: Date,
+    // >0 only for a paid student's follow-up bundles within the same day —
+    // sequence 0 stays the planned bundle daily notifications link to.
+    sequence = 0,
   ) {
     const used = new Set<string>();
     const resolved: { labelId: string; question: Awaited<ReturnType<WathbGenerationService['pickQuestion']>> }[] = [];
@@ -181,6 +184,7 @@ export class WathbGenerationService {
       data: {
         studentId,
         scheduledFor,
+        sequence,
         bundleType,
         status: 'pending',
         questions: {

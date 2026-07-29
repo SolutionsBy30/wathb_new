@@ -1,6 +1,8 @@
-import { Body, Controller, ForbiddenException, Get, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Logger, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { CheckoutService } from './checkout.service';
+import { computePaymobHmac } from './paymob-hmac.util';
 import { RequireSession, RequireStepUp, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
@@ -8,7 +10,42 @@ import { StartCheckoutDto, StartCheckoutForStudentDto, ActivateWireTransferDto }
 
 @Controller()
 export class CheckoutController {
-  constructor(private checkout: CheckoutService) {}
+  private readonly logger = new Logger(CheckoutController.name);
+
+  constructor(
+    private checkout: CheckoutService,
+    private config: ConfigService,
+  ) {}
+
+  /**
+   * Paymob's Transaction Response Callback — the payer's browser lands here
+   * after the hosted checkout, with the transaction outcome as query params.
+   * Confirms the subscription synchronously (see
+   * CheckoutService.handleGatewayReturn) so activation doesn't depend on the
+   * async webhook arriving, then bounces the payer on to their app.
+   *
+   * The HMAC check matters here even more than on the webhook: this URL is
+   * in the payer's browser history, so without it anyone could replay it
+   * with success=true and a guessed subscription id. Invalid/missing HMAC
+   * (when a secret is configured) downgrades the outcome to failed rather
+   * than 400ing — the payer mid-redirect should always land somewhere sane.
+   */
+  @Get('checkout/return')
+  async gatewayReturn(@Query() query: Record<string, string>, @Res() res: Response) {
+    const secret = this.config.get<string>('PAYMOB_HMAC_SECRET');
+    let effectiveQuery = query;
+    if (secret) {
+      const expected = computePaymobHmac(query, secret);
+      if (query['hmac'] !== expected) {
+        this.logger.warn(`gateway return with bad/missing hmac for ref=${query['merchant_order_id'] ?? 'none'} — treating as failed`);
+        effectiveQuery = { ...query, success: 'false' };
+      }
+    } else {
+      this.logger.warn('PAYMOB_HMAC_SECRET not set — gateway return accepted unverified (dev only, never production)');
+    }
+    const { redirectUrl } = await this.checkout.handleGatewayReturn(effectiveQuery);
+    res.redirect(302, redirectUrl);
+  }
 
   @UseGuards(SessionGuard)
   @RequireSession('student')
