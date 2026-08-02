@@ -40,6 +40,19 @@ export default function StudentDetail({ studentId, onBack }) {
   const [data, setData] = useState(null);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
+  const [loginLink, setLoginLink] = useState(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+
+  const mintLoginLink = async () => {
+    setLinkBusy(true);
+    try {
+      setLoginLink(await api.mintStudentLoginLink(studentId));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLinkBusy(false);
+    }
+  };
 
   useEffect(() => {
     api.studentDetail(studentId).then(setData).catch((e) => setError(e.message));
@@ -60,8 +73,37 @@ export default function StudentDetail({ studentId, onBack }) {
             {student.user.mobileE164} · {student.school?.nameAr ?? 'بدون مدرسة'} {student.school ? `· ${student.school.city?.nameAr}` : ''}
           </span>
         </div>
-        <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>→ رجوع للقائمة</button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            onClick={mintLoginLink}
+            disabled={linkBusy}
+            title="ينشئ رابط دخول صالحاً لمدة 24 ساعة يمكن إرساله للطالب — كل إنشاء يُسجَّل في سجل التدقيق"
+            style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--lime)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+          >
+            {linkBusy ? 'جاري الإنشاء…' : 'إنشاء رابط دخول'}
+          </button>
+          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>→ رجوع للقائمة</button>
+        </div>
       </div>
+
+      {loginLink && (
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '14px 18px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            readOnly
+            value={loginLink.url}
+            dir="ltr"
+            onFocus={(e) => e.target.select()}
+            style={{ flex: 1, minWidth: '260px', padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '11px' }}
+          />
+          <button
+            onClick={() => navigator.clipboard?.writeText(loginLink.url)}
+            style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px', background: 'var(--lime)', color: 'var(--lime-ink)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+          >
+            نسخ
+          </button>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>صالح 24 ساعة، يُستخدم مرة واحدة.</span>
+        </div>
+      )}
 
       {report && (
         <Section title="ملخص التقرير">

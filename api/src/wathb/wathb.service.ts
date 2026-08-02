@@ -78,12 +78,17 @@ export class WathbService {
         throw new BadRequestException('no eligible questions available today — bank exhausted, contact support');
       }
     } else if (wathb.status === 'completed') {
-      // Paid students aren't capped at one Wathb per day — completing one
-      // rolls straight into a fresh bundle (next sequence). The free tier
-      // and unpriced plans keep the 1/day cap (FRE-002), signalled by
-      // returning the completed bundle so the client shows "done today".
-      const paid = subscriptions.some((s) => s.package.priceHalalas > 0 && s.package.testIds.includes(student.targetTestId!));
-      if (paid) {
+      // Completing a bundle rolls into a fresh one (next sequence) up to the
+      // package's admin-set daily limit — Package.dailyWathbLimit, where
+      // null means unlimited. The most generous covering package wins when
+      // several are active; the free tier ships backfilled to 1 (FRE-002).
+      // At the limit, the completed bundle is returned so the client shows
+      // "done today".
+      const covering = subscriptions.filter((s) => s.package.testIds.includes(student.targetTestId!));
+      const unlimited = covering.some((s) => s.package.dailyWathbLimit === null);
+      const limit = unlimited ? Infinity : Math.max(1, ...covering.map((s) => s.package.dailyWathbLimit ?? 1));
+      const doneToday = wathb.sequence + 1; // sequences are contiguous from 0
+      if (doneToday < limit) {
         const next = await this.generation.generateDaily(
           studentId, student.targetTestId, student.track ?? null, DEFAULT_BUNDLE_SIZE, undefined, wathb.sequence + 1,
         );

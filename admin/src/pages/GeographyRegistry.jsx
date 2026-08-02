@@ -35,6 +35,9 @@ export default function GeographyRegistry() {
   const [mergeTarget, setMergeTarget] = useState('');
   const [mergeResult, setMergeResult] = useState(null);
   const [mergeError, setMergeError] = useState(null);
+  const [newRegionAr, setNewRegionAr] = useState('');
+  const [newRegionEn, setNewRegionEn] = useState('');
+  const [newCity, setNewCity] = useState({});
 
   const load = () => api.adminListRegions().then(setRegions);
   useEffect(() => { load(); }, []);
@@ -66,6 +69,18 @@ export default function GeographyRegistry() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '15px', color: 'var(--sand)' }}>إدارة السجل الجغرافي</h2>
+
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={newRegionAr} onChange={(e) => setNewRegionAr(e.target.value)} placeholder="منطقة جديدة (عربي)" style={{ ...fieldStyle, width: '170px' }} />
+        <input value={newRegionEn} onChange={(e) => setNewRegionEn(e.target.value)} placeholder="Region (EN)" style={{ ...fieldStyle, width: '150px' }} />
+        <button
+          disabled={!newRegionAr.trim() || !newRegionEn.trim()}
+          onClick={async () => { await api.createRegion({ nameAr: newRegionAr.trim(), nameEn: newRegionEn.trim() }); setNewRegionAr(''); setNewRegionEn(''); load(); }}
+          style={{ ...btnStyle, background: 'var(--lime)', color: 'var(--lime-ink)' }}
+        >
+          إضافة منطقة
+        </button>
+      </div>
 
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '16px' }}>
         {regions.map((r) => (
@@ -127,6 +142,31 @@ export default function GeographyRegistry() {
                     </div>
                   </div>
                 ))}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', padding: '8px 0' }}>
+                  <input
+                    value={newCity[r.id]?.ar ?? ''}
+                    onChange={(e) => setNewCity((prev) => ({ ...prev, [r.id]: { ...prev[r.id], ar: e.target.value } }))}
+                    placeholder="مدينة جديدة (عربي)"
+                    style={{ ...fieldStyle, width: '150px', padding: '6px 10px', fontSize: '12px' }}
+                  />
+                  <input
+                    value={newCity[r.id]?.en ?? ''}
+                    onChange={(e) => setNewCity((prev) => ({ ...prev, [r.id]: { ...prev[r.id], en: e.target.value } }))}
+                    placeholder="City (EN)"
+                    style={{ ...fieldStyle, width: '130px', padding: '6px 10px', fontSize: '12px' }}
+                  />
+                  <button
+                    disabled={!(newCity[r.id]?.ar ?? '').trim() || !(newCity[r.id]?.en ?? '').trim()}
+                    onClick={async () => {
+                      await api.createCity({ regionId: r.id, nameAr: newCity[r.id].ar.trim(), nameEn: newCity[r.id].en.trim() });
+                      setNewCity((prev) => ({ ...prev, [r.id]: { ar: '', en: '' } }));
+                      loadCities(r.id);
+                    }}
+                    style={{ ...btnStyle, background: 'var(--lime)', color: 'var(--lime-ink)' }}
+                  >
+                    إضافة مدينة
+                  </button>
+                </div>
               </div>
             )}
           </div>

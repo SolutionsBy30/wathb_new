@@ -29,7 +29,7 @@ const DAYS = [
   { id: 6, label: 'السبت' },
 ];
 
-export default function Profile({ student, subscription, onManageSubscription, onSubscriptionChanged, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
+export default function Profile({ student, subscription, onManageSubscription, onSubscriptionChanged, onLogout, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
   // FRE-006 — shown locked with an upgrade prompt, not hidden, when the
   // active package doesn't allow supervisor linking. Server-enforced too
   // (SupervisorsService.invite throws 403) — this is just the honest UI.
@@ -160,9 +160,22 @@ export default function Profile({ student, subscription, onManageSubscription, o
         ) : (
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--mist)' }}>لا يوجد اشتراك حالياً.</p>
         )}
-        <Button variant="secondary" onClick={onManageSubscription}>
-          {subscription?.status === 'active' ? 'تجديد الاشتراك الآن' : 'اشترك الآن'}
-        </Button>
+        {(() => {
+          // Renewal nagging only when it's actually relevant: an active
+          // subscription shows the renew button solely inside the last 7
+          // days before expiry. Inactive/absent subscriptions always get
+          // the subscribe button.
+          const active = subscription?.status === 'active';
+          const daysLeft = active && subscription?.endsAt
+            ? Math.ceil((new Date(subscription.endsAt).getTime() - Date.now()) / 86_400_000)
+            : null;
+          if (active && daysLeft !== null && daysLeft > 7) return null;
+          return (
+            <Button variant="secondary" onClick={onManageSubscription}>
+              {active ? 'تجديد الاشتراك الآن' : 'اشترك الآن'}
+            </Button>
+          );
+        })()}
       </div>
 
       {/* STU-029 — payment history + cancellation are both behind step-up
@@ -338,6 +351,13 @@ export default function Profile({ student, subscription, onManageSubscription, o
         </Button>
         {notifSaved && <span style={{ fontSize: '12px', color: 'var(--teal-ink)' }}>تم الحفظ.</span>}
       </div>
+
+      <button
+        onClick={onLogout}
+        style={{ alignSelf: 'flex-start', border: 'none', cursor: 'pointer', padding: '10px 18px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--coral)', color: 'var(--coral)', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+      >
+        تسجيل الخروج
+      </button>
     </>
   );
 }

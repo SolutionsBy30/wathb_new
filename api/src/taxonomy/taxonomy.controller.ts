@@ -21,6 +21,11 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @Get('admin/tests')
+  listAllTests() {
+    return this.taxonomy.listAllTests();
+  }
+
   @Post('admin/tests')
   createTest(@Body() dto: UpsertTestDto) {
     return this.taxonomy.createTest(dto);

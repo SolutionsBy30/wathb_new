@@ -102,6 +102,11 @@ export class QuestionsController {
     return this.questions.bulkRetire(ids);
   }
 
+  @Post('bulk-status')
+  bulkStatus(@Body('ids') ids: string[], @Body('status') status: 'draft' | 'in_review' | 'published' | 'retired') {
+    return this.questions.bulkSetStatus(ids, status);
+  }
+
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   importCsv(@UploadedFile() file: Express.Multer.File, @Body('labelId') labelId: string) {

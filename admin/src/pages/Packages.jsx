@@ -31,6 +31,7 @@ function NewPackageForm({ tests, onCreated }) {
   const [durationMonths, setDurationMonths] = useState(1);
   const [priceSar, setPriceSar] = useState('');
   const [dailyNotificationEnabled, setDailyNotificationEnabled] = useState(true);
+  const [dailyWathbLimit, setDailyWathbLimit] = useState('');
   const [reportVisibility, setReportVisibility] = useState('full');
   const [weeklyReportEnabled, setWeeklyReportEnabled] = useState(true);
   const [supervisorLinkingAllowed, setSupervisorLinkingAllowed] = useState(true);
@@ -48,6 +49,7 @@ function NewPackageForm({ tests, onCreated }) {
         nameAr: nameAr.trim(), nameEn: nameEn.trim(), testIds,
         durationMonths: Number(durationMonths), priceHalalas: Math.round(Number(priceSar) * 100),
         dailyNotificationEnabled, reportVisibility, weeklyReportEnabled, supervisorLinkingAllowed,
+        dailyWathbLimit: dailyWathbLimit === '' ? null : Number(dailyWathbLimit),
       });
       setNameAr(''); setNameEn(''); setTestIds([]); setDurationMonths(1); setPriceSar('');
       setDailyNotificationEnabled(true); setReportVisibility('full'); setWeeklyReportEnabled(true); setSupervisorLinkingAllowed(true);
@@ -82,6 +84,15 @@ function NewPackageForm({ tests, onCreated }) {
         <input style={{ ...fieldStyle, flex: 1 }} type="number" min={1} placeholder="المدة (أشهر)" value={durationMonths} onChange={(e) => setDurationMonths(e.target.value)} />
         <input style={{ ...fieldStyle, flex: 1 }} type="number" min={0} step="0.01" placeholder="السعر (ريال، شامل الضريبة)" value={priceSar} onChange={(e) => setPriceSar(e.target.value)} />
       </div>
+      <input
+        style={fieldStyle}
+        type="number"
+        min={1}
+        placeholder="حد الوثبات اليومية (فارغ = غير محدود)"
+        value={dailyWathbLimit}
+        onChange={(e) => setDailyWathbLimit(e.target.value)}
+        title="كم وثبة يستطيع المشترك إكمالها في اليوم الواحد؛ اتركه فارغاً لعدد غير محدود"
+      />
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '4px', borderTop: '0.5px solid var(--on-indigo-line)' }}>
         <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>حدود الباقة (لتحديد باقة مجانية محدودة)</span>
         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>
@@ -154,6 +165,9 @@ export default function Packages({ tests }) {
                     <FlagBadge active={p.reportVisibility === 'full'} onClick={() => toggleFlag(p, 'reportVisibility', p.reportVisibility === 'full' ? 'partial' : 'full')} label="تقرير كامل" />
                     <FlagBadge active={p.weeklyReportEnabled} onClick={() => toggleFlag(p, 'weeklyReportEnabled', !p.weeklyReportEnabled)} label="تقرير أسبوعي" />
                     <FlagBadge active={p.supervisorLinkingAllowed} onClick={() => toggleFlag(p, 'supervisorLinkingAllowed', !p.supervisorLinkingAllowed)} label="دعوة مشرف" />
+                    <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--mist)', padding: '3px 8px', borderRadius: '999px', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)' }}>
+                      وثبات/يوم: {p.dailyWathbLimit ?? 'غير محدود'}
+                    </span>
                   </div>
                 </td>
                 <td style={td}>

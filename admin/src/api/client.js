@@ -37,9 +37,11 @@ async function request(path, { method = 'GET', body, isForm = false } = {}) {
 export const api = {
   login: (email, password) => request('/auth/admin/login', { method: 'POST', body: { email, password } }),
 
-  listTests: () => request('/tests'),
+  // Admin management needs deactivated tests too — /tests hides them.
+  listTests: () => request('/admin/tests'),
   tree: (testId) => request(`/tests/${testId}/tree`),
   createTest: (dto) => request('/admin/tests', { method: 'POST', body: dto }),
+  updateTest: (id, dto) => request(`/admin/tests/${id}`, { method: 'PATCH', body: dto }),
   createSection: (testId, dto) => request(`/admin/tests/${testId}/sections`, { method: 'POST', body: dto }),
   updateSection: (id, dto) => request(`/admin/sections/${id}`, { method: 'PATCH', body: dto }),
   createArea: (sectionId, dto) => request(`/admin/sections/${sectionId}/areas`, { method: 'POST', body: dto }),
@@ -143,6 +145,9 @@ export const api = {
   studentDetail: (id) => request(`/admin/students/${id}/detail`),
   setStudentSchool: (studentId, schoolId) => request(`/admin/students/${studentId}/school`, { method: 'PATCH', body: { schoolId } }),
   listSupervisors: () => request('/admin/supervisors'),
+
+  bulkStatus: (ids, status) => request('/admin/questions/bulk-status', { method: 'POST', body: { ids, status } }),
+  mintStudentLoginLink: (studentId) => request(`/admin/students/${studentId}/magic-link`, { method: 'POST' }),
 
   listDailyTips: () => request('/admin/daily-tips'),
   createDailyTip: (textAr) => request('/admin/daily-tips', { method: 'POST', body: { textAr } }),

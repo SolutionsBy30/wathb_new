@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from './accounts.service';
 import { GoalSetupDto } from './dto/people.dto';
 import { ReportsService } from '../reports/reports.service';
+import { MagicLinkService } from '../auth/magic-link.service';
+import { AuditLogService } from '../admin-ops/audit-log.service';
 
 export type AdminStudentSort = 'name' | 'subscriptionEnd' | 'performance' | 'createdAt';
 
@@ -12,7 +15,35 @@ export class StudentsService {
     private prisma: PrismaService,
     private accounts: AccountsService,
     private reports: ReportsService,
+    private magicLinks: MagicLinkService,
+    private config: ConfigService,
+    private auditLog: AuditLogService,
   ) {}
+
+  /**
+   * Admin support tool: mint a login link for a student who can't receive
+   * OTP (broken WhatsApp, changed device, walk-in support case). Purpose
+   * 'renewal' lands them on Home with a normal scoped session — of the
+   * existing MagicLinkPurpose values it's the only one that isn't tied to a
+   * specific wathb/report target. Every mint is audit-logged with the
+   * acting admin, since this is effectively "log in as any student".
+   */
+  async mintLoginLink(studentId: string, adminUserId: string) {
+    const student = await this.prisma.student.findUnique({ where: { userId: studentId }, include: { user: true } });
+    if (!student) throw new NotFoundException('student not found');
+    const link = await this.magicLinks.mint({ subjectId: studentId, subjectType: 'student', purpose: 'renewal' });
+    const appUrl = this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
+    const admin = await this.prisma.user.findUnique({ where: { id: adminUserId }, select: { name: true, email: true } });
+    await this.auditLog.record({
+      actorId: adminUserId,
+      actorLabel: admin?.email ?? admin?.name ?? adminUserId,
+      action: 'student.login_link_minted',
+      entityType: 'Student',
+      entityId: studentId,
+      note: `admin-minted login link for ${student.user.name}`,
+    });
+    return { url: `${appUrl}/#magic=${link.token}`, expiresAt: link.expiresAt };
+  }
 
   createStudent(mobile: string, name: string) {
     return this.accounts.createStudent(mobile, name);

@@ -10,6 +10,12 @@ export class TaxonomyService {
     return this.prisma.test.findMany({ where: { isActive: true }, orderBy: { nameEn: 'asc' } });
   }
 
+  // Admin management needs deactivated tests too — the public picker above
+  // hides them, which would otherwise make deactivation a one-way door.
+  listAllTests() {
+    return this.prisma.test.findMany({ orderBy: { nameEn: 'asc' } });
+  }
+
   async tree(testId: string) {
     const test = await this.prisma.test.findUnique({
       where: { id: testId },

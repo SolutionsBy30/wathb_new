@@ -6,9 +6,10 @@ import { AuthModule } from '../auth/auth.module';
 import { AccountsModule } from './accounts.module';
 import { ReportsModule } from '../reports/reports.module';
 import { NotificationChannelModule } from '../notifications/notification-channel.module';
+import { AuditLogModule } from '../admin-ops/audit-log.module';
 
 @Module({
-  imports: [AuthModule, AccountsModule, ReportsModule, NotificationChannelModule],
+  imports: [AuthModule, AccountsModule, ReportsModule, NotificationChannelModule, AuditLogModule],
   providers: [StudentsService, SupervisorsService],
   controllers: [PeopleController],
 })

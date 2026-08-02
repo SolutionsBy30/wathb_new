@@ -67,4 +67,43 @@ export class PaymobProvider implements PaymentProvider {
     const checkoutUrl = `${this.baseUrl}/unifiedcheckout/?publicKey=${this.publicKey}&clientSecret=${json.client_secret}`;
     return { checkoutUrl, providerRef: json.id?.toString() ?? params.merchantOrderId };
   }
+
+  /**
+   * Retrieve the intention we created and look for hard evidence of a
+   * successful payment. Deliberately tolerant about the response shape
+   * (Paymob's intention payload nests transactions differently across
+   * markets/versions): any object anywhere in the tree with success===true
+   * and pending===false counts, as does a top-level PAID payment status.
+   * Anything else — including transport errors — is 'unknown', which the
+   * caller treats as "leave it pending".
+   */
+  async fetchPaymentStatus(providerRef: string): Promise<'paid' | 'unknown'> {
+    try {
+      const res = await fetch(`${this.baseUrl}/v1/intention/${providerRef}`, {
+        headers: { Authorization: `Token ${this.secretKey}` },
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        this.logger.warn(`intention lookup failed: ${res.status} ${JSON.stringify(json).slice(0, 300)}`);
+        return 'unknown';
+      }
+      const paidStatus = String(json?.payment_status ?? json?.status ?? '').toUpperCase();
+      if (paidStatus === 'PAID' || paidStatus === 'SUCCESS') return 'paid';
+      const hasSuccessfulTxn = (node: unknown): boolean => {
+        if (Array.isArray(node)) return node.some(hasSuccessfulTxn);
+        if (node && typeof node === 'object') {
+          const o = node as Record<string, unknown>;
+          if (o['success'] === true && o['pending'] !== true) return true;
+          return Object.values(o).some((v) => (Array.isArray(v) || (v && typeof v === 'object')) && hasSuccessfulTxn(v));
+        }
+        return false;
+      };
+      if (hasSuccessfulTxn(json)) return 'paid';
+      this.logger.log(`intention ${providerRef} shows no successful transaction yet (payment_status=${paidStatus || 'n/a'})`);
+      return 'unknown';
+    } catch (e: any) {
+      this.logger.warn(`intention lookup error: ${e?.message ?? e}`);
+      return 'unknown';
+    }
+  }
 }

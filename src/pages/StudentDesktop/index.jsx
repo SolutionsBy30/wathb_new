@@ -174,6 +174,14 @@ export default function StudentDesktop() {
     }
   };
 
+  const logout = () => {
+    setToken(null);
+    setStudent(null);
+    setReport(null);
+    setSubscription(null);
+    setScreen('landing');
+  };
+
   const goLanding = () => setScreen('landing');
   const goLogin = () => { setLoginMode('login'); setScreen('login'); };
   const goSignup = () => { setLoginMode('signup'); setScreen('login'); };
@@ -611,6 +619,7 @@ export default function StudentDesktop() {
               subscription={subscription}
               onManageSubscription={() => goPricing()}
               onSubscriptionChanged={loadSubscription}
+              onLogout={logout}
               supervisors={supervisors}
               onInvite={inviteSupervisor}
               onRevoke={revokeSupervisor}

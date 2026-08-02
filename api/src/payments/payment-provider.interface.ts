@@ -21,4 +21,11 @@ export const PAYMENT_PROVIDER = Symbol('PAYMENT_PROVIDER');
 
 export interface PaymentProvider {
   createCheckout(params: CreateCheckoutParams): Promise<CheckoutResult>;
+  /**
+   * Ask the gateway what actually happened to a checkout, by the providerRef
+   * returned from createCheckout. Backstop for a webhook/redirect that never
+   * arrived: 'paid' flips the subscription active, 'unknown' changes nothing
+   * (fail-open toward pending — never activate without positive evidence).
+   */
+  fetchPaymentStatus(providerRef: string): Promise<'paid' | 'unknown'>;
 }

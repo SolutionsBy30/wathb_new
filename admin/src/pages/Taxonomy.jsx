@@ -206,8 +206,22 @@ export default function Taxonomy({ tests, onTestsChanged }) {
           >
             {t.nameAr}
             <span style={{ fontFamily: 'var(--font-latin)', fontSize: '10px', opacity: 0.7 }}>{LANGUAGE_LABEL[t.language] ?? t.language}</span>
+            {t.isActive === false && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--coral)' }}>معطّل</span>}
           </button>
         ))}
+        {testId && (() => {
+          const current = tests.find((t) => t.id === testId);
+          if (!current) return null;
+          return (
+            <button
+              onClick={async () => { await api.updateTest(testId, { isActive: !current.isActive }); await onTestsChanged(); }}
+              style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: current.isActive ? 'var(--coral)' : 'var(--teal-ink)' }}
+              title="اختبار معطّل لا يظهر للطلاب في اختيار الهدف؛ الطلاب المرتبطون به حالياً لا يتأثرون."
+            >
+              {current.isActive ? 'تعطيل الاختبار' : 'تفعيل الاختبار'}
+            </button>
+          );
+        })()}
         {!newTestOpen && (
           <button onClick={() => setNewTestOpen(true)} style={{ border: 'none', background: 'transparent', color: 'var(--lime)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
             + اختبار جديد

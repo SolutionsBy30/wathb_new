@@ -7,6 +7,9 @@ export class UpsertPackageDto {
   @IsInt() @Min(1) durationMonths!: number;
   @IsInt() @Min(0) priceHalalas!: number;
   @IsOptional() @IsInt() @Min(1) questionsPerDay?: number;
+  // Wathbs per day; null = unlimited. @IsOptional also passes null through,
+  // which is exactly the "clear the limit" signal Prisma expects.
+  @IsOptional() @IsInt() @Min(1) dailyWathbLimit?: number | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
   @IsOptional() @IsIn(['public', 'link_only']) visibility?: 'public' | 'link_only';
   // FRE-007 — the free tier's limits, tunable per package without a code change.

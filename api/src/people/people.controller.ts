@@ -67,6 +67,12 @@ export class PeopleController {
   }
 
   @RequireSession('admin')
+  @Post('admin/students/:id/magic-link')
+  mintStudentLoginLink(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
+    return this.students.mintLoginLink(id, session.sub);
+  }
+
+  @RequireSession('admin')
   @Get('admin/supervisors')
   adminListSupervisors() {
     return this.supervisors.adminList();

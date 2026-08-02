@@ -25,6 +25,21 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
     return next;
   });
 
+  const bulkSetStatus = async (newStatus) => {
+    if (selected.size === 0 || !newStatus) return;
+    await api.bulkStatus([...selected], newStatus);
+    setSelected(new Set());
+    load();
+  };
+
+  const allVisibleSelected = data.items.length > 0 && data.items.every((q) => selected.has(q.id));
+  const toggleAll = () => {
+    setSelected((prev) => {
+      if (allVisibleSelected) return new Set();
+      return new Set([...prev, ...data.items.map((q) => q.id)]);
+    });
+  };
+
   const bulkRetire = async () => {
     if (selected.size === 0) return;
     await api.bulkRetire([...selected]);
@@ -56,9 +71,15 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
         />
         <button onClick={load} style={{ border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>بحث</button>
         {selected.size > 0 && (
-          <button onClick={bulkRetire} style={{ border: 'none', background: 'var(--coral)', color: 'var(--indigo)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
-            تقاعد ({selected.size})
-          </button>
+          <>
+            <select defaultValue="" onChange={(e) => { bulkSetStatus(e.target.value); e.target.value = ''; }} style={selectStyle}>
+              <option value="" disabled>تغيير الحالة ({selected.size})…</option>
+              {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <button onClick={bulkRetire} style={{ border: 'none', background: 'var(--coral)', color: 'var(--indigo)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
+              تقاعد ({selected.size})
+            </button>
+          </>
         )}
         <span style={{ marginInlineStart: 'auto', fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--mist)' }}>{data.total} سؤال</span>
       </div>
@@ -67,7 +88,7 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ textAlign: 'start', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
-              <th style={th}></th>
+              <th style={th}><input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} title="تحديد الكل" /></th>
               <th style={th}>السؤال</th>
               <th style={th}>التصنيف</th>
               <th style={th}>الصعوبة</th>

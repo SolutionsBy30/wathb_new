@@ -140,6 +140,10 @@ export class QuestionsService {
     return this.prisma.question.update({ where: { id }, data: { status } });
   }
 
+  bulkSetStatus(ids: string[], status: 'draft' | 'in_review' | 'published' | 'retired') {
+    return this.prisma.question.updateMany({ where: { id: { in: ids } }, data: { status } });
+  }
+
   async bulkRetire(ids: string[]) {
     return this.prisma.question.updateMany({ where: { id: { in: ids } }, data: { status: 'retired' } });
   }

@@ -656,6 +656,9 @@ model Package {
   durationMonths  Int
   priceHalalas    Int // VAT-inclusive, 15% KSA — spec §4.5
   questionsPerDay Int               @default(5)
+  // How many Wathbs a subscriber may take per day. null = unlimited (the
+  // paid default); the free tier is backfilled to 1 by the migration.
+  dailyWathbLimit Int?
   isActive        Boolean           @default(true)
   visibility      PackageVisibility @default(public)
   dailyNotificationEnabled  Boolean           @default(true) // FRE-002

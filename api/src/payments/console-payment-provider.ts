@@ -27,4 +27,10 @@ export class ConsolePaymentProvider implements PaymentProvider {
     );
     return { checkoutUrl, providerRef };
   }
+
+  // No gateway to ask — the dev-complete redirect is the only confirmation
+  // path in dev, so reconciliation has nothing to add here.
+  async fetchPaymentStatus(): Promise<'paid' | 'unknown'> {
+    return 'unknown';
+  }
 }

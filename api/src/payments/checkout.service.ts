@@ -146,11 +146,24 @@ export class CheckoutService {
   }
 
   async myLatestSubscription(studentId: string) {
-    return this.prisma.subscription.findFirst({
+    const latest = await this.prisma.subscription.findFirst({
       where: { studentId },
       orderBy: { createdAt: 'desc' },
       include: { package: true },
     });
+    // Self-healing for the "paid at the gateway but still pending here"
+    // case: when neither the webhook nor the redirect-return delivered the
+    // confirmation (both observed failing in production), ask the gateway
+    // directly the next time the student's app loads their subscription.
+    // Only positive evidence ('paid') activates; 'unknown' leaves pending.
+    if (latest?.status === 'pending' && latest.paymentRef && !latest.paymentRef.startsWith('console-') && !latest.paymentRef.startsWith('wire_transfer:')) {
+      const status = await this.provider.fetchPaymentStatus(latest.paymentRef);
+      if (status === 'paid') {
+        await this.confirmPayment(latest.id);
+        return this.prisma.subscription.findUniqueOrThrow({ where: { id: latest.id }, include: { package: true } });
+      }
+    }
+    return latest;
   }
 
   /**
