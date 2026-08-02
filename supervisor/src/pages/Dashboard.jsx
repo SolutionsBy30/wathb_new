@@ -6,8 +6,11 @@ function daysUntil(dateStr) {
   return days >= 0 ? days : null;
 }
 
+const SUB_STATUS_LABEL = { active: 'نشط', pending: 'بانتظار الدفع', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
+
 function StudentCard({ s, onOpen, onPay }) {
   const countdown = daysUntil(s.testDate);
+  const sub = s.subscription;
   return (
     <div
       style={{
@@ -18,6 +21,24 @@ function StudentCard({ s, onOpen, onPay }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '16px', fontWeight: 500, color: 'var(--sand)' }}>{s.name}</span>
         <span style={{ fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--lime)' }}>🔥 {s.streak}</span>
+      </div>
+
+      {/* Current plan — so an upgrade (the student's own, or one this
+          supervisor paid for) shows here immediately. */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>الباقة</span>
+        {sub ? (
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>
+              {sub.packageNameAr}{sub.isFree ? '' : ''}
+            </span>
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: sub.status === 'active' ? 'var(--teal-ink)' : 'var(--coral)' }}>
+              {SUB_STATUS_LABEL[sub.status] ?? sub.status}
+            </span>
+          </span>
+        ) : (
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>بدون اشتراك</span>
+        )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>

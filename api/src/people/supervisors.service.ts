@@ -190,6 +190,14 @@ export class SupervisorsService {
         const totalAnswered = stats.reduce((sum, s) => sum + s.nAnswered, 0);
         const totalCorrect = stats.reduce((sum, s) => sum + s.nCorrect, 0);
         const { compositeIndex, delta: compositeIndexDelta } = await this.reports.getCompositeSummary(link.studentId);
+        // The card shows the student's current plan so an upgrade (their
+        // own, or one this supervisor just paid for) is visible here
+        // without asking the student.
+        const latestSub = await this.prisma.subscription.findFirst({
+          where: { studentId: link.studentId },
+          orderBy: { createdAt: 'desc' },
+          include: { package: true },
+        });
         return {
           studentId: link.studentId,
           name: link.student.user.name,
@@ -204,6 +212,9 @@ export class SupervisorsService {
           compositeIndexDelta,
           topStrength: strongest ? { nameAr: strongest.label.nameAr, nameEn: strongest.label.nameEn, accuracy: strongest.nCorrect / strongest.nAnswered } : null,
           topWeakness: weakest ? { nameAr: weakest.label.nameAr, nameEn: weakest.label.nameEn, accuracy: weakest.nCorrect / weakest.nAnswered } : null,
+          subscription: latestSub
+            ? { packageNameAr: latestSub.package.nameAr, status: latestSub.status, endsAt: latestSub.endsAt, isFree: latestSub.package.priceHalalas === 0 }
+            : null,
         };
       }),
     );

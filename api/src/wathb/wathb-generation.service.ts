@@ -33,7 +33,7 @@ export class WathbGenerationService {
   }
 
   /** Picks one unseen (or spaced-review-eligible) published question near targetDifficulty for a label, expanding the window if needed. */
-  private async pickQuestion(labelId: string, targetDifficulty: number, studentId: string, excludeQuestionIds: Set<string>) {
+  private async pickQuestion(labelId: string, targetDifficulty: number, studentId: string, excludeQuestionIds: Set<string>, repeatPractice = false) {
     const answered = await this.prisma.answer.findMany({
       where: { studentId },
       select: { questionId: true, isCorrect: true, answeredAt: true },
@@ -47,14 +47,28 @@ export class WathbGenerationService {
     }
     const nowMs = Date.now();
     const seen = new Set<string>();
-    for (const [questionId, a] of latestByQuestion) {
-      if (a.isCorrect) {
-        seen.add(questionId); // mastered — excluded for good
-        continue;
+    if (repeatPractice) {
+      // Same-day extra bundles (sequence > 0) are voluntary re-practice, not
+      // the daily plan. Applying the strict never-repeat rule there empties
+      // the pool within a couple of bundles on a modest bank — observed in
+      // production as 2-3-question bundles and then "no more leaps". So the
+      // only exclusion here is anything answered TODAY: no repeats within
+      // the day, but older material is fair game to practise again.
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      for (const [questionId, a] of latestByQuestion) {
+        if (a.answeredAt >= todayStart) seen.add(questionId);
       }
-      const daysSince = (nowMs - a.answeredAt.getTime()) / 86400_000;
-      if (daysSince < REVIEW_COOLDOWN_DAYS) seen.add(questionId); // still cooling down
-      // else: cooldown elapsed — eligible again as a spaced-review item
+    } else {
+      for (const [questionId, a] of latestByQuestion) {
+        if (a.isCorrect) {
+          seen.add(questionId); // mastered — excluded for good
+          continue;
+        }
+        const daysSince = (nowMs - a.answeredAt.getTime()) / 86400_000;
+        if (daysSince < REVIEW_COOLDOWN_DAYS) seen.add(questionId); // still cooling down
+        // else: cooldown elapsed — eligible again as a spaced-review item
+      }
     }
 
     for (const window of [0, 1, 2, 3, 4]) {
@@ -85,7 +99,7 @@ export class WathbGenerationService {
     for (let i = 0; i < PLACEMENT_SIZE && labels.length > 0; i++) {
       picks.push(labels[i % labels.length].id);
     }
-    return this.buildWathb(studentId, picks.map((labelId) => ({ labelId, targetDifficulty: 3 })), 'placement', forDate);
+    return this.buildWathb(studentId, picks.map((labelId) => ({ labelId, targetDifficulty: 3 })), 'placement', forDate, 0, labels.map((l) => l.id));
   }
 
   async generateDaily(studentId: string, testId: string, track: 'scientific' | 'humanities' | null, bundleSize: number, forDate?: Date, sequence = 0) {
@@ -135,7 +149,7 @@ export class WathbGenerationService {
     const scopedLabels = chosenSectionId ? labelStates.filter((l) => l.sectionId === chosenSectionId) : labelStates;
 
     const picks = selectLabelsForBundle(scopedLabels, { bundleSize });
-    return this.buildWathb(studentId, picks, 'standard', forDate, sequence);
+    return this.buildWathb(studentId, picks, 'standard', forDate, sequence, scopedLabels.map((l) => l.labelId));
   }
 
   private async buildWathb(
@@ -146,11 +160,15 @@ export class WathbGenerationService {
     // >0 only for a paid student's follow-up bundles within the same day —
     // sequence 0 stays the planned bundle daily notifications link to.
     sequence = 0,
+    // Every label the bundle is allowed to draw from, used to backfill slots
+    // whose weighted-picked label came up empty (see below).
+    candidateLabelIds: string[] = [],
   ) {
     const used = new Set<string>();
+    const repeatPractice = sequence > 0;
     const resolved: { labelId: string; question: Awaited<ReturnType<WathbGenerationService['pickQuestion']>> }[] = [];
     for (const pick of picks) {
-      const q = await this.pickQuestion(pick.labelId, pick.targetDifficulty, studentId, used);
+      const q = await this.pickQuestion(pick.labelId, pick.targetDifficulty, studentId, used, repeatPractice);
       if (!q) {
         this.logger.warn(`bank exhaustion: label ${pick.labelId} has no unseen published question for student ${studentId}`);
         // SEL-006 — "fire an admin alert rather than error". No dedicated
@@ -171,6 +189,24 @@ export class WathbGenerationService {
       used.add(q.id);
       resolved.push({ labelId: pick.labelId, question: q });
     }
+
+    // SEL-006 — a label coming up empty used to silently shorten the bundle,
+    // so on a thin bank (a section with fewer questions than labels) students
+    // got 2-3 questions instead of the intended 5. Weighted selection has
+    // already had its say; rather than lose the slot, backfill it from any
+    // other label in the same scope that still has an eligible question.
+    // Only a genuinely exhausted scope now yields a short bundle.
+    if (resolved.length < picks.length && candidateLabelIds.length > 0) {
+      const targetDifficulty = picks[0]?.targetDifficulty ?? 3;
+      for (const labelId of candidateLabelIds) {
+        if (resolved.length >= picks.length) break;
+        const q = await this.pickQuestion(labelId, targetDifficulty, studentId, used, repeatPractice);
+        if (!q) continue;
+        used.add(q.id);
+        resolved.push({ labelId, question: q });
+      }
+    }
+
     if (resolved.length === 0) return null;
 
     const scheduledFor = forDate ? new Date(forDate) : new Date();

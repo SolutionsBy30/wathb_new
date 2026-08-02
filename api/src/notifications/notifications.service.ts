@@ -152,7 +152,12 @@ export class NotificationsService {
     const slot = resolveSlotForDay(wathb.scheduledFor, student.notifSlotStartHour, student.notifSlotEndHour);
     const decision = decideSendChannel(waSession?.lastInboundAt ?? null, slot);
 
-    const { token } = await this.magicLinks.mint({ subjectId: student.userId, subjectType: 'student', purpose: 'wathb', targetId: wathb.id });
+    // A daily practice link is one student's own link for one day, and
+    // reopening it (to continue, or to start another bundle) is ordinary
+    // use — single-use here stranded students on the link-expired screen.
+    // Sensitive purposes (renewal, reports) keep maxUses=1; the per-open
+    // access log still feeds the anti-sharing signal either way.
+    const { token } = await this.magicLinks.mint({ subjectId: student.userId, subjectType: 'student', purpose: 'wathb', targetId: wathb.id, maxUses: 5 });
     const appUrl = this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
     const url = `${appUrl}/#magic=${token}`;
 

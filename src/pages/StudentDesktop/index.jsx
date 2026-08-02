@@ -87,8 +87,11 @@ export default function StudentDesktop() {
         magicPurpose = decodeSession(sessionToken)?.purpose ?? null;
         window.history.replaceState(null, '', window.location.pathname);
       } catch {
-        setToken(null);
-        magicLinkFailed = true;
+        // An already-used/expired link is only a dead end when there's no
+        // session to fall back on. Re-tapping yesterday's (or this
+        // morning's) link while still signed in should just carry on, not
+        // sign the student out and strand them on the link-expired screen.
+        if (!getToken()) magicLinkFailed = true;
         window.history.replaceState(null, '', window.location.pathname);
       }
     }
