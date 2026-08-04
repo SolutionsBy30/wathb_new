@@ -66,6 +66,44 @@ export class PeopleController {
     return this.students.adminDetail(id);
   }
 
+  // STU-002 — the student's own covered tests, toggles and per-test goals.
+  @RequireSession('student')
+  @Get('students/me/tests')
+  myTests(@CurrentSession() session: SessionPayload) {
+    return this.students.myTests(session.sub);
+  }
+
+  @RequireSession('student')
+  @Patch('students/me/tests/:testId')
+  updateMyTest(
+    @Param('testId') testId: string,
+    @Body() dto: { isActive?: boolean; targetScore?: number | null; testDate?: string | null; focus?: boolean },
+    @CurrentSession() session: SessionPayload,
+  ) {
+    return this.students.updateMyTest(session.sub, testId, dto);
+  }
+
+  // Leap history — same payload for all three audiences; the student reads
+  // their own, a supervisor reads a linked student's, admin reads anyone's.
+  @RequireSession('student')
+  @Get('students/me/leaps')
+  myLeaps(@CurrentSession() session: SessionPayload) {
+    return this.students.leapHistory(session.sub);
+  }
+
+  @RequireSession('admin')
+  @Get('admin/students/:id/leaps')
+  adminStudentLeaps(@Param('id') id: string) {
+    return this.students.leapHistory(id);
+  }
+
+  @RequireSession('supervisor')
+  @Get('supervisors/me/students/:id/leaps')
+  async supervisorStudentLeaps(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
+    await this.supervisors.assertLinkedTo(session.sub, id);
+    return this.students.leapHistory(id);
+  }
+
   @RequireSession('admin')
   @Post('admin/students/:id/magic-link')
   mintStudentLoginLink(@Param('id') id: string, @CurrentSession() session: SessionPayload) {

@@ -12,7 +12,8 @@ export interface ImportRow {
   difficulty: number;
   timeLimitS: number | null;
   stem: string;
-  options: { key: string; text: string }[];
+  stemImageUrl: string | null;
+  options: { key: string; text: string; imageUrl?: string }[];
   correctKey: string;
   explanation: string;
   source: string | null;
@@ -59,10 +60,15 @@ export class BulkImportService {
   // before upload, never read from a per-row column, so the template stays
   // narrow and mistyped/mismatched taxonomy names can't happen.
   private parseRow(raw: Record<string, string>, rowIndex: number, labelId: string): ImportRow {
-    const options: { key: string; text: string }[] = [];
+    // ADM-032 — artwork columns are optional. CSV can only carry a URL, so
+    // a bulk import points at images that are already hosted (either
+    // uploaded through the editor, or on the author's own server); the
+    // single-question editor is where files themselves get uploaded.
+    const options: { key: string; text: string; imageUrl?: string }[] = [];
     for (let i = 0; i < 5; i++) {
       const text = (raw[`option_${i + 1}`] ?? '').trim();
-      if (text) options.push({ key: OPTION_KEYS[i], text });
+      const imageUrl = (raw[`option_${i + 1}_image`] ?? '').trim();
+      if (text || imageUrl) options.push({ key: OPTION_KEYS[i], text, imageUrl: imageUrl || undefined });
     }
     const correctIdx = parseInt(raw['correct_option'] ?? '', 10);
     const correctKey = correctIdx >= 1 && correctIdx <= options.length ? OPTION_KEYS[correctIdx - 1] : '';
@@ -73,6 +79,7 @@ export class BulkImportService {
       difficulty: parseInt(raw['difficulty'] ?? '3', 10) || 3,
       timeLimitS: raw['time_limit_s'] ? parseInt(raw['time_limit_s'], 10) : null,
       stem: (raw['stem'] ?? '').trim(),
+      stemImageUrl: (raw['stem_image_url'] ?? '').trim() || null,
       options,
       correctKey,
       explanation: (raw['explanation'] ?? '').trim(),
@@ -186,6 +193,7 @@ export class BulkImportService {
           difficulty: row.difficulty,
           timeLimitS: row.timeLimitS ?? undefined,
           stem: row.stem,
+          stemImageUrl: row.stemImageUrl ?? undefined,
           options: row.options,
           correctKey: row.correctKey,
           explanation: row.explanation,

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService } from './accounts.service';
@@ -200,7 +200,152 @@ export class StudentsService {
     });
   }
 
+  /**
+   * STU-002/STU-024 — the tests the student's package covers, each with its
+   * own enable flag and goal. Rows are materialised lazily from the active
+   * package's testIds so a package upgrade immediately exposes its extra
+   * tests without a migration or a background job.
+   */
+  async myTests(studentId: string) {
+    const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId } });
+    const activeSub = await this.prisma.subscription.findFirst({
+      where: { studentId, status: 'active' },
+      include: { package: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    // Without a package the student still sees the test they're focused on,
+    // so the screen is never empty mid-renewal.
+    const coveredIds = activeSub?.package.testIds ?? (student.targetTestId ? [student.targetTestId] : []);
+    const existing = await this.prisma.studentTest.findMany({ where: { studentId } });
+    const known = new Set(existing.map((e) => e.testId));
+    const missing = coveredIds.filter((id) => !known.has(id));
+    if (missing.length > 0) {
+      await this.prisma.studentTest.createMany({
+        // Newly-exposed tests start disabled — an upgrade shouldn't silently
+        // change what the student is preparing for; they opt in.
+        data: missing.map((testId) => ({ studentId, testId, isActive: testId === student.targetTestId })),
+        skipDuplicates: true,
+      });
+    }
+    const rows = await this.prisma.studentTest.findMany({
+      where: { studentId, testId: { in: coveredIds } },
+      include: { test: true },
+    });
+    return {
+      focusedTestId: student.targetTestId,
+      tests: rows
+        .filter((r) => r.test.isActive)
+        .map((r) => ({
+          testId: r.testId,
+          nameAr: r.test.nameAr,
+          nameEn: r.test.nameEn,
+          isActive: r.isActive,
+          targetScore: r.targetScore,
+          testDate: r.testDate,
+          isFocused: r.testId === student.targetTestId,
+        })),
+    };
+  }
+
+  /**
+   * Enable/disable a covered test or update its goal. Disabling the focused
+   * test moves focus to another enabled one rather than leaving the student
+   * with a focus they've switched off (which would break today()).
+   */
+  async updateMyTest(studentId: string, testId: string, dto: { isActive?: boolean; targetScore?: number | null; testDate?: string | null; focus?: boolean }) {
+    // Switching off the last one would leave focus pointing at a disabled
+    // test, which today() would still happily serve — a state the profile
+    // screen can't represent. Refuse instead of producing the contradiction.
+    if (dto.isActive === false) {
+      const stillEnabled = await this.prisma.studentTest.count({
+        where: { studentId, isActive: true, NOT: { testId } },
+      });
+      if (stillEnabled === 0) {
+        throw new BadRequestException('at least one test must stay enabled');
+      }
+    }
+
+    const row = await this.prisma.studentTest.upsert({
+      where: { studentId_testId: { studentId, testId } },
+      create: {
+        studentId,
+        testId,
+        isActive: dto.isActive ?? true,
+        targetScore: dto.targetScore ?? undefined,
+        testDate: dto.testDate ? new Date(dto.testDate) : undefined,
+      },
+      update: {
+        isActive: dto.isActive,
+        targetScore: dto.targetScore === null ? null : dto.targetScore,
+        testDate: dto.testDate === null ? null : dto.testDate ? new Date(dto.testDate) : undefined,
+      },
+    });
+
+    const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId } });
+    let nextFocus = student.targetTestId;
+    if (dto.focus && row.isActive) nextFocus = testId;
+    if (row.isActive === false && student.targetTestId === testId) {
+      const fallback = await this.prisma.studentTest.findFirst({ where: { studentId, isActive: true, NOT: { testId } } });
+      nextFocus = fallback?.testId ?? student.targetTestId;
+    }
+    if (nextFocus !== student.targetTestId) {
+      await this.prisma.student.update({ where: { userId: studentId }, data: { targetTestId: nextFocus } });
+    }
+    return this.myTests(studentId);
+  }
+
+  /**
+   * Leap history — every bundle the student has taken, newest first, with
+   * its date, test, and score. Shared verbatim by the student's own screen,
+   * the supervisor's student view, and the admin student detail so all three
+   * report the same thing.
+   */
+  async leapHistory(studentId: string, limit = 100) {
+    const wathbs = await this.prisma.wathb.findMany({
+      where: { studentId },
+      orderBy: [{ scheduledFor: 'desc' }, { sequence: 'desc' }],
+      take: limit,
+      include: { test: true, questions: { select: { questionId: true } } },
+    });
+    const ids = wathbs.map((w) => w.id);
+    const answers = await this.prisma.answer.findMany({
+      where: { wathbId: { in: ids } },
+      select: { wathbId: true, isCorrect: true },
+    });
+    const byWathb = new Map<string, { total: number; correct: number }>();
+    for (const a of answers) {
+      const cur = byWathb.get(a.wathbId!) ?? { total: 0, correct: 0 };
+      cur.total++;
+      if (a.isCorrect) cur.correct++;
+      byWathb.set(a.wathbId!, cur);
+    }
+    return wathbs.map((w) => {
+      const tally = byWathb.get(w.id) ?? { total: 0, correct: 0 };
+      return {
+        wathbId: w.id,
+        scheduledFor: w.scheduledFor,
+        sequence: w.sequence,
+        bundleType: w.bundleType,
+        status: w.status,
+        completedAt: w.completedAt,
+        testNameAr: w.test?.nameAr ?? null,
+        testNameEn: w.test?.nameEn ?? null,
+        totalQuestions: w.questions.length,
+        answered: tally.total,
+        correct: tally.correct,
+        accuracy: tally.total > 0 ? tally.correct / tally.total : null,
+      };
+    });
+  }
+
   async setGoal(studentId: string, dto: GoalSetupDto) {
+    // Keep the per-test goal table in step with onboarding's single-test
+    // choice, so the profile screen has a row to show from day one.
+    await this.prisma.studentTest.upsert({
+      where: { studentId_testId: { studentId, testId: dto.targetTestId } },
+      create: { studentId, testId: dto.targetTestId, isActive: true, targetScore: dto.targetScore, testDate: dto.testDate ? new Date(dto.testDate) : undefined },
+      update: { isActive: true, targetScore: dto.targetScore, testDate: dto.testDate ? new Date(dto.testDate) : undefined },
+    });
     return this.prisma.student.update({
       where: { userId: studentId },
       data: {

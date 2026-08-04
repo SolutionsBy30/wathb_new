@@ -9,6 +9,19 @@ export function setToken(token) {
   else localStorage.removeItem(SESSION_KEY);
 }
 
+/**
+ * ADM-032 — uploaded artwork is stored as a root-relative `/api/uploads/...`
+ * path. Production serves it from the same origin as the admin app; dev has
+ * the app on :5173 and the API on :4000, so resolve against the API origin.
+ * An absolute URL (author-hosted image) passes through unchanged.
+ */
+export function mediaUrl(u) {
+  if (!u) return null;
+  if (/^https?:\/\//i.test(u)) return u;
+  const origin = API_BASE.replace(/\/api\/?$/, '');
+  return `${origin}${u.startsWith('/') ? '' : '/'}${u}`;
+}
+
 async function request(path, { method = 'GET', body, isForm = false } = {}) {
   const headers = {};
   if (!isForm) headers['Content-Type'] = 'application/json';
@@ -67,6 +80,14 @@ export const api = {
 
   listProblemReports: (status) => request(`/admin/questions/problem-reports${status ? `?status=${status}` : ''}`),
   resolveProblemReport: (id) => request(`/admin/questions/problem-reports/${id}/resolve`, { method: 'POST' }),
+
+  // ADM-032 — upload artwork for a stem or an option; returns { url } to
+  // store on the version being saved.
+  uploadQuestionImage: (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request('/admin/questions/images', { method: 'POST', body: form, isForm: true });
+  },
 
   importCsv: (file, labelId) => {
     const form = new FormData();
@@ -148,6 +169,7 @@ export const api = {
 
   bulkStatus: (ids, status) => request('/admin/questions/bulk-status', { method: 'POST', body: { ids, status } }),
   mintStudentLoginLink: (studentId) => request(`/admin/students/${studentId}/magic-link`, { method: 'POST' }),
+  studentLeaps: (studentId) => request(`/admin/students/${studentId}/leaps`),
 
   listDailyTips: () => request('/admin/daily-tips'),
   createDailyTip: (textAr) => request('/admin/daily-tips', { method: 'POST', body: { textAr } }),

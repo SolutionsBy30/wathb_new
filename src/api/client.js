@@ -9,6 +9,20 @@ export function setToken(token) {
   else localStorage.removeItem(SESSION_KEY);
 }
 
+/**
+ * ADM-032 — question artwork is stored as a root-relative `/api/uploads/...`
+ * path so it survives a domain change. In production the app and the API
+ * share an origin and that path resolves on its own; in dev the app is on
+ * :5173 and the API on :4000, so resolve against the API origin. An absolute
+ * URL (an author pointing at their own host) is passed through untouched.
+ */
+export function mediaUrl(u) {
+  if (!u) return null;
+  if (/^https?:\/\//i.test(u)) return u;
+  const origin = API_BASE.replace(/\/api\/?$/, '');
+  return `${origin}${u.startsWith('/') ? '' : '/'}${u}`;
+}
+
 export function decodeSession(token) {
   try {
     return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
@@ -60,7 +74,10 @@ export const api = {
   setGoal: (dto) => request('/students/me/goal', { method: 'PATCH', body: dto }),
   setNotificationPrefs: (dto) => request('/students/me/notification-prefs', { method: 'PATCH', body: dto }),
 
-  today: () => request('/wathb/today'),
+  today: (testId) => request(`/wathb/today${testId ? `?testId=${encodeURIComponent(testId)}` : ''}`),
+  myTests: () => request('/students/me/tests'),
+  updateMyTest: (testId, dto) => request(`/students/me/tests/${testId}`, { method: 'PATCH', body: dto }),
+  myLeaps: () => request('/students/me/leaps'),
   answer: (wathbId, position, selectedKey) =>
     request(`/wathb/${wathbId}/answer`, { method: 'POST', body: { position, selectedKey } }),
   complete: (wathbId) => request(`/wathb/${wathbId}/complete`, { method: 'POST' }),

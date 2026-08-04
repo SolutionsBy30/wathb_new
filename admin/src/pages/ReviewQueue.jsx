@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { api, mediaUrl } from '../api/client';
 import { Button } from '../design-system/components/Button';
 
 // ADM-027 — a review queue lists in_review questions for a second reviewer
@@ -82,16 +82,26 @@ export default function ReviewQueue({ onEdit }) {
                   </div>
                 </div>
 
+                {/* ADM-032 — a reviewer can't judge an image-based question
+                    without seeing the image. */}
+                {v?.stemImageUrl && (
+                  <img src={mediaUrl(v.stemImageUrl)} alt="" style={{ maxWidth: '320px', maxHeight: '220px', borderRadius: 'var(--radius-sm)', background: 'var(--sand)' }} />
+                )}
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {v?.options?.map((o) => (
                     <span
                       key={o.key}
                       style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
                         fontFamily: 'var(--font-arabic)', fontSize: '13px',
                         color: o.key === v.correctKey ? 'var(--lime)' : 'var(--sand)',
                       }}
                     >
                       {o.key === v.correctKey ? '✓ ' : '· '}{o.text}
+                      {o.imageUrl && (
+                        <img src={mediaUrl(o.imageUrl)} alt="" style={{ maxHeight: '56px', borderRadius: '4px', background: 'var(--sand)' }} />
+                      )}
                     </span>
                   ))}
                 </div>

@@ -62,7 +62,8 @@ need to change, only how the frontend stores what it returns.
   tree editor, soft-delete/retire semantics.
 - **Question bank** (`api/src/questions/`, `admin/src/pages/QuestionBank.jsx`
   + `QuestionEditor.jsx`): CRUD, versioning (edits never mutate history),
-  exact + `pg_trgm` fuzzy duplicate detection, live RTL preview.
+  exact + `pg_trgm` fuzzy duplicate detection, live RTL preview, optional
+  artwork on the stem and on individual options (ADM-032).
 - **Bulk import** (`api/src/questions/bulk-import.service.ts`,
   `admin/src/pages/BulkImport.jsx`): parse → validate → confirm, per-row
   errors, in-grid correction, **never a partial commit**.
@@ -331,6 +332,38 @@ Built directly against `docs/wathb-srs.md`'s gap analysis (`docs/srs-gap-analysi
   and per-row validation no longer carry a `label_id` column — the single
   most common source of import error (mistyped/mismatched taxonomy names)
   is gone by construction rather than caught by validation.
+- **ADM-032 — question artwork**: some items can't be expressed as text at
+  all (a chart to read off, a geometry figure, a shape sequence), so a
+  version can carry `stemImageUrl` and a per-option `imageUrl`. Both are
+  optional, and an option only has to have *one* of text or image. Files
+  upload through `POST /api/admin/questions/images` and are **content-
+  addressed** (sha256 of the bytes): re-uploading the same figure returns
+  the same URL, and a URL can never point at different artwork later —
+  which matters because question versions are immutable, and mutable
+  artwork would silently rewrite what a student was actually shown.
+  Uploads are validated by magic number, not the browser's claimed
+  mimetype, and **SVG is refused** — it is an active document (script,
+  external fetches) served from our own origin, not a picture. They are
+  served read-only under `/api/uploads/...` so the existing Nginx
+  `location /api` proxy already routes them with no webserver change.
+  CSV bulk import gained optional `stem_image_url` / `option_N_image`
+  columns; a CSV can only carry a URL, so files themselves are uploaded in
+  the single-question editor.
+- **STU-002/STU-024 — per-test enable/disable and goals**: a `StudentTest`
+  row per covered test carries its own `isActive`, `targetScore` and
+  `testDate`. Rows are materialised lazily from the active package's
+  `testIds`, so a package upgrade exposes its extra tests with no migration
+  and no background job — and newly-exposed tests start *disabled*, because
+  an upgrade shouldn't silently change what the student is preparing for.
+  `GET /api/wathb/today?testId=` scopes a new leap to a chosen test and
+  refuses one that isn't enabled. Disabling the last enabled test is
+  refused outright: it would leave focus pointing at a disabled test, a
+  state the profile screen can't represent but `today()` would still serve.
+- **Leap history** (`GET /api/students/me/leaps`,
+  `/api/admin/students/:id/leaps`, `/api/supervisors/me/students/:id/leaps`):
+  one service method behind three routes, so the student, the supervisor and
+  admin cannot drift into reporting different histories for the same student.
+  The supervisor route asserts the link first.
 - **ADM-085 — suspend + audit log**: a new `AuditLog` table (actor, action,
   entity, before/after, timestamp) and `User.suspendedAt`/`suspendReason`.
   `POST /api/admin/users/:id/suspend` (required reason, optional note)
@@ -504,6 +537,7 @@ POST /api/admin/tests | sections | areas | labels
 GET  /api/admin/questions
 POST /api/admin/questions
 POST /api/admin/questions/:id/versions
+POST /api/admin/questions/images       (multipart image → { url })
 POST /api/admin/questions/import       (multipart CSV)
 POST /api/admin/questions/import/:jobId/commit
 

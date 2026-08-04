@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
 
-const TEMPLATE_HEADER = 'type,difficulty,time_limit_s,stem,option_1,option_2,option_3,option_4,option_5,correct_option,explanation,source\n';
-const TEMPLATE_EXAMPLE = 'mcq_single,3,40,"نص السؤال هنا","خيار 1","خيار 2","خيار 3","خيار 4",,2,"شرح الإجابة الصحيحة هنا",استيراد يدوي\n';
+// ADM-032 — the *_image columns are optional and hold a URL, not a file: a
+// CSV can't carry bytes. Upload artwork in the single-question editor (or
+// host it yourself) and paste the resulting URL here.
+const TEMPLATE_HEADER = 'type,difficulty,time_limit_s,stem,stem_image_url,option_1,option_1_image,option_2,option_2_image,option_3,option_3_image,option_4,option_4_image,option_5,option_5_image,correct_option,explanation,source\n';
+const TEMPLATE_EXAMPLE = 'mcq_single,3,40,"نص السؤال هنا",,"خيار 1",,"خيار 2",,"خيار 3",,"خيار 4",,,,2,"شرح الإجابة الصحيحة هنا",استيراد يدوي\n';
 
 function downloadTemplate() {
   const blob = new Blob([TEMPLATE_HEADER + TEMPLATE_EXAMPLE], { type: 'text/csv;charset=utf-8;' });

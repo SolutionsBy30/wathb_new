@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, Query } from '@nestjs/common';
 import { WathbService } from './wathb.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
@@ -13,8 +13,8 @@ export class WathbController {
   constructor(private wathb: WathbService) {}
 
   @Get('today')
-  today(@CurrentSession() session: SessionPayload) {
-    return this.wathb.today(session.sub);
+  today(@CurrentSession() session: SessionPayload, @Query('testId') testId?: string) {
+    return this.wathb.today(session.sub, testId);
   }
 
   @Post(':id/answer')

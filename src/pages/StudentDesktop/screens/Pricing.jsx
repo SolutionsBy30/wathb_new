@@ -5,7 +5,7 @@ function halalasToSar(h) {
   return (h / 100).toFixed(0);
 }
 
-export default function Pricing({ packages, onSubscribe, blockedMessage, onBack }) {
+export default function Pricing({ packages, onSubscribe, blockedMessage, onBack, currentPackageId }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState(null);
 
@@ -53,10 +53,14 @@ export default function Pricing({ packages, onSubscribe, blockedMessage, onBack 
               <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>شامل ضريبة القيمة المضافة (15%)</span>
             )}
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{p.durationMonths} شهر · {p.questionsPerDay} أسئلة يومياً</span>
-            <Button variant="primary" disabled={busyId === p.id} onClick={() => subscribe(p.id)}>
+            <Button variant="primary" disabled={busyId === p.id || p.id === currentPackageId} onClick={() => subscribe(p.id)}>
               {busyId === p.id
                 ? (p.priceHalalas === 0 ? 'جاري التفعيل…' : 'جاري التحويل…')
-                : (p.priceHalalas === 0 ? 'ابدأ مجاناً' : 'اشترك الآن')}
+                : p.id === currentPackageId
+                  ? 'باقتك الحالية'
+                  : currentPackageId
+                    ? 'ترقية لهذه الباقة'
+                    : (p.priceHalalas === 0 ? 'ابدأ مجاناً' : 'اشترك الآن')}
             </Button>
           </div>
         ))}

@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Bar } from '../design-system/components/Bar';
+import { LeapHistoryTable } from '../components/LeapHistoryTable';
+import { api } from '../api/client';
 
 const lineStyle = { borderBottom: '0.5px solid var(--on-indigo-line)' };
 
@@ -18,7 +21,13 @@ function heatmapWeeks(heatmap, weeks = 8) {
   return cells;
 }
 
-export default function StudentReport({ report, onBack }) {
+export default function StudentReport({ report, studentId, onBack }) {
+  // Leap history, same table the student and admin see.
+  const [leaps, setLeaps] = useState(null);
+  useEffect(() => {
+    if (studentId) api.studentLeaps(studentId).then(setLeaps).catch(() => {});
+  }, [studentId]);
+
   if (!report) return <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>جاري التحميل…</p>;
 
   const trend = report.trend.filter((t) => t.accuracy !== null);
@@ -134,6 +143,10 @@ export default function StudentReport({ report, onBack }) {
             </div>
           );
         })}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '15px', fontWeight: 500, color: 'var(--sand)' }}>سجل الوثبات</h2>
+        {leaps ? <LeapHistoryTable rows={leaps} /> : <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>جاري التحميل…</p>}
       </div>
     </div>
   );

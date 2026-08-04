@@ -51,6 +51,7 @@ export const api = {
 
   dashboard: () => request('/supervisors/me/dashboard'),
   listPackages: () => request('/packages', { auth: false }),
+  studentLeaps: (studentId) => request(`/supervisors/me/students/${studentId}/leaps`),
   startCheckoutForStudent: (studentId, packageId) => request('/checkout/start-for-student', { method: 'POST', body: { studentId, packageId } }),
   acceptInvite: (id) => request(`/supervisors/me/invites/${id}/accept`, { method: 'POST' }),
   rejectInvite: (id) => request(`/supervisors/me/invites/${id}/reject`, { method: 'POST' }),

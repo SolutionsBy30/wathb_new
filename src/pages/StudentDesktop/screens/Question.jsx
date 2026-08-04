@@ -16,7 +16,9 @@ export default function Question({ vm, selectOption, confirmAnswer }) {
       <div dir={vm.contentDir} style={{ maxWidth: '640px' }}>
         <QuestionCard
           question={vm.currentStem}
+          questionImage={vm.currentStemImage}
           options={vm.currentOptions}
+          optionImages={vm.currentOptionImages}
           selected={vm.selectedIndex}
           onSelect={selectOption}
           showLetters={false}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
 import { AnswerState } from '../../../design-system/components/AnswerState';
-import { api } from '../../../api/client';
+import { api, mediaUrl } from '../../../api/client';
 
 const lineStyle = { borderBottom: '0.5px solid var(--on-indigo-line)' };
 
@@ -105,6 +105,9 @@ export default function Explanations({ result, onContinue }) {
             <div key={q.position} style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: '16px', ...lineStyle }}>
               <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>سؤال {q.position + 1}</span>
               <p dir={contentDir} style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--sand)', lineHeight: 1.8 }}>{q.stem}</p>
+              {q.stemImageUrl && (
+                <img src={mediaUrl(q.stemImageUrl)} alt="" style={{ maxWidth: '100%', borderRadius: 'var(--radius-md)', background: 'var(--sand)' }} />
+              )}
               <div dir={contentDir}>
                 <AnswerState
                   status={q.isCorrect ? 'correct' : 'wrong'}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { LeapHistoryTable } from '../components/LeapHistoryTable';
 
 const SUB_STATUS_LABEL = { pending: 'قيد الانتظار', active: 'فعّال', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
 const NOTIF_STATUS_LABEL = { scheduled: 'مجدول', sent: 'أُرسل', delivered: 'تم التسليم', read: 'قُرئ', failed: 'فشل' };
@@ -40,6 +41,7 @@ export default function StudentDetail({ studentId, onBack }) {
   const [data, setData] = useState(null);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
+  const [leaps, setLeaps] = useState(null);
   const [loginLink, setLoginLink] = useState(null);
   const [linkBusy, setLinkBusy] = useState(false);
 
@@ -57,6 +59,7 @@ export default function StudentDetail({ studentId, onBack }) {
   useEffect(() => {
     api.studentDetail(studentId).then(setData).catch((e) => setError(e.message));
     api.studentReport(studentId).then(setReport).catch(() => {}); // ADM-051 — non-fatal if not enough data yet
+    api.studentLeaps(studentId).then(setLeaps).catch(() => {});
   }, [studentId]);
 
   if (error) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>;
@@ -104,6 +107,10 @@ export default function StudentDetail({ studentId, onBack }) {
           <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>صالح 24 ساعة، يُستخدم مرة واحدة.</span>
         </div>
       )}
+
+      <Section title="سجل الوثبات">
+        {leaps ? <LeapHistoryTable rows={leaps} /> : <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>جاري التحميل…</p>}
+      </Section>
 
       {report && (
         <Section title="ملخص التقرير">

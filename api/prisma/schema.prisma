@@ -136,6 +136,7 @@ model Student {
   supervisorLinks     StudentSupervisor[]
   subscriptions       Subscription[]
   problemReports      ProblemReport[]
+  studentTests        StudentTest[]
 
   @@map("students")
 }
@@ -144,6 +145,24 @@ model Student {
 // schools come from an admin-managed registry or a student's self-declared
 // suggestion (status=pending_review, never inserted directly — §3.4's "valve
 // that keeps the registry clean").
+// STU-002/STU-024 — a package can cover several tests; the student turns
+// the ones they're actually preparing for on or off and carries a separate
+// goal (target score + exam date) for each. Student.targetTestId remains
+// the currently-focused test — the one a new leap defaults to — and must
+// always point at an enabled row here.
+model StudentTest {
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  testId      String
+  test        Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  isActive    Boolean   @default(true)
+  targetScore Int?
+  testDate    DateTime?
+
+  @@id([studentId, testId])
+  @@map("student_tests")
+}
+
 model Region {
   id       String   @id @default(uuid())
   nameAr   String
@@ -243,6 +262,8 @@ model Test {
   isActive Boolean         @default(true)
   sections Section[]
   students Student[]
+  studentTests StudentTest[]
+  wathbs   Wathb[]
 
   @@map("tests")
 }
@@ -384,6 +405,11 @@ model Wathb {
   studentId     String
   student       Student     @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   scheduledFor  DateTime    @db.Date
+  // Which test this bundle drew from. Nullable only for rows predating
+  // multi-test support; every new bundle records it so leap history can
+  // show the test without inferring it from the student's current focus.
+  testId        String?
+  test          Test?       @relation(fields: [testId], references: [id])
   // Paid students may take any number of Wathbs per day; sequence numbers
   // them within the day (0 = the planned/first bundle — the one the daily
   // WhatsApp notification links to). Free tier stays capped at sequence 0.
@@ -656,6 +682,8 @@ model Package {
   durationMonths  Int
   priceHalalas    Int // VAT-inclusive, 15% KSA — spec §4.5
   questionsPerDay Int               @default(5)
+  // Display order on the student pricing screen, admin-controlled.
+  sort            Int               @default(0)
   // How many Wathbs a subscriber may take per day. null = unlimited (the
   // paid default); the free tier is backfilled to 1 by the migration.
   dailyWathbLimit Int?

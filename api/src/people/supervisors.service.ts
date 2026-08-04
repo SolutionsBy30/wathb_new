@@ -123,6 +123,15 @@ export class SupervisorsService {
     return { studentSupervisorId: link.id, inviteToken: magicLink.token, expiresAt: magicLink.expiresAt, delivered };
   }
 
+  /** Shared trust boundary: a supervisor may only read a student they're accepted on. */
+  async assertLinkedTo(supervisorId: string, studentId: string) {
+    const link = await this.prisma.studentSupervisor.findUnique({
+      where: { studentId_supervisorId: { studentId, supervisorId } },
+    });
+    if (!link || !link.acceptedAt || link.revokedAt) throw new ForbiddenException('not linked to this student');
+    return link;
+  }
+
   async acceptInvite(supervisorId: string, studentSupervisorId: string) {
     const link = await this.prisma.studentSupervisor.findUnique({ where: { id: studentSupervisorId } });
     if (!link) throw new NotFoundException('invite not found');

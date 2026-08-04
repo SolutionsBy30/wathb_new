@@ -4,3 +4,8 @@ dist
 *.local
 .env
 !.env.example
+
+# ADM-032 — uploaded question artwork. User content, not source; on a server
+# it lives outside the checkout (see UPLOADS_DIR) so a redeploy can't wipe it.
+api/uploads/
+uploads/

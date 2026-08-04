@@ -47,13 +47,23 @@ export class WathbService {
     private generation: WathbGenerationService,
   ) {}
 
-  async today(studentId: string) {
+  async today(studentId: string, requestedTestId?: string) {
     const student = await this.prisma.student.findUnique({ where: { userId: studentId } });
     if (!student) throw new NotFoundException('student not found');
-    if (!student.targetTestId) throw new BadRequestException('goal setup not complete: no target test selected');
+    // STU-002 — a leap is taken against one chosen test. The client may name
+    // it explicitly (the picker on Home); otherwise the student's focused
+    // test stands in. Only tests they've actually enabled are eligible.
+    let testId = requestedTestId ?? student.targetTestId ?? undefined;
+    if (requestedTestId) {
+      const enabled = await this.prisma.studentTest.findUnique({
+        where: { studentId_testId: { studentId, testId: requestedTestId } },
+      });
+      if (!enabled?.isActive) throw new BadRequestException('this test is not enabled for you');
+    }
+    if (!testId) throw new BadRequestException('goal setup not complete: no target test selected');
 
     const subscriptions = await this.prisma.subscription.findMany({ where: { studentId, status: 'active' }, include: { package: true } });
-    if (!anyActiveCovers(subscriptions, student.targetTestId)) {
+    if (!anyActiveCovers(subscriptions, testId)) {
       // S14 in the spec — Expired/paused state, renewal CTA. The frontend
       // distinguishes this from other errors by status code.
       throw new ForbiddenException('no active subscription covers this test');
@@ -64,16 +74,18 @@ export class WathbService {
 
     // Latest of today's bundles — sequence 0 is the planned one; paid
     // students may have gone past it (see below).
+    // Scoped to the chosen test: switching tests mid-day starts that test's
+    // own bundle rather than resuming the other one's.
     let wathb = await this.prisma.wathb.findFirst({
-      where: { studentId, scheduledFor: todayDate },
+      where: { studentId, scheduledFor: todayDate, testId },
       orderBy: { sequence: 'desc' },
       include: { questions: WATHB_QUESTIONS_INCLUDE },
     });
 
     if (!wathb) {
       wathb = !student.placementDoneAt
-        ? await this.generation.generatePlacement(studentId, student.targetTestId, student.track ?? null)
-        : await this.generation.generateDaily(studentId, student.targetTestId, student.track ?? null, DEFAULT_BUNDLE_SIZE);
+        ? await this.generation.generatePlacement(studentId, testId, student.track ?? null)
+        : await this.generation.generateDaily(studentId, testId, student.track ?? null, DEFAULT_BUNDLE_SIZE);
       if (!wathb) {
         throw new BadRequestException('no eligible questions available today — bank exhausted, contact support');
       }
@@ -84,13 +96,13 @@ export class WathbService {
       // several are active; the free tier ships backfilled to 1 (FRE-002).
       // At the limit, the completed bundle is returned so the client shows
       // "done today".
-      const covering = subscriptions.filter((s) => s.package.testIds.includes(student.targetTestId!));
+      const covering = subscriptions.filter((s) => s.package.testIds.includes(testId!));
       const unlimited = covering.some((s) => s.package.dailyWathbLimit === null);
       const limit = unlimited ? Infinity : Math.max(1, ...covering.map((s) => s.package.dailyWathbLimit ?? 1));
       const doneToday = wathb.sequence + 1; // sequences are contiguous from 0
       if (doneToday < limit) {
         const next = await this.generation.generateDaily(
-          studentId, student.targetTestId, student.track ?? null, DEFAULT_BUNDLE_SIZE, undefined, wathb.sequence + 1,
+          studentId, testId, student.track ?? null, DEFAULT_BUNDLE_SIZE, undefined, wathb.sequence + 1,
         );
         // Bank exhausted for a follow-up bundle isn't an error — the student
         // already practised today; fall through with the completed one.
@@ -115,7 +127,7 @@ export class WathbService {
 
     // ADM-012 — content direction follows the test's configured language,
     // not a fixed app-wide RTL assumption (spec §1.3.1/NFR-003).
-    const test = await this.prisma.test.findUniqueOrThrow({ where: { id: student.targetTestId }, select: { language: true } });
+    const test = await this.prisma.test.findUniqueOrThrow({ where: { id: testId }, select: { language: true } });
 
     return {
       wathbId: wathb.id,
@@ -303,6 +315,10 @@ export class WathbService {
         answerId: a.id,
         questionId: wq.questionId,
         stem: wq.questionVersion.stem,
+        // ADM-032 — the review screen has to show the same figure the
+        // student answered against, or an image-based item is unreadable
+        // exactly where the learning is supposed to happen.
+        stemImageUrl: wq.questionVersion.stemImageUrl,
         options: wq.questionVersion.options,
         correctKey: wq.questionVersion.correctKey,
         explanation: wq.questionVersion.explanation,

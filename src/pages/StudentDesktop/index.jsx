@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './layout.css';
-import { api, getToken, setToken, decodeSession } from '../../api/client';
+import { api, getToken, setToken, decodeSession, mediaUrl } from '../../api/client';
 import Landing from '../Landing';
 import Login from './screens/Login';
 import LinkExpired from './screens/LinkExpired';
@@ -14,6 +14,7 @@ import Complete from './screens/Complete';
 import Performance from './screens/Performance';
 import Profile from './screens/Profile';
 import Pricing from './screens/Pricing';
+import LeapHistory from './screens/LeapHistory';
 import WeeklyReport from './screens/WeeklyReport';
 
 export default function StudentDesktop() {
@@ -47,6 +48,7 @@ export default function StudentDesktop() {
   const [packages, setPackages] = useState([]);
   const [pricingMessage, setPricingMessage] = useState(null);
   const [adminTip, setAdminTip] = useState(null);
+  const [myTests, setMyTests] = useState(null);
 
   const timerRef = useRef(null);
   const submittingRef = useRef(false);
@@ -110,6 +112,7 @@ export default function StudentDesktop() {
       // Admin-authored tip of the day — non-fatal; homeVm falls back to the
       // generated weakest-area tip when none is set.
       api.dailyTip().then((r) => setAdminTip(r.tip)).catch(() => {});
+      api.myTests().then(setMyTests).catch(() => {});
       let paymentFailed = false;
       if (window.location.hash === '#subscription=success') {
         // Landed back from a checkout redirect (real Paymob or the dev
@@ -309,11 +312,11 @@ export default function StudentDesktop() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopTimer, startTimerFor]);
 
-  const startWathb = async () => {
+  const startWathb = async (testId) => {
     setWathbError(null);
     setAlreadyDoneToday(false);
     try {
-      const result = await api.today();
+      const result = await api.today(testId);
       if (result.status === 'completed') {
         setAlreadyDoneToday(true);
         return;
@@ -446,7 +449,9 @@ export default function StudentDesktop() {
         background: i < qIndex ? 'var(--lime)' : i === qIndex ? 'var(--sand)' : 'var(--on-indigo-subtle)',
       })),
       currentStem: q.stem,
+      currentStemImage: mediaUrl(q.stemImageUrl),
       currentOptions: q.options.map((o) => o.text),
+      currentOptionImages: q.options.map((o) => mediaUrl(o.imageUrl)),
       selectedIndex,
       confirmDisabled: selectedIndex === null,
       // ADM-012 — content direction follows the test's configured language;
@@ -601,7 +606,17 @@ export default function StudentDesktop() {
           {wathbError && (
             <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{wathbError}</p>
           )}
-          {screen === 'home' && <Home vm={homeVm} student={student} goTestPicker={startWathb} />}
+          {screen === 'home' && (
+            <Home
+              vm={homeVm}
+              student={student}
+              goTestPicker={startWathb}
+              tests={(myTests?.tests ?? []).filter((t) => t.isActive)}
+              focusedTestId={myTests?.focusedTestId}
+              onOpenHistory={() => setScreen('leapHistory')}
+            />
+          )}
+          {screen === 'leapHistory' && <LeapHistory onBack={goHome} />}
           {screen === 'question' && questionVm && (
             <Question vm={questionVm} selectOption={setSelectedIndex} confirmAnswer={confirmAnswer} />
           )}
@@ -614,7 +629,7 @@ export default function StudentDesktop() {
           {screen === 'performance' && <Performance report={report} onUpgrade={() => goPricing()} />}
           {screen === 'weeklyReport' && <WeeklyReport report={report} onOpenPerformance={goPerformance} />}
           {screen === 'pricing' && (
-            <Pricing packages={packages} onSubscribe={subscribeToPackage} blockedMessage={pricingMessage} onBack={goHome} />
+            <Pricing packages={packages} onSubscribe={subscribeToPackage} blockedMessage={pricingMessage} onBack={goHome} currentPackageId={subscription?.status === 'active' ? subscription.packageId : null} />
           )}
           {screen === 'profile' && (
             <Profile
@@ -623,6 +638,8 @@ export default function StudentDesktop() {
               onManageSubscription={() => goPricing()}
               onSubscriptionChanged={loadSubscription}
               onLogout={logout}
+              onTestsChanged={() => api.myTests().then(setMyTests).catch(() => {})}
+              onOpenHistory={() => setScreen('leapHistory')}
               supervisors={supervisors}
               onInvite={inviteSupervisor}
               onRevoke={revokeSupervisor}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
 import { api, decodeSession, getToken, setToken } from '../../../api/client';
+import MyTests from './MyTests';
 
 function formatDate(d) {
   return d ? new Date(d).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
@@ -29,7 +30,7 @@ const DAYS = [
   { id: 6, label: 'السبت' },
 ];
 
-export default function Profile({ student, subscription, onManageSubscription, onSubscriptionChanged, onLogout, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
+export default function Profile({ student, subscription, onManageSubscription, onSubscriptionChanged, onLogout, onTestsChanged, onOpenHistory, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
   // FRE-006 — shown locked with an upgrade prompt, not hidden, when the
   // active package doesn't allow supervisor linking. Server-enforced too
   // (SupervisorsService.invite throws 403) — this is just the honest UI.
@@ -239,6 +240,16 @@ export default function Profile({ student, subscription, onManageSubscription, o
           </div>
         </div>
       )}
+
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>اختباراتي وأهدافي</h2>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', maxWidth: '520px' }}>
+        <MyTests onChanged={onTestsChanged} />
+      </div>
+
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>سجل الوثبات</h2>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', maxWidth: '360px' }}>
+        <Button variant="secondary" onClick={onOpenHistory}>عرض سجل الوثبات</Button>
+      </div>
 
       <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المشرف وولي الأمر</h2>
       <div className="sd-card-grid" style={{ gap: '20px' }}>

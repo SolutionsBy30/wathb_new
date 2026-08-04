@@ -104,6 +104,9 @@ function StudentCard({ s, onOpen, onPay }) {
         >
           عرض التقرير
         </button>
+        {/* A student already on an active package doesn't need paying for —
+            the supervisor sees the plan above instead. */}
+        {sub?.status !== 'active' && (
         <button
           onClick={() => onPay(s.studentId, s.name)}
           style={{
@@ -114,6 +117,7 @@ function StudentCard({ s, onOpen, onPay }) {
         >
           الدفع نيابة عنه
         </button>
+        )}
       </div>
     </div>
   );
@@ -177,12 +181,16 @@ export default function Dashboard({ data, onOpenStudent, onPayForStudent }) {
                   ) : <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>قيد الجمع</span>}
                 </td>
                 <td style={td} onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => onPayForStudent(s.studentId, s.name)}
-                    style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: '999px', background: 'var(--lime)', color: 'var(--lime-ink)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
-                  >
-                    الدفع نيابة عنه
-                  </button>
+                  {s.subscription?.status === 'active' ? (
+                    <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--teal-ink)' }}>{s.subscription.packageNameAr}</span>
+                  ) : (
+                    <button
+                      onClick={() => onPayForStudent(s.studentId, s.name)}
+                      style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: '999px', background: 'var(--lime)', color: 'var(--lime-ink)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+                    >
+                      الدفع نيابة عنه
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

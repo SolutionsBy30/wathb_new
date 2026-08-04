@@ -1,10 +1,16 @@
+import { useEffect, useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
 import { Bar } from '../../../design-system/components/Bar';
 import { StreakStrip } from '../../../design-system/components/StreakStrip';
 import { RuleSpark } from '../../../design-system/components/RuleSpark';
 import markOnIndigo from '../../../design-system/assets/mark-on-indigo.svg';
 
-export default function Home({ vm, student, goTestPicker }) {
+export default function Home({ vm, student, goTestPicker, tests = [], focusedTestId, onOpenHistory }) {
+  // STU-002 — with more than one enabled test the student chooses which one
+  // this leap is for; with a single test there's nothing to pick, so the
+  // selector stays out of the way.
+  const [chosenTest, setChosenTest] = useState(focusedTestId ?? tests[0]?.testId);
+  useEffect(() => { setChosenTest(focusedTestId ?? tests[0]?.testId); }, [focusedTestId, tests.length]);
   return (
     <div className="sd-split">
       <div className="sd-rail">
@@ -86,7 +92,30 @@ export default function Home({ vm, student, goTestPicker }) {
           </div>
         )}
 
-        <Button variant="primary" fullWidth disabled={vm.alreadyDoneToday} onClick={goTestPicker}>{vm.startButtonLabel}</Button>
+        {tests.length > 1 && (
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            {tests.map((t) => (
+              <button
+                key={t.testId}
+                onClick={() => setChosenTest(t.testId)}
+                style={{
+                  border: 'none', cursor: 'pointer', padding: '7px 14px', borderRadius: '999px',
+                  fontFamily: 'var(--font-arabic)', fontSize: '12px',
+                  background: chosenTest === t.testId ? 'var(--lime)' : 'var(--on-indigo-subtle)',
+                  color: chosenTest === t.testId ? 'var(--lime-ink)' : 'var(--sand)',
+                }}
+              >
+                {t.nameAr}
+              </button>
+            ))}
+          </div>
+        )}
+        <Button variant="primary" fullWidth disabled={vm.alreadyDoneToday} onClick={() => goTestPicker(chosenTest)}>{vm.startButtonLabel}</Button>
+        {onOpenHistory && (
+          <button onClick={onOpenHistory} style={{ marginTop: '10px', border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}>
+            سجل الوثبات ←
+          </button>
+        )}
       </div>
     </div>
   );

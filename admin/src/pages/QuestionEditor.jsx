@@ -1,10 +1,75 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { api, mediaUrl } from '../api/client';
 import { Button } from '../design-system/components/Button';
 import { QuestionCard } from '../design-system/components/QuestionCard';
 
 const fieldStyle = { padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px', width: '100%', boxSizing: 'border-box' };
 const labelStyle = { fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' };
+
+/**
+ * ADM-032 — attach artwork to a stem or an option. Some items can't be
+ * expressed as text at all (a chart to read off, a geometry figure, a shape
+ * sequence), so the picture *is* the question. Always optional.
+ */
+function ImageField({ value, onChange, label, compact = false }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const upload = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { url } = await api.uploadQuestionImage(file);
+      onChange(url);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      {label && <label style={labelStyle}>{label}</label>}
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <label
+          style={{
+            cursor: busy ? 'default' : 'pointer', padding: '6px 12px', borderRadius: '999px',
+            boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--mist)',
+            fontFamily: 'var(--font-arabic)', fontSize: '12px', whiteSpace: 'nowrap',
+          }}
+        >
+          {busy ? 'جاري الرفع…' : value ? 'استبدال الصورة' : '+ صورة'}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            disabled={busy}
+            onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }}
+            style={{ display: 'none' }}
+          />
+        </label>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            style={{ border: 'none', background: 'transparent', color: 'var(--coral)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+          >
+            إزالة
+          </button>
+        )}
+      </div>
+      {value && (
+        <img
+          src={mediaUrl(value)}
+          alt=""
+          style={{ maxWidth: compact ? '120px' : '100%', maxHeight: compact ? '80px' : '220px', borderRadius: 'var(--radius-sm)', background: 'var(--sand)' }}
+        />
+      )}
+      {error && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>{error}</span>}
+    </div>
+  );
+}
 
 async function flattenLabels(tests) {
   const trees = await Promise.all(tests.map((t) => api.tree(t.id)));
@@ -28,6 +93,7 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
   const [difficulty, setDifficulty] = useState(3);
   const [timeLimitS, setTimeLimitS] = useState('');
   const [stem, setStem] = useState('');
+  const [stemImageUrl, setStemImageUrl] = useState(null);
   const [options, setOptions] = useState([{ key: 'أ', text: '' }, { key: 'ب', text: '' }, { key: 'ج', text: '' }, { key: 'د', text: '' }]);
   const [correctKey, setCorrectKey] = useState('أ');
   const [explanation, setExplanation] = useState('');
@@ -47,6 +113,7 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
         setDifficulty(q.difficulty);
         setTimeLimitS(q.timeLimitS ?? '');
         setStem(v.stem);
+        setStemImageUrl(v.stemImageUrl ?? null);
         setOptions(v.options);
         setCorrectKey(v.correctKey);
         setExplanation(v.explanation);
@@ -83,13 +150,18 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
     setError(null);
     if (!labelId) return setError('اختر التصنيف.');
     if (!stem.trim()) return setError('نص السؤال مطلوب.');
-    if (options.some((o) => !o.text.trim())) return setError('جميع الخيارات مطلوبة.');
+    // An option may be a picture instead of text (shape/graph choices), so
+    // it only has to carry one of the two.
+    if (options.some((o) => !o.text.trim() && !o.imageUrl)) return setError('كل خيار يحتاج نصاً أو صورة.');
     if (!explanation.trim()) return setError('الشرح إلزامي — هذه هي لحظة التعلّم في المنتج.');
     setBusy(true);
     try {
       const dto = {
         labelId, difficulty: Number(difficulty), timeLimitS: timeLimitS ? Number(timeLimitS) : undefined,
-        stem: stem.trim(), options, correctKey, explanation: explanation.trim(), source: source.trim() || undefined,
+        stem: stem.trim(),
+        stemImageUrl: stemImageUrl || undefined,
+        options: options.map((o) => ({ key: o.key, text: o.text, imageUrl: o.imageUrl || undefined })),
+        correctKey, explanation: explanation.trim(), source: source.trim() || undefined,
       };
       if (isNew) await api.createQuestion(dto);
       else await api.newVersion(questionId, dto);
@@ -140,26 +212,40 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
             </div>
           )}
 
+          <ImageField
+            label="صورة السؤال (اختياري — رسم بياني أو شكل هندسي)"
+            value={stemImageUrl}
+            onChange={setStemImageUrl}
+          />
+
           <label style={labelStyle}>الخيارات (حدد الإجابة الصحيحة)</label>
           {options.map((o, i) => (
-            <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
               <input
                 type="radio"
                 checked={correctKey === o.key}
                 onChange={() => setCorrectKey(o.key)}
                 title="الإجابة الصحيحة"
+                style={{ marginTop: '12px' }}
               />
               <input
                 value={o.key}
                 onChange={(e) => setOptions((os) => os.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}
                 style={{ ...fieldStyle, width: '48px', flex: 'none', textAlign: 'center' }}
               />
-              <input
-                value={o.text}
-                onChange={(e) => setOptions((os) => os.map((x, j) => j === i ? { ...x, text: e.target.value } : x))}
-                style={fieldStyle}
-                placeholder={`خيار ${i + 1}`}
-              />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <input
+                  value={o.text}
+                  onChange={(e) => setOptions((os) => os.map((x, j) => j === i ? { ...x, text: e.target.value } : x))}
+                  style={fieldStyle}
+                  placeholder={`خيار ${i + 1}`}
+                />
+                <ImageField
+                  compact
+                  value={o.imageUrl ?? null}
+                  onChange={(url) => setOptions((os) => os.map((x, j) => j === i ? { ...x, imageUrl: url ?? undefined } : x))}
+                />
+              </div>
             </div>
           ))}
 
@@ -186,7 +272,14 @@ export default function QuestionEditor({ tests, questionId, onDone }) {
 
         <div dir="rtl" style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-lg)', padding: '24px', maxWidth: '420px', position: 'sticky', top: '20px' }}>
           <p style={{ ...labelStyle, marginBottom: '12px' }}>معاينة — بعين الطالب</p>
-          <QuestionCard question={stem || 'نص السؤال يظهر هنا…'} options={options.map((o) => o.text || '—')} selected={null} onSelect={() => {}} />
+          <QuestionCard
+            question={stem || 'نص السؤال يظهر هنا…'}
+            questionImage={mediaUrl(stemImageUrl)}
+            options={options.map((o) => o.text || (o.imageUrl ? '' : '—'))}
+            optionImages={options.map((o) => mediaUrl(o.imageUrl))}
+            selected={null}
+            onSelect={() => {}}
+          />
         </div>
       </div>
     </div>

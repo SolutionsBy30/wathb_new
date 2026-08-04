@@ -99,7 +99,7 @@ export class WathbGenerationService {
     for (let i = 0; i < PLACEMENT_SIZE && labels.length > 0; i++) {
       picks.push(labels[i % labels.length].id);
     }
-    return this.buildWathb(studentId, picks.map((labelId) => ({ labelId, targetDifficulty: 3 })), 'placement', forDate, 0, labels.map((l) => l.id));
+    return this.buildWathb(studentId, picks.map((labelId) => ({ labelId, targetDifficulty: 3 })), 'placement', forDate, 0, labels.map((l) => l.id), testId);
   }
 
   async generateDaily(studentId: string, testId: string, track: 'scientific' | 'humanities' | null, bundleSize: number, forDate?: Date, sequence = 0) {
@@ -149,7 +149,7 @@ export class WathbGenerationService {
     const scopedLabels = chosenSectionId ? labelStates.filter((l) => l.sectionId === chosenSectionId) : labelStates;
 
     const picks = selectLabelsForBundle(scopedLabels, { bundleSize });
-    return this.buildWathb(studentId, picks, 'standard', forDate, sequence, scopedLabels.map((l) => l.labelId));
+    return this.buildWathb(studentId, picks, 'standard', forDate, sequence, scopedLabels.map((l) => l.labelId), testId);
   }
 
   private async buildWathb(
@@ -163,6 +163,9 @@ export class WathbGenerationService {
     // Every label the bundle is allowed to draw from, used to backfill slots
     // whose weighted-picked label came up empty (see below).
     candidateLabelIds: string[] = [],
+    // Recorded on the bundle so leap history can report which test it was
+    // for without inferring it from the student's current focus.
+    testId?: string,
   ) {
     const used = new Set<string>();
     const repeatPractice = sequence > 0;
@@ -221,6 +224,7 @@ export class WathbGenerationService {
         studentId,
         scheduledFor,
         sequence,
+        testId,
         bundleType,
         status: 'pending',
         questions: {

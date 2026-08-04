@@ -189,7 +189,7 @@ export default function App() {
       </header>
       <main style={{ padding: '24px', maxWidth: '760px', margin: '0 auto' }}>
         {screen === 'dashboard' && <Dashboard data={dashboard} onOpenStudent={openStudent} onPayForStudent={openPayForStudent} />}
-        {screen === 'report' && <StudentReport report={report} onBack={() => setScreen('dashboard')} />}
+        {screen === 'report' && <StudentReport report={report} studentId={report?.student?.id} onBack={() => setScreen('dashboard')} />}
         {screen === 'pay' && payTarget && (
           <PayForStudent studentId={payTarget.studentId} studentName={payTarget.studentName} onBack={() => setScreen('dashboard')} />
         )}

@@ -32,6 +32,7 @@ function NewPackageForm({ tests, onCreated }) {
   const [priceSar, setPriceSar] = useState('');
   const [dailyNotificationEnabled, setDailyNotificationEnabled] = useState(true);
   const [dailyWathbLimit, setDailyWathbLimit] = useState('');
+  const [sort, setSort] = useState(0);
   const [reportVisibility, setReportVisibility] = useState('full');
   const [weeklyReportEnabled, setWeeklyReportEnabled] = useState(true);
   const [supervisorLinkingAllowed, setSupervisorLinkingAllowed] = useState(true);
@@ -50,6 +51,7 @@ function NewPackageForm({ tests, onCreated }) {
         durationMonths: Number(durationMonths), priceHalalas: Math.round(Number(priceSar) * 100),
         dailyNotificationEnabled, reportVisibility, weeklyReportEnabled, supervisorLinkingAllowed,
         dailyWathbLimit: dailyWathbLimit === '' ? null : Number(dailyWathbLimit),
+        sort: Number(sort) || 0,
       });
       setNameAr(''); setNameEn(''); setTestIds([]); setDurationMonths(1); setPriceSar('');
       setDailyNotificationEnabled(true); setReportVisibility('full'); setWeeklyReportEnabled(true); setSupervisorLinkingAllowed(true);
@@ -92,6 +94,13 @@ function NewPackageForm({ tests, onCreated }) {
         value={dailyWathbLimit}
         onChange={(e) => setDailyWathbLimit(e.target.value)}
         title="كم وثبة يستطيع المشترك إكمالها في اليوم الواحد؛ اتركه فارغاً لعدد غير محدود"
+      />
+      <input
+        style={fieldStyle}
+        type="number"
+        placeholder="ترتيب العرض (الأصغر أولاً)"
+        value={sort}
+        onChange={(e) => setSort(e.target.value)}
       />
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '4px', borderTop: '0.5px solid var(--on-indigo-line)' }}>
         <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>حدود الباقة (لتحديد باقة مجانية محدودة)</span>
@@ -171,6 +180,18 @@ export default function Packages({ tests }) {
                   </div>
                 </td>
                 <td style={td}>
+                  <div style={{ display: 'flex', gap: '2px', marginBottom: '4px' }}>
+                    <button
+                      title="نقل لأعلى"
+                      onClick={() => api.updatePackage(p.id, { sort: (p.sort ?? 0) - 1 }).then(load)}
+                      style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--mist)', fontSize: '12px' }}
+                    >↑</button>
+                    <button
+                      title="نقل لأسفل"
+                      onClick={() => api.updatePackage(p.id, { sort: (p.sort ?? 0) + 1 }).then(load)}
+                      style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--mist)', fontSize: '12px' }}
+                    >↓</button>
+                  </div>
                   <button
                     onClick={() => toggleActive(p)}
                     style={{ border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: p.isActive ? 'var(--teal-ink)' : 'var(--coral)' }}

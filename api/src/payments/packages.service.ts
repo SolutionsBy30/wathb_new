@@ -7,11 +7,11 @@ export class PackagesService {
   constructor(private prisma: PrismaService) {}
 
   listPublic() {
-    return this.prisma.package.findMany({ where: { isActive: true, visibility: 'public' }, orderBy: { priceHalalas: 'asc' } });
+    return this.prisma.package.findMany({ where: { isActive: true, visibility: 'public' }, orderBy: [{ sort: 'asc' }, { priceHalalas: 'asc' }] });
   }
 
   listAll() {
-    return this.prisma.package.findMany({ orderBy: { createdAt: 'desc' } });
+    return this.prisma.package.findMany({ orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }] });
   }
 
   create(dto: UpsertPackageDto) {

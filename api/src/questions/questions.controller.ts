@@ -17,6 +17,7 @@ import { QuestionsService } from './questions.service';
 import { BulkImportService } from './bulk-import.service';
 import { QuestionStatsService } from './question-stats.service';
 import { ProblemReportsService } from './problem-reports.service';
+import { MAX_IMAGE_BYTES, QuestionMediaService } from './question-media.service';
 import { CreateQuestionDto, ListQuestionsQuery, UpdateQuestionContentDto } from './dto/questions.dto';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
@@ -31,7 +32,18 @@ export class QuestionsController {
     private bulkImport: BulkImportService,
     private questionStats: QuestionStatsService,
     private problemReports: ProblemReportsService,
+    private media: QuestionMediaService,
   ) {}
+
+  // ADM-032 — upload artwork for a stem or an option (graphs, geometry
+  // figures, shape sequences). Returns the URL to store on the version;
+  // the caller decides whether it belongs to the stem or an option.
+  // Declared before ':id' so 'images' isn't parsed as a question id.
+  @Post('images')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_BYTES } }))
+  uploadImage(@UploadedFile() file: Express.Multer.File) {
+    return this.media.store(file);
+  }
 
   // STU-012 — the admin inbox for "report a problem." Must come before
   // ':id' or 'problem-reports' would be parsed as a question id.
