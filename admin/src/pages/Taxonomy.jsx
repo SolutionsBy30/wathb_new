@@ -33,6 +33,109 @@ function InlineAdd({ placeholder1, placeholder2, onAdd }) {
   );
 }
 
+/**
+ * ADM-014 — rename a section or area in place. The PATCH endpoints have
+ * always existed; until now the UI only ever used them to persist drag-
+ * reorder, so a typo in a name was uncorrectable without a DB query.
+ * `extra` carries the one field sections have and areas don't (weight).
+ */
+function InlineEdit({ nameAr, nameEn, extra, onSave, onCancel }) {
+  const [ar, setAr] = useState(nameAr);
+  const [en, setEn] = useState(nameEn);
+  const [extraVal, setExtraVal] = useState(extra?.value ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave({ nameAr: ar.trim(), nameEn: en.trim(), extra: extraVal });
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input style={input} value={ar} onChange={(e) => setAr(e.target.value)} placeholder="الاسم (عربي)" />
+        <input style={input} value={en} onChange={(e) => setEn(e.target.value)} placeholder="Name (EN)" />
+        {extra && (
+          <input
+            style={{ ...input, width: '70px' }}
+            type="number" step="0.1" min="0"
+            value={extraVal}
+            onChange={(e) => setExtraVal(e.target.value)}
+            title={extra.label}
+          />
+        )}
+        <button
+          disabled={busy || !ar.trim() || !en.trim()}
+          onClick={save}
+          style={{ border: 'none', background: 'var(--lime)', color: 'var(--lime-ink)', borderRadius: '999px', padding: '6px 12px', fontFamily: 'var(--font-arabic)', fontSize: '11px', cursor: 'pointer' }}
+        >
+          {busy ? '…' : 'حفظ'}
+        </button>
+        <button onClick={onCancel} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontSize: '11px' }}>إلغاء</button>
+      </div>
+      {error && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>{error}</span>}
+    </div>
+  );
+}
+
+/**
+ * Delete is only ever offered for an empty branch, and the server enforces
+ * that independently — a populated section/area is refused with a count,
+ * because the cascade would take StudentLabelStat (per-student performance
+ * history) with it. The button explains what will disappear so "empty" isn't
+ * mistaken for "nothing at all".
+ */
+function DeleteControl({ what, childCount, childNoun, onDelete }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onDelete();
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
+
+  if (error) {
+    return (
+      <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)', maxWidth: '380px' }}>
+        {error} <button onClick={() => setError(null)} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontSize: '11px' }}>إخفاء</button>
+      </span>
+    );
+  }
+  if (!confirming) {
+    return (
+      <button onClick={() => setConfirming(true)} title={`حذف ${what}`} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontSize: '12px' }}>
+        حذف
+      </button>
+    );
+  }
+  return (
+    <span style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>
+        {childCount > 0 ? `سيُحذف ${childCount} ${childNoun} أيضاً — متأكد؟` : 'تأكيد الحذف؟'}
+      </span>
+      <button disabled={busy} onClick={run} style={{ border: 'none', background: 'var(--coral)', color: 'var(--indigo)', borderRadius: '999px', padding: '4px 10px', fontFamily: 'var(--font-arabic)', fontSize: '11px', cursor: 'pointer' }}>
+        {busy ? '…' : 'نعم، احذف'}
+      </button>
+      <button onClick={() => setConfirming(false)} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontSize: '11px' }}>إلغاء</button>
+    </span>
+  );
+}
+
 const LANGUAGE_LABEL = { ar: 'عربي', en: 'English' };
 
 // ADM-013 — native HTML5 drag-and-drop (no library — this is the only
@@ -117,6 +220,7 @@ function LabelPill({ label: l, index, labels, persistOrder, onReload }) {
 }
 
 function AreaBlock({ area, index, areas, persistAreasOrder, testId, onReload }) {
+  const [editing, setEditing] = useState(false);
   const { onDragStart, onDragOver, onDrop } = useDragReorder(areas, persistAreasOrder);
   const persistLabelsOrder = async (reordered) => {
     await Promise.all(reordered.map((l, i) => api.updateLabel(l.id, { sort: i })));
@@ -130,12 +234,34 @@ function AreaBlock({ area, index, areas, persistAreasOrder, testId, onReload }) 
       onDrop={() => onDrop(index)}
       style={{ borderInlineStart: '2px solid var(--on-indigo-line)', paddingInlineStart: '12px' }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ ...label13, display: 'flex', alignItems: 'center', gap: '6px' }}><DragHandle />{area.nameAr}</span>
-        {area.appliesToTracks?.length > 0 && (
-          <span style={{ fontSize: '10px', color: 'var(--lime)' }}>{area.appliesToTracks.join(', ')}</span>
-        )}
-      </div>
+      {editing ? (
+        <InlineEdit
+          nameAr={area.nameAr}
+          nameEn={area.nameEn}
+          onSave={async ({ nameAr, nameEn }) => {
+            await api.updateArea(area.id, { nameAr, nameEn });
+            setEditing(false);
+            await onReload();
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+          <span style={{ ...label13, display: 'flex', alignItems: 'center', gap: '6px' }}><DragHandle />{area.nameAr}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {area.appliesToTracks?.length > 0 && (
+              <span style={{ fontSize: '10px', color: 'var(--lime)' }}>{area.appliesToTracks.join(', ')}</span>
+            )}
+            <button onClick={() => setEditing(true)} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontSize: '12px' }}>تحرير</button>
+            <DeleteControl
+              what="المجال"
+              childCount={area.labels.length}
+              childNoun="تصنيف"
+              onDelete={async () => { await api.deleteArea(area.id); await onReload(); }}
+            />
+          </span>
+        </div>
+      )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px', marginBottom: '6px' }}>
         {area.labels.map((l, i) => (
           <LabelPill key={l.id} label={l} index={i} labels={area.labels} persistOrder={persistLabelsOrder} onReload={onReload} />
@@ -147,6 +273,7 @@ function AreaBlock({ area, index, areas, persistAreasOrder, testId, onReload }) 
 }
 
 function SectionCard({ section, index, sections, persistSectionsOrder, onReload }) {
+  const [editing, setEditing] = useState(false);
   const { onDragStart, onDragOver, onDrop } = useDragReorder(sections, persistSectionsOrder);
   const persistAreasOrder = async (reordered) => {
     await Promise.all(reordered.map((a, i) => api.updateArea(a.id, { sort: i })));
@@ -160,11 +287,43 @@ function SectionCard({ section, index, sections, persistSectionsOrder, onReload 
       onDrop={() => onDrop(index)}
       style={card}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <span style={{ ...label13, fontWeight: 500, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <DragHandle />{section.nameAr} <span style={{ color: 'var(--mist)', fontSize: '11px' }}>· وزن {section.weight}</span>
-        </span>
-      </div>
+      {editing ? (
+        <div style={{ marginBottom: '10px' }}>
+          <InlineEdit
+            nameAr={section.nameAr}
+            nameEn={section.nameEn}
+            extra={{ label: 'الوزن', value: section.weight }}
+            onSave={async ({ nameAr, nameEn, extra }) => {
+              const weight = Number(extra);
+              await api.updateSection(section.id, {
+                nameAr,
+                nameEn,
+                // Weight drives how heavily the selection engine draws from
+                // this section — never let a blank field silently zero it.
+                ...(Number.isFinite(weight) && weight > 0 ? { weight } : {}),
+              });
+              setEditing(false);
+              await onReload();
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '10px' }}>
+          <span style={{ ...label13, fontWeight: 500, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <DragHandle />{section.nameAr} <span style={{ color: 'var(--mist)', fontSize: '11px' }}>· وزن {section.weight}</span>
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button onClick={() => setEditing(true)} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontSize: '12px' }}>تحرير</button>
+            <DeleteControl
+              what="القسم"
+              childCount={section.areas.length}
+              childNoun="مجال"
+              onDelete={async () => { await api.deleteSection(section.id); await onReload(); }}
+            />
+          </span>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingInlineStart: '16px' }}>
         {section.areas.map((area, i) => (
           <AreaBlock key={area.id} area={area} index={i} areas={section.areas} persistAreasOrder={persistAreasOrder} onReload={onReload} />

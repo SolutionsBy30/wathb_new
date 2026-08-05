@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { TaxonomyService } from './taxonomy.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { UpsertAreaDto, UpsertLabelDto, UpsertSectionDto, UpsertTestDto } from './dto/taxonomy.dto';
@@ -26,6 +26,11 @@ export class TaxonomyController {
     return this.taxonomy.listAllTests();
   }
 
+  // SessionGuard is not registered as an APP_GUARD (only ThrottlerGuard is),
+  // so an admin route without these decorators is genuinely public. This one
+  // was missing them — anyone could create a test.
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
   @Post('admin/tests')
   createTest(@Body() dto: UpsertTestDto) {
     return this.taxonomy.createTest(dto);
@@ -50,6 +55,22 @@ export class TaxonomyController {
   @Patch('admin/sections/:id')
   updateSection(@Param('id') id: string, @Body() dto: Partial<UpsertSectionDto>) {
     return this.taxonomy.updateSection(id, dto);
+  }
+
+  // ADM-014 — only ever succeeds for an empty branch; see the service for why
+  // a populated one is refused rather than cascaded.
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @Delete('admin/sections/:id')
+  deleteSection(@Param('id') id: string) {
+    return this.taxonomy.deleteSection(id);
+  }
+
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @Delete('admin/areas/:id')
+  deleteArea(@Param('id') id: string) {
+    return this.taxonomy.deleteArea(id);
   }
 
   @UseGuards(SessionGuard)
