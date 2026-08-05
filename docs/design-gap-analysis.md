@@ -1,36 +1,32 @@
 # Design ↔ implementation gap analysis
 
 **Design source**: Claude Design project `f109eb81-20b9-47cd-8a7b-f67609338379`
-**Snapshot analysed**: cached copy dated **19 July 2026**
-**Implementation analysed**: `880c8ca` (4 August 2026)
+**Design analysed**: full 33-file export, received 5 August 2026
+**Implementation analysed**: `0ffeca3` (5 August 2026)
 
-## How this was produced, and what that limits
+## Provenance
 
-The `DesignSync` MCP tool is present in the session but **cannot authorise in
-this environment** — `/design-login` needs an interactive terminal, and Claude
-Code on the web has none. Both reading the live project and writing back to it
-are blocked. Retried; same result.
+`DesignSync` could not authorise in this environment (`/design-login` needs an
+interactive terminal; Claude Code on the web has none), so the project was
+exported by hand and uploaded as a zip. All 33 files are present.
 
-So this analysis is against a **17-day-old local snapshot**, which covers 6 of
-the 9 files in the project:
+An earlier draft of this document was written against a 19 July cache covering
+only 6 of the 9 prototype files. **The full export was diffed against that
+cache and every design file is byte-identical**:
 
-| File | Snapshot |
+| File | Live vs 19-July cache |
 |---|---|
-| `Admin.dc.html` | ✅ 168 KB |
-| `Student.dc.html` | ✅ 72 KB |
-| `Supervisor.dc.html` | ✅ 124 KB |
-| `Wathb Admin Console.html` | ✅ 599 KB |
-| `support.js` | ✅ (the `<x-dc>` runtime) |
-| `wathb-data.js` | ✅ |
-| `_ds/` bundle (tokens, styles, assets, fonts) | ✅ complete |
-| `Admin Login.dc.html` | ❌ not in snapshot |
-| `Landing.dc.html` | ❌ not in snapshot |
-| `Student Login.dc.html` | ❌ not in snapshot |
+| `Admin.dc.html` | identical |
+| `Student.dc.html` | identical |
+| `Supervisor.dc.html` | identical |
+| `Wathb Admin Console.html` | identical |
+| `wathb-data.js` | identical |
+| `_ds/` bundle (tokens, styles, assets, fonts) | identical |
+| `support.js` | changed (64 → 66 KB) — the Claude Design **runtime**, not the design |
 
-**Therefore**: every row below is provisional until the live project is
-re-read. Anything the design changed after 19 July is invisible here, and the
-three login/landing screens could not be assessed at all. Nothing in this
-document should be treated as "the design says X" without re-checking.
+So the design has not moved since 19 July, and the analysis below is confirmed
+rather than provisional. The three files the cache lacked — `Admin Login`,
+`Student Login`, `Landing` — are covered in §5.
 
 Screens were enumerated from the `show*` flags that drive the prototypes'
 `<sc-if>` switches, which is how the `.dc.html` files route between views.
@@ -226,14 +222,74 @@ that rule.
 
 ---
 
-## 5. Summary
+## 5. Login and landing — the three files the cache lacked
+
+### 5.1 `Admin Login.dc.html` — one gap
+
+Design: email + password, `showForm` / `showError` / `showSuccess`, and a
+**"نسيت كلمة المرور؟"** link. The app's `admin/src/pages/Login.jsx` has the
+email/password form and the error state but **no forgot-password affordance**
+(`grep "نسيت"` → 0).
+
+Note this is not merely a missing link: there is no password-reset flow behind
+it server-side either. An admin who forgets their password today has no
+self-service route back in. Small screen, real feature.
+
+### 5.2 `Student Login.dc.html` — **the design is wrong here, do not follow it**
+
+Design flow: `showPhone` → `showOtp` → `showSuccess`, and then, if the student
+has no active subscription, `showPayment` → a plan picker → `showPaymentForm`
+→ `showPaymentSuccess`.
+
+The app matches the shape exactly — phone → OTP, then `goPricing('اشتراكك غير
+فعّال أو منتهٍ …')` when there is no active plan.
+
+**It diverges on the payment step, and correctly so.** The design's
+`showPaymentForm` renders our own card fields:
+
+```html
+<label>رقم البطاقة</label>
+<input value="{{ cardNumber }}" placeholder="0000 0000 0000 0000" ...>
+```
+
+The implementation never touches a card number: `startCheckout` redirects to
+Paymob's hosted checkout and the browser returns via `/checkout/return`.
+
+Collecting a raw PAN in our own form would pull Wathb into **PCI-DSS SAQ D** —
+the heaviest merchant compliance tier — where the hosted-redirect approach
+keeps it in SAQ A. For a KSA education product taking card payments this is
+not a style preference; it is the difference between a routine integration and
+an audited cardholder-data environment.
+
+**Action: fix the design, not the app.** The design's payment step should show
+a "المتابعة إلى بوابة الدفع" handoff, not card inputs.
+
+### 5.3 `Landing.dc.html` — one divergence that is deliberate
+
+Design: nav (المميزات / الأسعار / تسجيل الدخول), a hero
+("طريقك للوصول لنسبة 100%" · "كل يوم وثبة. وثبة واحدة في النهاية."), a
+three-audience section, features, inline pricing, footer.
+
+The design's login menu offers **three** routes:
+دخول / تسجيل الطالب · دخول ولي الأمر / المشرف · **دخول الإدارة**
+
+The app offers the first two only — `grep "دخول الإدارة"` → 0.
+
+**This is intentional.** It was an explicit product request on 28 July
+("remove 'admin login from landing page'"), and it is the right call: the
+admin console is staff-only and does not belong on a public marketing page.
+
+**Recorded here so nobody "fixes" it back by matching the design.** The design
+should drop the third link.
+
+## 6. Summary
 
 **Design is behind the product, not ahead of it.** 18 of the app's 43 screens
-have no design counterpart, and every one of them post-dates the snapshot. The
-tokens are already shared verbatim, so this is a screen-inventory gap, not a
-visual-language gap.
+have no design counterpart, and every one of them post-dates the design's last
+change. The tokens are already shared verbatim, so this is a screen-inventory
+gap, not a visual-language gap.
 
-### Update the design with (18 screens)
+### Update the design with (18 screens + 3 corrections)
 
 Admin: Review Queue · Problem Reports · Daily Tips · Audit Log · Campaign ·
 Geography Registry · the grouped 4-section nav
@@ -243,26 +299,39 @@ Link Expired
 Supervisor: Pending Invites · Pay For Student (with the active-subscription
 hide rule) · Link Expired
 
-### Update the app with (2 screens, both already designed)
+Corrections where the **design is wrong and the app is right** — these must
+not be "fixed" by making the app match:
+
+- **Student Login payment step** — replace the inline card form with a
+  handoff to the hosted gateway (§5.2). Following the design here would put
+  Wathb in PCI-DSS SAQ D.
+- **Landing** — drop the دخول الإدارة link (§5.3); removed from the app by
+  explicit product request on 28 July.
+- **Admin nav** — adopt the grouped four-section structure (§2.4).
+
+### Update the app with (3 items, all already designed)
 
 1. **Question analysis drill-down** (`showAdminQuestionAnalysis`) — distractor
    distribution, explanation feedback, problem-report count. Data mostly
    exists server-side.
 2. **Leap detail / "leap report"** (`showWathbDetail`) — the view a leap
    history row should open into. Outstanding from the 4 August request.
+3. **Admin forgot-password** (§5.1) — needs a server-side reset flow too, not
+   just the link.
 
 ### Reconsider
 
-3. **Test picker as a dedicated screen** rather than chips on Home — the
+4. **Test picker as a dedicated screen** rather than chips on Home — the
    design's version better matches "select the test when starting a leap".
-4. **`fonts.css`** — drop the Google Fonts `@import` and self-host, as the
-   design system already does.
+5. **`fonts.css`** — drop the Google Fonts `@import` and self-host, as the
+   design system already does. See also `docs/accessibility-audit.md` §3: the
+   `--mist` contrast failure and the admin light/dark theme divergence are a
+   single decision.
 
-### Blocked
+### No longer blocked
 
-- Re-read the live project once `DesignSync` can authorise (or the files are
-  sent via "Send to Claude Code Web"), and **re-verify every row above** —
-  this snapshot is 17 days old.
-- `Admin Login.dc.html`, `Landing.dc.html`, `Student Login.dc.html` were never
-  assessed. The app has an admin login, a student login and a landing page;
-  whether they match is unknown.
+The full 33-file export has been received and verified byte-identical to the
+19 July cache (except the Claude Design runtime), so every row above is
+confirmed. Writing the 18 missing screens **back** into the Claude Design
+project still requires `DesignSync` authorisation, which this environment
+cannot provide — that half remains manual.
