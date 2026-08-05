@@ -12,6 +12,7 @@ const letters = ["أ", "ب", "ج", "د"];
 export function QuestionCard({
   question,
   questionImage,
+  questionImageAlt,
   options = [],
   optionImages = [],
   selected,
@@ -35,7 +36,12 @@ export function QuestionCard({
       {questionImage && (
         <img
           src={questionImage}
-          alt=""
+          /* Not decorative: for a geometry figure or a chart the picture IS
+             the question, so alt="" would hide the item entirely from a
+             screen reader. Until authors can supply real alt text (see
+             docs/accessibility-audit.md) this at least announces that the
+             question carries a figure rather than silently dropping it. */
+          alt={questionImageAlt || "صورة السؤال"}
           style={{
             maxWidth: "100%",
             borderRadius: "var(--radius-md)",
@@ -79,7 +85,11 @@ export function QuestionCard({
               {optionImages[i] && (
                 <img
                   src={optionImages[i]}
-                  alt=""
+                  /* An option can be a picture with no text at all (shape
+                     choices), so an empty alt would leave the button
+                     nameless. Fall back to the option letter the student is
+                     asked to pick. */
+                  alt={opt ? "" : `الخيار ${letters[i] ?? i + 1}`}
                   style={{
                     maxHeight: "96px",
                     maxWidth: "40%",

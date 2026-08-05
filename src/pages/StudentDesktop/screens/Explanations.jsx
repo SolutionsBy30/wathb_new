@@ -106,7 +106,7 @@ export default function Explanations({ result, onContinue }) {
               <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>سؤال {q.position + 1}</span>
               <p dir={contentDir} style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--sand)', lineHeight: 1.8 }}>{q.stem}</p>
               {q.stemImageUrl && (
-                <img src={mediaUrl(q.stemImageUrl)} alt="" style={{ maxWidth: '100%', borderRadius: 'var(--radius-md)', background: 'var(--sand)' }} />
+                <img src={mediaUrl(q.stemImageUrl)} alt="صورة السؤال" style={{ maxWidth: '100%', borderRadius: 'var(--radius-md)', background: 'var(--sand)' }} />
               )}
               <div dir={contentDir}>
                 <AnswerState
