@@ -5,6 +5,7 @@ import { WathbGenerationService } from '../wathb/wathb-generation.service';
 import { MagicLinkService } from '../auth/magic-link.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from './channel.interface';
 import { decideSendChannel, resolveSlotForDay } from './reactive-scheduler';
+import { EmailChannel } from './email-channel';
 
 const DEFAULT_BUNDLE_SIZE = 5;
 // Never more than 2 messages/day to a student — spec §7.4 frequency cap.
@@ -36,7 +37,29 @@ export class NotificationsService {
     private magicLinks: MagicLinkService,
     @Inject(NOTIFICATION_CHANNEL) private channel: NotificationChannel,
     private config: ConfigService,
+    private email: EmailChannel,
   ) {}
+
+  /**
+   * NOT-012 — send the same notification to the user's email when they have
+   * opted in. Returns nothing and throws nothing: email is the secondary
+   * channel, so every failure mode (unconfigured SMTP, bounce, timeout) must
+   * be invisible to the WhatsApp path that follows it.
+   */
+  private async sendEmailCopy(
+    user: { notificationEmail: string | null; emailNotificationsEnabled: boolean; suspendedAt: Date | null },
+    notificationId: string,
+    subject: string,
+    text: string,
+  ): Promise<void> {
+    if (!user.emailNotificationsEnabled || !user.notificationEmail || user.suspendedAt) return;
+    const messageId = await this.email.send({ to: user.notificationEmail, subject, text });
+    if (!messageId) return;
+    await this.prisma.notification.update({
+      where: { id: notificationId },
+      data: { emailSentAt: new Date() },
+    });
+  }
 
   /**
    * plan_day (spec §9.4) — pre-generate tomorrow's bundle and queue the
@@ -143,7 +166,19 @@ export class NotificationsService {
    * notification sent or schedules the next rung of the retry ladder.
    */
   private async attemptSend(
-    student: { userId: string; notifSlotStartHour: number; notifSlotEndHour: number; user: { name: string; mobileE164: string | null } },
+    student: {
+      userId: string;
+      notifSlotStartHour: number;
+      notifSlotEndHour: number;
+      user: {
+        name: string;
+        mobileE164: string | null;
+        // NOT-012 — needed for the parallel email copy below.
+        notificationEmail: string | null;
+        emailNotificationsEnabled: boolean;
+        suspendedAt: Date | null;
+      };
+    },
     wathb: { id: string; scheduledFor: Date },
     notifId: string,
     retryCount: number,
@@ -160,6 +195,19 @@ export class NotificationsService {
     const { token } = await this.magicLinks.mint({ subjectId: student.userId, subjectType: 'student', purpose: 'wathb', targetId: wathb.id, maxUses: 5 });
     const appUrl = this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
     const url = `${appUrl}/#magic=${token}`;
+
+    // NOT-012 — email is a parallel second channel, sent before the WhatsApp
+    // attempt and never allowed to affect it. It is fire-and-forget on
+    // purpose: EmailChannel.send swallows its own failures and returns null,
+    // so a bounced address cannot fail the job or trip the WhatsApp retry
+    // ladder below. The STOP opt-out is WhatsApp-specific and deliberately
+    // does not gate email, but a suspended account is silenced everywhere.
+    await this.sendEmailCopy(
+      student.user,
+      notifId,
+      'وثبتك اليومية جاهزة',
+      `${student.user.name}، وثبتك اليومية جاهزة:\n${url}`,
+    );
 
     try {
       const result =
@@ -225,7 +273,18 @@ export class NotificationsService {
       const wathb = await this.prisma.wathb.findFirst({ where: { studentId: student.userId, scheduledFor: notif.scheduledFor, sequence: 0 } });
       if (!wathb) continue;
       const result = await this.attemptSend(
-        { userId: student.userId, notifSlotStartHour: student.notifSlotStartHour, notifSlotEndHour: student.notifSlotEndHour, user: { name: notif.user.name, mobileE164: notif.user.mobileE164 } },
+        {
+          userId: student.userId,
+          notifSlotStartHour: student.notifSlotStartHour,
+          notifSlotEndHour: student.notifSlotEndHour,
+          user: {
+            name: notif.user.name,
+            mobileE164: notif.user.mobileE164,
+            notificationEmail: notif.user.notificationEmail,
+            emailNotificationsEnabled: notif.user.emailNotificationsEnabled,
+            suspendedAt: notif.user.suspendedAt,
+          },
+        },
         wathb,
         notif.id,
         notif.retryCount,

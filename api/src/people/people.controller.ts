@@ -4,7 +4,8 @@ import { SupervisorsService } from './supervisors.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
-import { CreateStudentDto, CreateSupervisorDto, GoalSetupDto, InviteSupervisorDto, StudentNotificationPrefsDto, SupervisorPreferencesDto } from './dto/people.dto';
+import { AdminUpdateAccountDto, CreateStudentDto, CreateSupervisorDto, EmailPrefsDto, GoalSetupDto, InviteSupervisorDto, StudentNotificationPrefsDto, SupervisorPreferencesDto } from './dto/people.dto';
+import { AccountsService } from './accounts.service';
 
 @UseGuards(SessionGuard)
 @Controller()
@@ -12,6 +13,7 @@ export class PeopleController {
   constructor(
     private students: StudentsService,
     private supervisors: SupervisorsService,
+    private accounts: AccountsService,
   ) {}
 
   @RequireSession('admin')
@@ -102,6 +104,29 @@ export class PeopleController {
   async supervisorStudentLeaps(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
     await this.supervisors.assertLinkedTo(session.sub, id);
     return this.students.leapHistory(id);
+  }
+
+  // NOT-012 — email prefs live on `users`, so students and supervisors share
+  // one implementation behind two role-scoped routes.
+  @RequireSession('student')
+  @Patch('students/me/email-prefs')
+  setStudentEmailPrefs(@Body() dto: EmailPrefsDto, @CurrentSession() session: SessionPayload) {
+    return this.accounts.setEmailPrefs(session.sub, dto);
+  }
+
+  @RequireSession('supervisor')
+  @Patch('supervisors/me/email-prefs')
+  setSupervisorEmailPrefs(@Body() dto: EmailPrefsDto, @CurrentSession() session: SessionPayload) {
+    return this.accounts.setEmailPrefs(session.sub, dto);
+  }
+
+  // ADM-086 — edit a student's or supervisor's contact details. Disabling an
+  // account is the existing suspend/unsuspend pair in AdminOpsController,
+  // which is audit-logged and revokes live magic links.
+  @RequireSession('admin')
+  @Patch('admin/accounts/:id')
+  adminUpdateAccount(@Param('id') id: string, @Body() dto: AdminUpdateAccountDto) {
+    return this.accounts.adminUpdateAccount(id, dto);
   }
 
   @RequireSession('admin')

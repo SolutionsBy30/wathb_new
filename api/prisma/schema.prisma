@@ -91,6 +91,14 @@ model User {
   timezone         String    @default("Asia/Riyadh")
   status           String    @default("active")
   whatsappOptInAt  DateTime?
+  // NOT-012 — email as a second notification channel, opt-in and independent
+  // of WhatsApp. Deliberately NOT the `email` field above: that one is unique
+  // and backs admin password login, so letting a student set it would both
+  // collide across accounts and blur a login credential into a contact
+  // detail. This one is contact-only and may repeat (a parent and child
+  // sharing an inbox is normal).
+  notificationEmail          String?
+  emailNotificationsEnabled  Boolean   @default(false)
   // NOT-010 — STOP/إيقاف is honored instantly and permanently: set once,
   // never auto-cleared. Every outbound send path must check this first.
   whatsappOptedOutAt DateTime?
@@ -621,6 +629,12 @@ model Notification {
   // NOT-009 — retry/fallback ladder for undelivered messages.
   retryCount   Int                  @default(0)
   nextRetryAt  DateTime?
+  // NOT-012 — email is a parallel copy of the same notification, not a
+  // separate one, so it is stamped on this row rather than inserted as
+  // another: [userId, kind, scheduledFor] is the idempotency key that stops
+  // a student getting the same daily message twice, and a second row would
+  // collide with it.
+  emailSentAt  DateTime?
 
   // Idempotency key (spec §7.3) — a duplicate daily message is a trust-destroying bug.
   @@unique([userId, kind, scheduledFor])
@@ -688,6 +702,10 @@ model Package {
   // paid default); the free tier is backfilled to 1 by the migration.
   dailyWathbLimit Int?
   isActive        Boolean           @default(true)
+  // FRE-009 — the package every new account is enrolled into automatically.
+  // At most one may be true; PackagesService enforces that by clearing the
+  // previous holder in the same transaction.
+  isDefault       Boolean           @default(false)
   visibility      PackageVisibility @default(public)
   dailyNotificationEnabled  Boolean           @default(true) // FRE-002
   reportVisibility          ReportVisibility  @default(full) // FRE-004

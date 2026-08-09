@@ -18,6 +18,8 @@ export class UpsertPackageDto {
   @IsOptional() @IsIn(['full', 'partial']) reportVisibility?: 'full' | 'partial';
   @IsOptional() @IsBoolean() weeklyReportEnabled?: boolean;
   @IsOptional() @IsBoolean() supervisorLinkingAllowed?: boolean;
+  // FRE-009 — enrol every new account into this package automatically.
+  @IsOptional() @IsBoolean() isDefault?: boolean;
 }
 
 export class StartCheckoutDto {
