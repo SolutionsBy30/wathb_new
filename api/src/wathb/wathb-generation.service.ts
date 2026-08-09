@@ -148,7 +148,16 @@ export class WathbGenerationService {
     const chosenSectionId = selectSectionForDay(sectionStates);
     const scopedLabels = chosenSectionId ? labelStates.filter((l) => l.sectionId === chosenSectionId) : labelStates;
 
-    const picks = selectLabelsForBundle(scopedLabels, { bundleSize });
+    // SEL-007 — the weakness floor is tunable without a redeploy, since the
+    // sustainable share depends on how deep the question bank is: a thin bank
+    // can't hold a high floor without repeatedly falling back.
+    const floorEnv = Number(process.env.SELECTION_WEAKNESS_FLOOR);
+    const picks = selectLabelsForBundle(scopedLabels, {
+      bundleSize,
+      ...(Number.isFinite(floorEnv) && floorEnv >= 0 && floorEnv <= 1
+        ? { weaknessFloorFraction: floorEnv }
+        : {}),
+    });
     return this.buildWathb(studentId, picks, 'standard', forDate, sequence, scopedLabels.map((l) => l.labelId), testId);
   }
 

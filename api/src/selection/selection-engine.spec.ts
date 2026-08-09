@@ -161,3 +161,65 @@ describe('selectSectionForDay', () => {
     }
   });
 });
+
+describe('SEL-007 weakness floor', () => {
+  // Six measured labels spanning the accuracy range. The weakest third is
+  // w1 + w2; everything else is mid or strong.
+  const spread: LabelState[] = [
+    label({ labelId: 'w1', accuracy: 0.10, nAnswered: 30 }),
+    label({ labelId: 'w2', accuracy: 0.20, nAnswered: 30 }),
+    label({ labelId: 'm1', accuracy: 0.50, nAnswered: 30 }),
+    label({ labelId: 'm2', accuracy: 0.55, nAnswered: 30 }),
+    label({ labelId: 's1', accuracy: 0.90, nAnswered: 30 }),
+    label({ labelId: 's2', accuracy: 0.95, nAnswered: 30 }),
+  ];
+  const weakIds = new Set(['w1', 'w2']);
+
+  it('puts the agreed share of the bundle in the weakest band', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const picks = selectLabelsForBundle(spread, { rng: seededRng(seed), bundleSize: 5 });
+      const fromWeak = picks.filter((p) => weakIds.has(p.labelId)).length;
+      expect(fromWeak).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('never sacrifices the strength or exploration guarantee to reach the floor', () => {
+    const withUnmeasured = [...spread, label({ labelId: 'new', accuracy: 0.5, nAnswered: 0 })];
+    for (let seed = 1; seed <= 40; seed++) {
+      const picks = selectLabelsForBundle(withUnmeasured, { rng: seededRng(seed), bundleSize: 5 });
+      // A strong label and the never-served one must both still be present.
+      expect(picks.some((p) => p.labelId === 's1' || p.labelId === 's2')).toBe(true);
+      expect(picks.some((p) => p.labelId === 'new')).toBe(true);
+      expect(picks.filter((p) => weakIds.has(p.labelId)).length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('respects maxPerLabel rather than stacking one weak label', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const picks = selectLabelsForBundle(spread, { rng: seededRng(seed), bundleSize: 5 });
+      for (const id of weakIds) {
+        expect(picks.filter((p) => p.labelId === id).length).toBeLessThanOrEqual(DEFAULT_SELECTION_CONFIG.maxPerLabel);
+      }
+    }
+  });
+
+  it('stays out of the way on a cold start, where nothing is measured yet', () => {
+    const cold = [
+      label({ labelId: 'a', nAnswered: 0 }),
+      label({ labelId: 'b', nAnswered: 0 }),
+      label({ labelId: 'c', nAnswered: 0 }),
+    ];
+    const picks = selectLabelsForBundle(cold, { rng: seededRng(7), bundleSize: 5 });
+    expect(picks.length).toBeGreaterThan(0);
+    expect(picks.every((p) => p.reason !== 'weakness_floor')).toBe(true);
+  });
+
+  it('can be switched off, restoring the pure adaptive draw', () => {
+    const picks = selectLabelsForBundle(spread, {
+      rng: seededRng(3),
+      bundleSize: 5,
+      weaknessFloorFraction: 0,
+    });
+    expect(picks.every((p) => p.reason !== 'weakness_floor')).toBe(true);
+  });
+});

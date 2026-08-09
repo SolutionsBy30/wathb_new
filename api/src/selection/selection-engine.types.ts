@@ -37,6 +37,22 @@ export interface SelectionConfig {
   strengthConfidenceThreshold: number;
   /** Max questions drawn from any single label per bundle. */
   maxPerLabel: number;
+  /**
+   * SEL-007 — weakness floor. The weighted score already favours weak labels,
+   * but only in expectation: on any given day the draw can land mostly on
+   * middling ones, and a student who was told the product targets their weak
+   * areas has no way to see that it did. This is a hard minimum share of the
+   * bundle that must come from the student's weakest measured labels.
+   *
+   * Expressed as a fraction of bundleSize (0.6 => at least 3 of 5). Set to 0
+   * to restore the pure adaptive behaviour.
+   */
+  weaknessFloorFraction: number;
+  /**
+   * What counts as "weakest": this fraction of measured labels, ranked by
+   * accuracy ascending. 1/3 => the weakest third.
+   */
+  weaknessBandFraction: number;
   /** Random source, injectable for deterministic tests. */
   rng: () => number;
 }
@@ -48,11 +64,13 @@ export const DEFAULT_SELECTION_CONFIG: Omit<SelectionConfig, 'rng'> = {
   strengthAccuracyThreshold: 0.7,
   strengthConfidenceThreshold: 0.5,
   maxPerLabel: 3,
+  weaknessFloorFraction: 0.6,
+  weaknessBandFraction: 1 / 3,
 };
 
 export interface LabelPick {
   labelId: string;
   targetDifficulty: number;
   /** True if this slot exists specifically to satisfy the strength or exploration guarantee. */
-  reason: 'weighted' | 'strength_guarantee' | 'exploration_guarantee';
+  reason: 'weighted' | 'strength_guarantee' | 'exploration_guarantee' | 'weakness_floor';
 }
