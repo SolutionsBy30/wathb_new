@@ -49,6 +49,14 @@ export default function Profile({ student, subscription, onManageSubscription, o
   const [notifBusy, setNotifBusy] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
 
+  // NOT-012 — the email channel lives on the user record, which /students/me
+  // already returns in full, so it seeds from the same payload as the rest.
+  const [email, setEmail] = useState(student?.user?.notificationEmail ?? '');
+  const [emailEnabled, setEmailEnabled] = useState(student?.user?.emailNotificationsEnabled ?? false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailSaved, setEmailSaved] = useState(false);
+  const [emailError, setEmailError] = useState(null);
+
   const toggleSkipDay = (id) => {
     setSkipDays((prev) => {
       const next = new Set(prev);
@@ -74,6 +82,28 @@ export default function Profile({ student, subscription, onManageSubscription, o
       setNotifSaved(true);
     } finally {
       setNotifBusy(false);
+    }
+  };
+
+  const saveEmailPrefs = async () => {
+    setEmailBusy(true);
+    setEmailSaved(false);
+    setEmailError(null);
+    try {
+      // An empty box means "remove it" — the server clears the address and
+      // switches the channel off together, so the two can't disagree.
+      const trimmed = email.trim();
+      const saved = await api.setEmailPrefs({
+        notificationEmail: trimmed === '' ? null : trimmed,
+        emailNotificationsEnabled: emailEnabled,
+      });
+      setEmail(saved.notificationEmail ?? '');
+      setEmailEnabled(saved.emailNotificationsEnabled);
+      setEmailSaved(true);
+    } catch (e) {
+      setEmailError(e.message);
+    } finally {
+      setEmailBusy(false);
     }
   };
 
@@ -361,6 +391,38 @@ export default function Profile({ student, subscription, onManageSubscription, o
           {notifBusy ? 'جاري الحفظ…' : 'حفظ'}
         </Button>
         {notifSaved && <span style={{ fontSize: '12px', color: 'var(--teal-ink)' }}>تم الحفظ.</span>}
+
+        {/* NOT-012 — email as a second channel alongside WhatsApp, never a
+            replacement: the address is optional and the toggle is separate,
+            so adding one doesn't silently start sending. */}
+        <div style={{ borderTop: '0.5px solid var(--on-indigo-line)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
+            البريد الإلكتروني (اختياري) — لاستلام نفس التنبيهات بالبريد إضافةً إلى واتساب
+          </p>
+          <input
+            type="email"
+            dir="ltr"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            style={{ padding: '9px 11px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px', textAlign: 'left' }}
+          />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={emailEnabled}
+              onChange={(e) => setEmailEnabled(e.target.checked)}
+            />
+            تفعيل التنبيهات عبر البريد
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <Button variant="primary" style={{ alignSelf: 'flex-start' }} disabled={emailBusy} onClick={saveEmailPrefs}>
+              {emailBusy ? 'جاري الحفظ…' : 'حفظ البريد'}
+            </Button>
+            {emailSaved && <span style={{ fontSize: '12px', color: 'var(--teal-ink)' }}>تم الحفظ.</span>}
+            {emailError && <span style={{ fontSize: '12px', color: 'var(--coral)' }}>{emailError}</span>}
+          </div>
+        </div>
       </div>
 
       <button

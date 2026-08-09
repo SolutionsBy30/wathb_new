@@ -60,4 +60,6 @@ export const api = {
 
   getPreferences: () => request('/supervisors/me/preferences'),
   setPreferences: (dto) => request('/supervisors/me/preferences', { method: 'PATCH', body: dto }),
+  // NOT-012 — email as a second notification channel.
+  setEmailPrefs: (dto) => request('/supervisors/me/email-prefs', { method: 'PATCH', body: dto }),
 };

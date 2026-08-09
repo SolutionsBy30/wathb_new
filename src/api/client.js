@@ -73,6 +73,8 @@ export const api = {
   me: () => request('/students/me'),
   setGoal: (dto) => request('/students/me/goal', { method: 'PATCH', body: dto }),
   setNotificationPrefs: (dto) => request('/students/me/notification-prefs', { method: 'PATCH', body: dto }),
+  // NOT-012 — email as a second notification channel.
+  setEmailPrefs: (dto) => request('/students/me/email-prefs', { method: 'PATCH', body: dto }),
 
   today: (testId) => request(`/wathb/today${testId ? `?testId=${encodeURIComponent(testId)}` : ''}`),
   myTests: () => request('/students/me/tests'),

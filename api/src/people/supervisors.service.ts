@@ -232,11 +232,20 @@ export class SupervisorsService {
   }
 
   // V3 in the spec — supervisor sets the weekly report day/time, or mutes it.
-  getPreferences(supervisorId: string) {
-    return this.prisma.supervisor.findUniqueOrThrow({
+  // NOT-012 — the email channel lives on `users`, so it is joined in here
+  // rather than making the preferences screen fetch from two places.
+  async getPreferences(supervisorId: string) {
+    const sup = await this.prisma.supervisor.findUniqueOrThrow({
       where: { userId: supervisorId },
-      select: { weeklyReportDay: true, weeklyReportHour: true, weeklyReportMuted: true },
+      select: {
+        weeklyReportDay: true,
+        weeklyReportHour: true,
+        weeklyReportMuted: true,
+        user: { select: { notificationEmail: true, emailNotificationsEnabled: true } },
+      },
     });
+    const { user, ...prefs } = sup;
+    return { ...prefs, ...user };
   }
 
   setPreferences(supervisorId: string, dto: { weeklyReportDay?: number; weeklyReportHour?: number; weeklyReportMuted?: boolean }) {
