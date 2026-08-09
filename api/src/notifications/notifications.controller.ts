@@ -73,9 +73,11 @@ export class NotificationsController {
 
   // weekly_report job (spec §9.4) — student + supervisor, same manual-trigger
   // rationale as plan_day/send_notification above.
+  // respectSchedule stays false here: an admin pressing "send weekly reports"
+  // means now, not "only for whoever's configured slot happens to be this hour".
   @Post('weekly-reports')
   sendWeeklyReports(@Body() dto: TriggerDateDto) {
-    return this.weeklyReports.sendAllDueWeeklyReports(resolveDate(dto.forDate));
+    return this.weeklyReports.sendAllDueWeeklyReports(resolveDate(dto.forDate), false);
   }
 
   // ADM-083 — bulk/filtered campaign send. Preview is a read-only dry run of

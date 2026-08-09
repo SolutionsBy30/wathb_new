@@ -10,6 +10,7 @@ import { AuditLogModule } from '../admin-ops/audit-log.module';
   imports: [AuthModule, AuditLogModule],
   providers: [WathbService, WathbGenerationService],
   controllers: [WathbController, AdminWathbController],
-  exports: [WathbGenerationService],
+  // WathbService is exported for the scheduler's idle-close job (STU-009).
+  exports: [WathbGenerationService, WathbService],
 })
 export class WathbModule {}

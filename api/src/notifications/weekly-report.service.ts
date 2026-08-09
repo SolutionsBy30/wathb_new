@@ -5,6 +5,7 @@ import { MagicLinkService } from '../auth/magic-link.service';
 import { ReportsService, MIN_SAMPLE_FOR_REPORTING } from '../reports/reports.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from './channel.interface';
 import { accuracyBand, compositeDelta, pickTopStrengthWeakness, speedBand, WeeklyLabelStat } from '../reports/weekly-report.util';
+import { riyadhNow, STUDENT_WEEKLY_REPORT_DAY, STUDENT_WEEKLY_REPORT_HOUR } from './riyadh-clock.util';
 
 function startOfWeek(d: Date): Date {
   const out = new Date(d);
@@ -112,7 +113,17 @@ export class WeeklyReportService {
     }
   }
 
-  async sendSupervisorWeeklyReport(supervisorId: string, forWeek: Date) {
+  /**
+   * `respectSchedule` is what the clock-driven runner passes: it ticks hourly
+   * and each supervisor is sent to only in their own configured day/hour slot.
+   *
+   * SUP-004 collected weeklyReportDay/weeklyReportHour from the start and
+   * nothing ever read them — with only a manual admin trigger there was no
+   * clock to compare against, so a preference the supervisor had set was
+   * silently ignored. The admin trigger keeps passing false, because "send
+   * the weekly reports now" should mean now.
+   */
+  async sendSupervisorWeeklyReport(supervisorId: string, forWeek: Date, respectSchedule = false) {
     const scheduledFor = startOfWeek(forWeek);
     const already = await this.prisma.notification.findUnique({
       where: { userId_kind_scheduledFor: { userId: supervisorId, kind: 'weekly_report_supervisor', scheduledFor } },
@@ -120,6 +131,12 @@ export class WeeklyReportService {
     if (already) return { skipped: 'already_sent' as const };
 
     const supervisor = await this.prisma.supervisor.findUniqueOrThrow({ where: { userId: supervisorId }, include: { user: true } });
+    if (respectSchedule) {
+      const now = riyadhNow();
+      if (now.day !== supervisor.weeklyReportDay || now.hour !== supervisor.weeklyReportHour) {
+        return { skipped: 'not_their_slot' as const };
+      }
+    }
     if (supervisor.weeklyReportMuted) return { skipped: 'muted' as const };
     if (supervisor.user.whatsappOptedOutAt) return { skipped: 'opted_out' as const };
     if (!supervisor.user.mobileE164) return { skipped: 'no_mobile' as const };
@@ -162,13 +179,25 @@ export class WeeklyReportService {
     }
   }
 
-  async sendAllDueWeeklyReports(forWeek: Date) {
-    const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
+  async sendAllDueWeeklyReports(forWeek: Date, respectSchedule = false) {
+    // Students have no per-student weekly slot of their own, so the clock-driven
+    // run uses one house time for all of them; the already-sent guard keyed on
+    // the week makes repeated ticks harmless either way.
+    const studentSlotNow = !respectSchedule || (() => {
+      const now = riyadhNow();
+      return now.day === STUDENT_WEEKLY_REPORT_DAY && now.hour === STUDENT_WEEKLY_REPORT_HOUR;
+    })();
+
+    const students = studentSlotNow
+      ? await this.prisma.student.findMany({ where: { targetTestId: { not: null } } })
+      : [];
     const supervisors = await this.prisma.supervisor.findMany();
     const studentResults = [];
     for (const s of students) studentResults.push({ studentId: s.userId, ...(await this.sendStudentWeeklyReport(s.userId, forWeek)) });
     const supervisorResults = [];
-    for (const sup of supervisors) supervisorResults.push({ supervisorId: sup.userId, ...(await this.sendSupervisorWeeklyReport(sup.userId, forWeek)) });
+    for (const sup of supervisors) {
+      supervisorResults.push({ supervisorId: sup.userId, ...(await this.sendSupervisorWeeklyReport(sup.userId, forWeek, respectSchedule)) });
+    }
     return { studentResults, supervisorResults };
   }
 }

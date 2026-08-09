@@ -16,10 +16,15 @@ import { PaymentsModule } from './payments/payments.module';
 import { GeographyModule } from './geography/geography.module';
 import { AdminOpsModule } from './admin-ops/admin-ops.module';
 import { OverviewModule } from './overview/overview.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // OPS-001 — registers the cron runtime; JobsModule holds the jobs themselves
+    // and no-ops entirely unless SCHEDULER_ENABLED=true.
+    ScheduleModule.forRoot(),
     // NFR-005 — a generous global default (generic abuse protection); the
     // OTP/magic-link/admin-login endpoints override this with much tighter
     // per-endpoint limits via @Throttle (see auth.controller.ts).
@@ -37,6 +42,7 @@ import { OverviewModule } from './overview/overview.module';
     GeographyModule,
     AdminOpsModule,
     OverviewModule,
+    JobsModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
