@@ -118,6 +118,8 @@ export const api = {
   sweepExpiredSubscriptions: () => request('/admin/subscriptions/sweep-expired', { method: 'POST' }),
 
   // ADM-085 — suspension + audit log
+  // ADM-086 — edit a student's or supervisor's contact details.
+  updateAccount: (userId, dto) => request(`/admin/accounts/${userId}`, { method: 'PATCH', body: dto }),
   suspendUser: (userId, reason, note) => request(`/admin/users/${userId}/suspend`, { method: 'POST', body: { reason, note } }),
   unsuspendUser: (userId) => request(`/admin/users/${userId}/unsuspend`, { method: 'POST' }),
   auditLog: () => request('/admin/audit-log'),

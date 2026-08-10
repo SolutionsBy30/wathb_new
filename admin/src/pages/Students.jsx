@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import AccountControls from '../components/AccountControls';
 
 function fmtDate(d) {
   if (!d) return '—';
@@ -40,20 +41,6 @@ export default function Students({ onOpenStudent }) {
   const onSort = (field) => {
     if (sortBy === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortBy(field); setSortDir(field === 'name' ? 'asc' : 'desc'); }
-  };
-
-  // ADM-085 — required reason, optional note; reversible.
-  const toggleSuspend = async (s) => {
-    if (s.user.status === 'suspended') {
-      await api.unsuspendUser(s.userId);
-      load();
-      return;
-    }
-    const reason = window.prompt('سبب التعليق (إلزامي):');
-    if (!reason || !reason.trim()) return;
-    const note = window.prompt('ملاحظة إضافية (اختياري):') || undefined;
-    await api.suspendUser(s.userId, reason.trim(), note);
-    load();
   };
 
   return (
@@ -98,6 +85,7 @@ export default function Students({ onOpenStudent }) {
               <SortHeader label="المؤشر المركّب" field="performance" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <SortHeader label="نهاية الاشتراك" field="subscriptionEnd" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <th style={th}>الحالة</th>
+              <th style={th}>إجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -119,16 +107,19 @@ export default function Students({ onOpenStudent }) {
                 </td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--mist)' }}>{fmtDate(s.subscriptionEnd)}</span></td>
                 <td style={td}>
-                  <button
-                    onClick={() => toggleSuspend(s)}
+                  <span
                     title={s.user.status === 'suspended' ? (s.user.suspendReason ?? '') : undefined}
                     style={{
-                      border: 'none', cursor: 'pointer', background: 'transparent', fontFamily: 'var(--font-arabic)', fontSize: '12px',
+                      fontFamily: 'var(--font-arabic)', fontSize: '12px',
                       color: s.user.status === 'suspended' ? 'var(--coral)' : 'var(--teal-ink)',
                     }}
                   >
-                    {s.user.status === 'suspended' ? 'معلّق — إلغاء التعليق' : 'نشط — تعليق'}
-                  </button>
+                    {s.user.status === 'suspended' ? 'معلّق' : 'نشط'}
+                  </span>
+                </td>
+                <td style={td}>
+                  {/* ADM-086 — edit + disable, shared with the supervisors table. */}
+                  <AccountControls user={{ ...s.user, id: s.userId }} onChanged={load} />
                 </td>
               </tr>
             ))}

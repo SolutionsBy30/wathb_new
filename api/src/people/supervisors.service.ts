@@ -35,6 +35,11 @@ export class SupervisorsService {
       name: s.user.name,
       mobile: s.user.mobileE164,
       type: s.type,
+      // ADM-086 — the admin table's edit/disable controls read these; without
+      // them the row could show actions it had no state to render.
+      status: s.user.status,
+      suspendReason: s.user.suspendReason,
+      notificationEmail: s.user.notificationEmail,
       students: s.studentLinks.map((l) => ({
         studentId: l.studentId,
         name: l.student.user.name,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './layout.css';
 import { api, getToken, setToken, decodeSession, mediaUrl } from '../../api/client';
+import { FreePlanBanner } from '../../design-system/components/FreePlanBanner';
 import Landing from '../Landing';
 import Login from './screens/Login';
 import LinkExpired from './screens/LinkExpired';
@@ -603,6 +604,12 @@ export default function StudentDesktop() {
       <div className="sd-sr-only" role="status" aria-live="assertive">{timerAnnouncement}</div>
       <div className="sd-shell">
         <div className={`sd-screen${showBottomNav ? '' : ' sd-screen-tight'}`}>
+          {/* FRE-010 — sits above every screen's content, but never over the
+              live question: a standing upgrade prompt during a timed leap
+              competes with the thing the student is meant to be doing. */}
+          {screen !== 'question' && screen !== 'pricing' && (
+            <FreePlanBanner subscription={subscription} onUpgrade={() => goPricing()} />
+          )}
           {wathbError && (
             <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{wathbError}</p>
           )}

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import AccountControls from '../components/AccountControls';
 
 export default function Supervisors() {
   const [items, setItems] = useState([]);
 
-  useEffect(() => { api.listSupervisors().then(setItems); }, []);
+  const load = () => api.listSupervisors().then(setItems);
+  useEffect(() => { load(); }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -17,6 +19,8 @@ export default function Supervisors() {
               <th style={th}>الجوال</th>
               <th style={th}>الصفة</th>
               <th style={th}>الطلاب المرتبطون</th>
+              <th style={th}>الحالة</th>
+              <th style={th}>إجراءات</th>
             </tr>
           </thead>
           <tbody>
@@ -29,6 +33,21 @@ export default function Supervisors() {
                   <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>
                     {s.students.length === 0 ? '—' : s.students.map((st) => `${st.name}${st.accepted ? '' : ' (بانتظار القبول)'}`).join('، ')}
                   </span>
+                </td>
+                <td style={td}>
+                  <span
+                    title={s.status === 'suspended' ? (s.suspendReason ?? '') : undefined}
+                    style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: s.status === 'suspended' ? 'var(--coral)' : 'var(--teal-ink)' }}
+                  >
+                    {s.status === 'suspended' ? 'معلّق' : 'نشط'}
+                  </span>
+                </td>
+                <td style={td}>
+                  {/* ADM-086 — same controls as the students table. */}
+                  <AccountControls
+                    user={{ id: s.supervisorId, name: s.name, mobileE164: s.mobile, notificationEmail: s.notificationEmail, status: s.status }}
+                    onChanged={load}
+                  />
                 </td>
               </tr>
             ))}
