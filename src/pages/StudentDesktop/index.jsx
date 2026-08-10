@@ -49,6 +49,8 @@ export default function StudentDesktop() {
   const [pricingMessage, setPricingMessage] = useState(null);
   const [adminTip, setAdminTip] = useState(null);
   const [myTests, setMyTests] = useState(null);
+  // STU-031 — set when the API refuses a leap because no test is switched on.
+  const [needsTestActivation, setNeedsTestActivation] = useState(false);
 
   const timerRef = useRef(null);
   const submittingRef = useRef(false);
@@ -315,6 +317,7 @@ export default function StudentDesktop() {
   const startWathb = async (testId) => {
     setWathbError(null);
     setAlreadyDoneToday(false);
+    setNeedsTestActivation(false);
     try {
       const result = await api.today(testId);
       if (result.status === 'completed') {
@@ -328,7 +331,13 @@ export default function StudentDesktop() {
       setScreen('question');
       startTimerFor(result.questions[pos].timeLimitS, () => submitAnswer(result.wathbId, pos, null, result.questions));
     } catch (e) {
-      if (e.message.includes('subscription')) {
+      // STU-031 — "you have no test switched on" and "your subscription
+      // doesn't cover this" are different problems with different fixes.
+      // Sending the first one to the pricing page asked students to buy a
+      // package they already had.
+      if (e.code === 'no_test_enabled' || e.code === 'goal_not_set' || e.code === 'test_not_enabled') {
+        setNeedsTestActivation(true);
+      } else if (e.code === 'no_subscription' || (!e.code && e.message.includes('subscription'))) {
         await goPricing('اشتراكك غير فعّال أو منتهٍ — اشترك في باقة لمتابعة وثبتك اليومية.');
       } else {
         setWathbError(e.message);
@@ -619,6 +628,8 @@ export default function StudentDesktop() {
               goTestPicker={startWathb}
               tests={(myTests?.tests ?? []).filter((t) => t.isActive)}
               focusedTestId={myTests?.focusedTestId}
+              needsTestActivation={needsTestActivation}
+              onManageTests={goProfile}
             />
           )}
           {screen === 'question' && questionVm && (
@@ -642,7 +653,11 @@ export default function StudentDesktop() {
               onManageSubscription={() => goPricing()}
               onSubscriptionChanged={loadSubscription}
               onLogout={logout}
-              onTestsChanged={() => api.myTests().then(setMyTests).catch(() => {})}
+              onTestsChanged={() => api.myTests().then((t) => {
+                setMyTests(t);
+                // Whatever they just changed, the refusal is stale now.
+                setNeedsTestActivation(false);
+              }).catch(() => {})}
               supervisors={supervisors}
               onInvite={inviteSupervisor}
               onRevoke={revokeSupervisor}

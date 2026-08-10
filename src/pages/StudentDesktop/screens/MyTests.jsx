@@ -43,14 +43,27 @@ export default function MyTests({ onChanged }) {
     return <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد اختبارات في باقتك الحالية.</p>;
   }
 
+  const noneActive = data.tests.every((t) => !t.isActive);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <p style={{ margin: '0 0 4px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: noneActive ? 'var(--coral)' : 'var(--mist)', lineHeight: 1.8 }}>
+        {noneActive
+          ? 'لا يوجد اختبار مفعّل — فعّل اختباراً واحداً على الأقل لتبدأ وثبتك اليومية.'
+          : 'يمكنك تفعيل أكثر من اختبار في نفس الوقت، واختيار أيّها تبدأ به كل يوم.'}
+      </p>
       {data.tests.map((t) => (
         <div key={t.testId} style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px 0', borderTop: '0.5px solid var(--on-indigo-line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '14px', color: t.isActive ? 'var(--sand)' : 'var(--mist)' }}>{t.nameAr}</span>
             {t.isFocused && (
               <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--lime-ink)', background: 'var(--lime)', borderRadius: '999px', padding: '2px 8px' }}>الاختبار الحالي</span>
+            )}
+            {/* STU-031 — every live test is listed now, so a row may be one
+                the current package doesn't pay for. Say so here rather than
+                letting the student switch it on and hit a 403 at start. */}
+            {t.isCovered === false && (
+              <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--mist)', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', borderRadius: '999px', padding: '2px 8px' }}>خارج باقتك</span>
             )}
             <button
               disabled={busyId === t.testId}

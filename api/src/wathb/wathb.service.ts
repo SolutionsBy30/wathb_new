@@ -53,20 +53,48 @@ export class WathbService {
     // STU-002 — a leap is taken against one chosen test. The client may name
     // it explicitly (the picker on Home); otherwise the student's focused
     // test stands in. Only tests they've actually enabled are eligible.
-    let testId = requestedTestId ?? student.targetTestId ?? undefined;
-    if (requestedTestId) {
-      const enabled = await this.prisma.studentTest.findUnique({
-        where: { studentId_testId: { studentId, testId: requestedTestId } },
-      });
-      if (!enabled?.isActive) throw new BadRequestException('this test is not enabled for you');
+    //
+    // STU-031 — enablement is resolved BEFORE subscription coverage, and every
+    // refusal carries a `code`. A student with a perfectly good subscription
+    // but no enabled test used to fall through to the coverage check and get
+    // "no active subscription covers this test", which the client turned into
+    // a pricing page — sending someone to buy a package they already own. The
+    // two states are different problems and now say so.
+    const studentTests = await this.prisma.studentTest.findMany({
+      where: { studentId },
+      include: { test: true },
+    });
+    // A test the admin has retired can't be leapt on even if the student's
+    // row still says enabled.
+    const enabledIds = studentTests.filter((r) => r.isActive && r.test.isActive).map((r) => r.testId);
+
+    if (requestedTestId && !enabledIds.includes(requestedTestId)) {
+      throw new BadRequestException({ code: 'test_not_enabled', message: 'this test is not enabled for you' });
     }
-    if (!testId) throw new BadRequestException('goal setup not complete: no target test selected');
+
+    let testId = requestedTestId;
+    if (!testId) {
+      // Focus wins when it's still enabled; otherwise any enabled test beats
+      // refusing outright — focus pointing at a switched-off test is a stale
+      // pointer, not a reason to block the student's day.
+      testId =
+        student.targetTestId && enabledIds.includes(student.targetTestId)
+          ? student.targetTestId
+          : enabledIds[0];
+    }
+    if (!testId) {
+      throw new BadRequestException(
+        studentTests.length === 0 && !student.targetTestId
+          ? { code: 'goal_not_set', message: 'goal setup not complete: no target test selected' }
+          : { code: 'no_test_enabled', message: 'no test is enabled — enable one to start a leap' },
+      );
+    }
 
     const subscriptions = await this.prisma.subscription.findMany({ where: { studentId, status: 'active' }, include: { package: true } });
     if (!anyActiveCovers(subscriptions, testId)) {
       // S14 in the spec — Expired/paused state, renewal CTA. The frontend
-      // distinguishes this from other errors by status code.
-      throw new ForbiddenException('no active subscription covers this test');
+      // distinguishes this from other errors by the code.
+      throw new ForbiddenException({ code: 'no_subscription', message: 'no active subscription covers this test' });
     }
 
     const todayDate = new Date();

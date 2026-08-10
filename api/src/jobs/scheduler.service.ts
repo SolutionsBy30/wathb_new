@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WeeklyReportService } from '../notifications/weekly-report.service';
+import { AdminAlertService } from '../notifications/admin-alert.service';
 import { WathbService } from '../wathb/wathb.service';
 import { CheckoutService } from '../payments/checkout.service';
 
@@ -39,6 +40,7 @@ export class SchedulerService {
     private weeklyReports: WeeklyReportService,
     private wathb: WathbService,
     private checkout: CheckoutService,
+    private adminAlerts: AdminAlertService,
   ) {}
 
   /**
@@ -113,6 +115,17 @@ export class SchedulerService {
   @Cron('30 0 * * *', { timeZone: TZ })
   sweepExpired() {
     return this.run('sweep_expired', () => this.checkout.sweepExpiredSubscriptions());
+  }
+
+  /**
+   * SEL-008 — one digest a morning of the sections that ran out of questions
+   * overnight. 07:00 rather than midnight so it lands at the start of an
+   * authoring day, and after plan_day (21:00) has generated every bundle for
+   * the day ahead, which is when exhaustion actually shows up.
+   */
+  @Cron('0 7 * * *', { timeZone: TZ })
+  exhaustionDigest() {
+    return this.run('exhaustion_digest', () => this.adminAlerts.sendExhaustionDigest());
   }
 }
 

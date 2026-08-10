@@ -213,33 +213,41 @@ export class StudentsService {
       include: { package: true },
       orderBy: { createdAt: 'desc' },
     });
-    // Without a package the student still sees the test they're focused on,
-    // so the screen is never empty mid-renewal.
-    const coveredIds = activeSub?.package.testIds ?? (student.targetTestId ? [student.targetTestId] : []);
+    // STU-031 — the whole live catalogue is listed, not just the package's
+    // tests. Scoping the list to covered tests meant a student without a
+    // subscription saw exactly one row and had nothing to switch on, so
+    // "activate several tests" was impossible to express in the UI. Coverage
+    // is reported per row as `isCovered` and still decides what a leap may be
+    // taken against (WathbService.today) — enabling is a preparation choice,
+    // paying is what unlocks it.
+    const catalogue = await this.prisma.test.findMany({ where: { isActive: true }, orderBy: { nameAr: 'asc' } });
+    const coveredIds = new Set(activeSub?.package.testIds ?? []);
     const existing = await this.prisma.studentTest.findMany({ where: { studentId } });
     const known = new Set(existing.map((e) => e.testId));
-    const missing = coveredIds.filter((id) => !known.has(id));
+    const missing = catalogue.filter((t) => !known.has(t.id));
     if (missing.length > 0) {
       await this.prisma.studentTest.createMany({
         // Newly-exposed tests start disabled — an upgrade shouldn't silently
         // change what the student is preparing for; they opt in.
-        data: missing.map((testId) => ({ studentId, testId, isActive: testId === student.targetTestId })),
+        data: missing.map((t) => ({ studentId, testId: t.id, isActive: t.id === student.targetTestId })),
         skipDuplicates: true,
       });
     }
     const rows = await this.prisma.studentTest.findMany({
-      where: { studentId, testId: { in: coveredIds } },
+      where: { studentId, testId: { in: catalogue.map((t) => t.id) } },
       include: { test: true },
     });
+    const order = new Map(catalogue.map((t, i) => [t.id, i]));
     return {
       focusedTestId: student.targetTestId,
       tests: rows
-        .filter((r) => r.test.isActive)
+        .sort((a, b) => (order.get(a.testId) ?? 0) - (order.get(b.testId) ?? 0))
         .map((r) => ({
           testId: r.testId,
           nameAr: r.test.nameAr,
           nameEn: r.test.nameEn,
           isActive: r.isActive,
+          isCovered: coveredIds.has(r.testId),
           targetScore: r.targetScore,
           testDate: r.testDate,
           isFocused: r.testId === student.targetTestId,

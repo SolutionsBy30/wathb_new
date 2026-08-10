@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/co
 import { NotificationsService } from './notifications.service';
 import { WeeklyReportService } from './weekly-report.service';
 import { CampaignService } from './campaign.service';
+import { AdminAlertService } from './admin-alert.service';
 import { RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
@@ -32,11 +33,20 @@ export class NotificationsController {
     private notifications: NotificationsService,
     private weeklyReports: WeeklyReportService,
     private campaigns: CampaignService,
+    private adminAlerts: AdminAlertService,
   ) {}
 
   @Get()
   deliveryLog() {
     return this.notifications.deliveryLog();
+  }
+
+  // SEL-008 — same digest the 07:00 job sends, on demand, so an admin can
+  // check what would go out (and that SMTP works) without waiting a day.
+  @Post('exhaustion-digest')
+  exhaustionDigest(@Query('sinceHours') sinceHours?: string) {
+    const hours = Number(sinceHours);
+    return this.adminAlerts.sendExhaustionDigest(Number.isFinite(hours) && hours > 0 ? hours : undefined);
   }
 
   @Post('plan-day')

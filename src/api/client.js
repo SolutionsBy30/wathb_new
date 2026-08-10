@@ -44,13 +44,22 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   });
   if (!res.ok) {
     let message = res.statusText;
+    let code = null;
     try {
       const err = await res.json();
       message = err.message || message;
+      // STU-031 — the API tags refusals it wants the UI to react to
+      // differently ('no_test_enabled' vs 'no_subscription'). Carried on the
+      // Error so callers branch on a stable code instead of substring-matching
+      // a human-readable message that translation would silently break.
+      code = err.code ?? null;
     } catch {
       /* body wasn't JSON */
     }
-    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+    const error = new Error(typeof message === 'string' ? message : JSON.stringify(message));
+    error.status = res.status;
+    error.code = code;
+    throw error;
   }
   if (res.status === 204) return null;
   return res.json();

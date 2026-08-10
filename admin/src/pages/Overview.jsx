@@ -103,6 +103,21 @@ export default function Overview() {
             </div>
           </AlertSection>
 
+          {/* SEL-008 — sections first: a section event means a student got a
+              short bundle, which is the one that needs authoring today. The
+              per-label list below fires on a healthy bank too. */}
+          <AlertSection title="أقسام نفدت أسئلتها — وثبات ناقصة (٧ أيام)" count={(alerts.exhaustedSections ?? []).length}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {(alerts.exhaustedSections ?? []).slice(0, 8).map((s) => (
+                <div key={s.sectionId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span style={{ fontFamily: 'var(--font-arabic)', color: 'var(--sand)' }}>{s.testNameAr} — {s.nameAr}</span>
+                  <span style={{ fontFamily: 'var(--font-latin)', color: 'var(--coral)' }}>{s.count} مرة</span>
+                </div>
+              ))}
+              {(alerts.exhaustedSections ?? []).length > 8 && <span style={{ fontSize: '11px', color: 'var(--mist)' }}>+{alerts.exhaustedSections.length - 8} أخرى</span>}
+            </div>
+          </AlertSection>
+
           <AlertSection title="نفاد بنك الأسئلة أثناء التوليد (٧ أيام)" count={alerts.bankExhaustionEvents.length}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {alerts.bankExhaustionEvents.slice(0, 8).map((e) => (

@@ -45,6 +45,21 @@ export class WathbGenerationService {
     for (const a of answered) {
       if (!latestByQuestion.has(a.questionId)) latestByQuestion.set(a.questionId, a);
     }
+    // SEL-008 — the exclusion above is built from the Answer table alone, so a
+    // question that was PUT IN A BUNDLE but never answered (bundle abandoned,
+    // auto-closed as partial by STU-009, or simply never opened) left no trace
+    // and could be handed to the same student again the next day. That is the
+    // repeat students were seeing. Serving counts as encountering.
+    const servedRows = await this.prisma.wathbQuestion.findMany({
+      where: { wathb: { studentId } },
+      select: { questionId: true, wathb: { select: { scheduledFor: true } } },
+    });
+    const lastServedByQuestion = new Map<string, Date>();
+    for (const r of servedRows) {
+      const prev = lastServedByQuestion.get(r.questionId);
+      if (!prev || r.wathb.scheduledFor > prev) lastServedByQuestion.set(r.questionId, r.wathb.scheduledFor);
+    }
+
     const nowMs = Date.now();
     const seen = new Set<string>();
     if (repeatPractice) {
@@ -59,6 +74,12 @@ export class WathbGenerationService {
       for (const [questionId, a] of latestByQuestion) {
         if (a.answeredAt >= todayStart) seen.add(questionId);
       }
+      // Served earlier today counts too, answered or not — otherwise the
+      // second bundle of the day can hand back a question the student is
+      // still looking at in the first.
+      for (const [questionId, servedFor] of lastServedByQuestion) {
+        if (servedFor >= todayStart) seen.add(questionId);
+      }
     } else {
       for (const [questionId, a] of latestByQuestion) {
         if (a.isCorrect) {
@@ -68,6 +89,16 @@ export class WathbGenerationService {
         const daysSince = (nowMs - a.answeredAt.getTime()) / 86400_000;
         if (daysSince < REVIEW_COOLDOWN_DAYS) seen.add(questionId); // still cooling down
         // else: cooldown elapsed — eligible again as a spaced-review item
+      }
+      // Same cooldown for merely-served questions. Not permanent: an
+      // abandoned bundle would otherwise burn five questions out of the
+      // student's bank for good, which a thin bank cannot afford. A
+      // review-eligible question (answered wrong ≥21 days ago) was served at
+      // least that long ago too, so this never cancels a spaced review.
+      for (const [questionId, servedFor] of lastServedByQuestion) {
+        if (seen.has(questionId)) continue;
+        const daysSince = (nowMs - servedFor.getTime()) / 86400_000;
+        if (daysSince < REVIEW_COOLDOWN_DAYS) seen.add(questionId);
       }
     }
 
@@ -158,7 +189,7 @@ export class WathbGenerationService {
         ? { weaknessFloorFraction: floorEnv }
         : {}),
     });
-    return this.buildWathb(studentId, picks, 'standard', forDate, sequence, scopedLabels.map((l) => l.labelId), testId);
+    return this.buildWathb(studentId, picks, 'standard', forDate, sequence, scopedLabels.map((l) => l.labelId), testId, chosenSectionId);
   }
 
   private async buildWathb(
@@ -175,6 +206,9 @@ export class WathbGenerationService {
     // Recorded on the bundle so leap history can report which test it was
     // for without inferring it from the student's current focus.
     testId?: string,
+    // The section the bundle was scoped to, so an exhausted bundle can be
+    // reported at the level an admin actually authors against.
+    sectionId?: string | null,
   ) {
     const used = new Set<string>();
     const repeatPractice = sequence > 0;
@@ -217,6 +251,23 @@ export class WathbGenerationService {
         used.add(q.id);
         resolved.push({ labelId, question: q });
       }
+    }
+
+    // SEL-008 — a short bundle after backfill means the whole scope is out of
+    // eligible questions, not just one label. That is the state worth waking
+    // an admin for: authoring one more question under the named section fixes
+    // it, whereas the per-label events (recorded above) fire routinely on a
+    // healthy bank and are noise on their own. AdminAlertService digests
+    // these nightly; OverviewService.alerts() shows them on the dashboard.
+    if (resolved.length < picks.length && sectionId) {
+      await this.auditLog.record({
+        actorId: null,
+        actorLabel: 'system',
+        action: 'selection.section_exhausted',
+        entityType: 'Section',
+        entityId: sectionId,
+        note: `only ${resolved.length}/${picks.length} questions available for student ${studentId}`,
+      });
     }
 
     if (resolved.length === 0) return null;

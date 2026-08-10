@@ -124,6 +124,24 @@ export class OverviewService {
       .map(([labelId, count]) => ({ labelId, nameAr: labelNames.get(labelId) ?? labelId, count }))
       .sort((a, b) => b.count - a.count);
 
-    return { thinLabels, negativeDiscrimination, nonDiscriminating, sharingAnomalies, bankExhaustionEvents };
+    // SEL-008 — the label events above fire routinely on a healthy bank (one
+    // weighted pick came up empty, backfill covered it). A *section* event
+    // means backfill failed too and a student got a short bundle, which is
+    // the one an admin has to act on.
+    const sectionExhaustionRaw = await this.prisma.auditLog.findMany({
+      where: { action: 'selection.section_exhausted', createdAt: { gte: exhaustionSince } },
+      select: { entityId: true },
+    });
+    const bySection = new Map<string, number>();
+    for (const e of sectionExhaustionRaw) bySection.set(e.entityId, (bySection.get(e.entityId) ?? 0) + 1);
+    const exhaustedSectionRows = await this.prisma.section.findMany({
+      where: { id: { in: [...bySection.keys()] } },
+      include: { test: true },
+    });
+    const exhaustedSections = exhaustedSectionRows
+      .map((s) => ({ sectionId: s.id, nameAr: s.nameAr, testNameAr: s.test.nameAr, count: bySection.get(s.id) ?? 0 }))
+      .sort((a, b) => b.count - a.count);
+
+    return { thinLabels, negativeDiscrimination, nonDiscriminating, sharingAnomalies, bankExhaustionEvents, exhaustedSections };
   }
 }

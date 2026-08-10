@@ -5,12 +5,13 @@ import { StreakStrip } from '../../../design-system/components/StreakStrip';
 import { RuleSpark } from '../../../design-system/components/RuleSpark';
 import markOnIndigo from '../../../design-system/assets/mark-on-indigo.svg';
 
-export default function Home({ vm, student, goTestPicker, tests = [], focusedTestId }) {
+export default function Home({ vm, student, goTestPicker, tests = [], focusedTestId, needsTestActivation, onManageTests }) {
   // STU-002 — with more than one enabled test the student chooses which one
   // this leap is for; with a single test there's nothing to pick, so the
   // selector stays out of the way.
   const [chosenTest, setChosenTest] = useState(focusedTestId ?? tests[0]?.testId);
   useEffect(() => { setChosenTest(focusedTestId ?? tests[0]?.testId); }, [focusedTestId, tests.length]);
+  const noTestEnabled = tests.length === 0 || needsTestActivation;
   return (
     <div className="sd-split">
       <div className="sd-rail">
@@ -110,7 +111,21 @@ export default function Home({ vm, student, goTestPicker, tests = [], focusedTes
             ))}
           </div>
         )}
-        <Button variant="primary" fullWidth disabled={vm.alreadyDoneToday} onClick={() => goTestPicker(chosenTest)}>{vm.startButtonLabel}</Button>
+        {/* STU-031 — no test switched on is a two-click fix in the profile,
+            not a payment problem. Shown as soon as the picker is empty rather
+            than waiting for the student to press a button that can only fail. */}
+        {noTestEnabled ? (
+          <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--sand)', lineHeight: 1.8 }}>
+              لم تفعّل أي اختبار بعد. فعّل اختباراً واحداً على الأقل من «اختباراتي وأهدافي» لتبدأ وثبتك اليومية — يمكنك تفعيل أكثر من اختبار.
+            </p>
+            {onManageTests && (
+              <Button variant="primary" onClick={onManageTests}>تفعيل اختبار</Button>
+            )}
+          </div>
+        ) : (
+          <Button variant="primary" fullWidth disabled={vm.alreadyDoneToday} onClick={() => goTestPicker(chosenTest)}>{vm.startButtonLabel}</Button>
+        )}
       </div>
     </div>
   );
