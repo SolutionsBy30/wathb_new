@@ -24,8 +24,14 @@ describe('isSubscriptionCovering', () => {
     expect(isSubscriptionCovering(sub({ endsAt: new Date('2026-01-01T00:00:00Z') }), 'qudurat', NOW)).toBe(false);
   });
 
-  it('accepts a subscription with no endsAt yet (still pending activation window)', () => {
+  // FRE-010 leans on this: a zero-price default enrolment is written with
+  // endsAt null precisely so the free tier never lapses and locks the student
+  // out of the product. sweepExpiredSubscriptions' `endsAt < now` filter never
+  // matches null either, so the two halves agree.
+  it('accepts a subscription with no endsAt (open-ended free tier, or pending activation window)', () => {
     expect(isSubscriptionCovering(sub({ endsAt: null }), 'qudurat', NOW)).toBe(true);
+    const farFuture = new Date('2099-01-01T00:00:00Z');
+    expect(isSubscriptionCovering(sub({ endsAt: null }), 'qudurat', farFuture)).toBe(true);
   });
 
   it('rejects when the package does not include the requested test', () => {

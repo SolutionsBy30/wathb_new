@@ -7,7 +7,10 @@ import { compositeDelta } from './weekly-report.util';
 // Statistical honesty requirement, spec §5.2: never render a percentage for
 // an area/label with fewer than this many answers.
 export const MIN_SAMPLE_FOR_REPORTING = 20;
-const DEFAULT_DAILY_TARGET = 5; // Package.questionsPerDay is a later phase; hardcoded until packages exist.
+// FRE-010 — fallback only, for a student with no active package at all. The
+// real target is Package.questionsPerDay, so the "5 per day" the progress bar
+// measures against follows whatever the admin set for that student's tier.
+const DEFAULT_DAILY_TARGET = 5;
 const HEATMAP_WEEKS = 8;
 
 // §4.8 guardrail #1 — a school with 3 students is not a data point. Both
@@ -158,6 +161,15 @@ export class ReportsService {
     startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
     startOfWeek.setUTCHours(0, 0, 0, 0);
 
+    // FRE-010 — the daily/weekly target follows the student's own tier.
+    const targetSubs = await this.prisma.subscription.findMany({
+      where: { studentId, status: 'active' },
+      select: { package: { select: { questionsPerDay: true } } },
+    });
+    const dailyTarget = targetSubs.length > 0
+      ? Math.max(1, ...targetSubs.map((s) => s.package.questionsPerDay ?? DEFAULT_DAILY_TARGET))
+      : DEFAULT_DAILY_TARGET;
+
     const [lifetimeAnswered, lifetimeCorrect, weekAnswered, uniqueQuestions, labelStats, recentMistakes, trend, heatmap] = await Promise.all([
       this.prisma.answer.count({ where: { studentId } }),
       this.prisma.answer.count({ where: { studentId, isCorrect: true } }),
@@ -238,7 +250,7 @@ export class ReportsService {
         lifetimeCorrect,
         lifetimeWrong: lifetimeAnswered - lifetimeCorrect,
         weekAnswered,
-        dailyTarget: DEFAULT_DAILY_TARGET,
+        dailyTarget,
         uniqueQuestionsAnswered: uniqueQuestions.length,
       },
       streak: { current: student.currentStreak, lastCompletedOn: student.lastCompletedOn },

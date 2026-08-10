@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { DefaultEnrolmentService } from '../payments/default-enrolment.service';
 
 // Shared by admin-created accounts (people.controller.ts) and public signup
 // (auth.controller.ts) — lives outside AuthModule/PeopleModule so neither has
@@ -9,7 +10,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AccountsService {
   private readonly logger = new Logger(AccountsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private defaultEnrolment: DefaultEnrolmentService,
+  ) {}
 
   // whatsappOptInAt is left null for admin-created accounts (no self-service
   // consent step happened) — only public signup captures it.
@@ -19,47 +23,14 @@ export class AccountsService {
       data: { mobileE164: mobile, name, role: 'student', whatsappOptInAt, student: { create: {} } },
       include: { student: true },
     });
-    await this.enrolInDefaultPackage(user.id);
+    // FRE-009 — a new student lands on the default package immediately rather
+    // than in the no-subscription state, so every entitlement check downstream
+    // has a package to read and "free" is a tier with admin-set limits rather
+    // than an absence. Non-fatal by design (see DefaultEnrolmentService).
+    await this.defaultEnrolment.enrol(user.id);
     return user;
   }
 
-  /**
-   * FRE-009 — a new student lands on the default package immediately rather
-   * than in the no-subscription state.
-   *
-   * That state was the worse of the two: the Wathb loop is gated on an active
-   * subscription, so a student who signed up and did nothing else could not
-   * take a leap at all, and the free-tier limits (1/day, partial report) had
-   * nothing to hang off. Enrolling on creation means the entitlement checks
-   * everywhere downstream have a package to read, and "free" becomes a tier
-   * with configurable limits rather than an absence.
-   *
-   * Failure here is deliberately non-fatal: an admin who has not nominated a
-   * default, or a transient write error, must not block signup. The student
-   * is simply in the old no-subscription state and can pick a package.
-   */
-  private async enrolInDefaultPackage(studentId: string): Promise<void> {
-    try {
-      const pkg = await this.prisma.package.findFirst({ where: { isDefault: true, isActive: true } });
-      if (!pkg) return;
-      const startsAt = new Date();
-      const endsAt = new Date(startsAt);
-      endsAt.setUTCMonth(endsAt.getUTCMonth() + pkg.durationMonths);
-      await this.prisma.subscription.create({
-        data: {
-          studentId,
-          packageId: pkg.id,
-          priceSnapshotHalalas: pkg.priceHalalas,
-          status: 'active',
-          startsAt,
-          endsAt,
-          paymentRef: 'default_enrolment',
-        },
-      });
-    } catch (e: any) {
-      this.logger.error(`default-package enrolment failed for student ${studentId}: ${e?.message ?? e}`);
-    }
-  }
 
   async createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor', whatsappOptInAt?: Date) {
     await this.assertMobileFree(mobile);

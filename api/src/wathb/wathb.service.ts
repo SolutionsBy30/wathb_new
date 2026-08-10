@@ -97,6 +97,16 @@ export class WathbService {
       throw new ForbiddenException({ code: 'no_subscription', message: 'no active subscription covers this test' });
     }
 
+    // FRE-010 — bundle size comes from the covering package, not a constant.
+    // Package.questionsPerDay was stored and advertised on the pricing screen
+    // but never actually read, so an admin who set the free tier to 3 still
+    // got bundles of 5. Most generous covering package wins, matching how
+    // dailyWathbLimit is resolved below.
+    const coveringPackages = subscriptions.filter((s) => s.package.testIds.includes(testId!)).map((s) => s.package);
+    const bundleSize = coveringPackages.length > 0
+      ? Math.max(1, ...coveringPackages.map((p) => p.questionsPerDay ?? DEFAULT_BUNDLE_SIZE))
+      : DEFAULT_BUNDLE_SIZE;
+
     const todayDate = new Date();
     todayDate.setUTCHours(0, 0, 0, 0);
 
@@ -113,7 +123,7 @@ export class WathbService {
     if (!wathb) {
       wathb = !student.placementDoneAt
         ? await this.generation.generatePlacement(studentId, testId, student.track ?? null)
-        : await this.generation.generateDaily(studentId, testId, student.track ?? null, DEFAULT_BUNDLE_SIZE);
+        : await this.generation.generateDaily(studentId, testId, student.track ?? null, bundleSize);
       if (!wathb) {
         throw new BadRequestException('no eligible questions available today — bank exhausted, contact support');
       }
@@ -124,13 +134,12 @@ export class WathbService {
       // several are active; the free tier ships backfilled to 1 (FRE-002).
       // At the limit, the completed bundle is returned so the client shows
       // "done today".
-      const covering = subscriptions.filter((s) => s.package.testIds.includes(testId!));
-      const unlimited = covering.some((s) => s.package.dailyWathbLimit === null);
-      const limit = unlimited ? Infinity : Math.max(1, ...covering.map((s) => s.package.dailyWathbLimit ?? 1));
+      const unlimited = coveringPackages.some((p) => p.dailyWathbLimit === null);
+      const limit = unlimited ? Infinity : Math.max(1, ...coveringPackages.map((p) => p.dailyWathbLimit ?? 1));
       const doneToday = wathb.sequence + 1; // sequences are contiguous from 0
       if (doneToday < limit) {
         const next = await this.generation.generateDaily(
-          studentId, testId, student.track ?? null, DEFAULT_BUNDLE_SIZE, undefined, wathb.sequence + 1,
+          studentId, testId, student.track ?? null, bundleSize, undefined, wathb.sequence + 1,
         );
         // Bank exhausted for a follow-up bundle isn't an error — the student
         // already practised today; fall through with the completed one.

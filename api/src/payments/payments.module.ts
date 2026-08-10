@@ -7,9 +7,10 @@ import { PaymobWebhookController } from './paymob-webhook.controller';
 import { PaymentProviderModule } from './payment-provider.module';
 import { AuthModule } from '../auth/auth.module';
 import { AuditLogModule } from '../admin-ops/audit-log.module';
+import { DefaultEnrolmentModule } from './default-enrolment.module';
 
 @Module({
-  imports: [AuthModule, PaymentProviderModule, AuditLogModule],
+  imports: [AuthModule, PaymentProviderModule, AuditLogModule, DefaultEnrolmentModule],
   providers: [PackagesService, CheckoutService],
   controllers: [PackagesController, CheckoutController, PaymobWebhookController],
   exports: [CheckoutService],

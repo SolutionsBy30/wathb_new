@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider.interface';
 import { AuditLogService } from '../admin-ops/audit-log.service';
 import { MagicLinkService } from '../auth/magic-link.service';
+import { DefaultEnrolmentService } from './default-enrolment.service';
 
 @Injectable()
 export class CheckoutService {
@@ -13,6 +14,7 @@ export class CheckoutService {
     private config: ConfigService,
     private auditLog: AuditLogService,
     private magicLinks: MagicLinkService,
+    private defaultEnrolment: DefaultEnrolmentService,
   ) {}
 
   /** True only when no real Paymob credentials are configured — see payment-provider.module.ts's identical check. */
@@ -263,10 +265,18 @@ export class CheckoutService {
       where: { status: 'active', endsAt: { lt: now } },
       select: { id: true, studentId: true },
     });
+    let downgraded = 0;
     for (const sub of expired) {
       await this.prisma.subscription.update({ where: { id: sub.id }, data: { status: 'expired' } });
       await this.magicLinks.revokeAllForSubject(sub.studentId);
+      // FRE-010 — a lapsed paid plan drops to the free tier rather than to
+      // nothing. Without this the admin's free-account settings only ever
+      // applied to brand-new signups, and an expired student was locked out
+      // of the product completely instead of falling back to the limited
+      // plan the admin configured. No-ops when no default is nominated, so
+      // the old hard-stop behaviour is still one un-nominated flag away.
+      if (await this.defaultEnrolment.enrol(sub.studentId)) downgraded += 1;
     }
-    return { expired: expired.length };
+    return { expired: expired.length, downgradedToDefault: downgraded };
   }
 }
