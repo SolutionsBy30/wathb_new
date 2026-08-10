@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
 import { api, decodeSession, getToken, setToken } from '../../../api/client';
 import MyTests from './MyTests';
+import { NOTIFICATION_SLOTS, slotById, slotIdFromHours, slotTimeRange } from '../../../lib/notification-slots';
 
 function formatDate(d) {
   return d ? new Date(d).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
@@ -30,7 +31,7 @@ const DAYS = [
   { id: 6, label: 'السبت' },
 ];
 
-export default function Profile({ student, subscription, onManageSubscription, onSubscriptionChanged, onLogout, onTestsChanged, onOpenHistory, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
+export default function Profile({ student, subscription, onManageSubscription, onSubscriptionChanged, onLogout, onTestsChanged, supervisors, onInvite, onRevoke, inviteBusy, inviteError }) {
   // FRE-006 — shown locked with an upgrade prompt, not hidden, when the
   // active package doesn't allow supervisor linking. Server-enforced too
   // (SupervisorsService.invite throws 403) — this is just the honest UI.
@@ -40,8 +41,9 @@ export default function Profile({ student, subscription, onManageSubscription, o
   const [type, setType] = useState('parent');
   const [sent, setSent] = useState(false);
 
-  const [startHour, setStartHour] = useState(student?.notifSlotStartHour ?? 18);
-  const [endHour, setEndHour] = useState(student?.notifSlotEndHour ?? 20);
+  // ONB-012 — same named day-parts as the onboarding step, so the choice a
+  // student made at signup is the choice they see here.
+  const [slotId, setSlotId] = useState(() => slotIdFromHours(student?.notifSlotStartHour, student?.notifSlotEndHour));
   // ONB-012 — skipDays was always in the schema but never actually settable
   // by anyone until now; the same day-chip toggle also seeds the onboarding
   // step (NotificationSlotSetup.jsx).
@@ -78,7 +80,8 @@ export default function Profile({ student, subscription, onManageSubscription, o
     setNotifBusy(true);
     setNotifSaved(false);
     try {
-      await api.setNotificationPrefs({ notifSlotStartHour: Number(startHour), notifSlotEndHour: Number(endHour), skipDays: [...skipDays] });
+      const slot = slotById(slotId);
+      await api.setNotificationPrefs({ notifSlotStartHour: slot.startHour, notifSlotEndHour: slot.endHour, skipDays: [...skipDays] });
       setNotifSaved(true);
     } finally {
       setNotifBusy(false);
@@ -276,11 +279,6 @@ export default function Profile({ student, subscription, onManageSubscription, o
         <MyTests onChanged={onTestsChanged} />
       </div>
 
-      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>سجل الوثبات</h2>
-      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', maxWidth: '360px' }}>
-        <Button variant="secondary" onClick={onOpenHistory}>عرض سجل الوثبات</Button>
-      </div>
-
       <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المشرف وولي الأمر</h2>
       <div className="sd-card-grid" style={{ gap: '20px' }}>
         <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -357,16 +355,27 @@ export default function Profile({ student, subscription, onManageSubscription, o
       <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>إعدادات الإشعارات</h2>
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '420px' }}>
         <div>
-          <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>نافذة إرسال الوثبة اليومية عبر واتساب</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <select value={startHour} onChange={(e) => setStartHour(e.target.value)} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}>
-              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}
-            </select>
-            <span style={{ color: 'var(--mist)', fontSize: '12px' }}>إلى</span>
-            <select value={endHour} onChange={(e) => setEndHour(e.target.value)} style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}>
-              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{h}:00</option>)}
-            </select>
+          <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>وقت إرسال الوثبة اليومية عبر واتساب</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {NOTIFICATION_SLOTS.map((s) => (
+              <button
+                key={s.id}
+                aria-pressed={slotId === s.id}
+                onClick={() => { setSlotId(s.id); setNotifSaved(false); }}
+                style={{
+                  border: 'none', cursor: 'pointer', minHeight: '44px', padding: '7px 16px', borderRadius: '999px',
+                  fontFamily: 'var(--font-arabic)', fontSize: '13px',
+                  background: slotId === s.id ? 'var(--lime)' : 'var(--indigo)',
+                  color: slotId === s.id ? 'var(--lime-ink)' : 'var(--sand)',
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
           </div>
+          <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+            يصلك التذكير بين <span dir="ltr" style={{ fontFamily: 'var(--font-latin)' }}>{slotTimeRange(slotById(slotId))}</span>
+          </p>
         </div>
         <div>
           <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>إيقاف التذكير في أيام معيّنة</p>

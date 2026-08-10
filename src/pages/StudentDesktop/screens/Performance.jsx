@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Bar } from '../../../design-system/components/Bar';
 import { Button } from '../../../design-system/components/Button';
+import { LeapHistoryTable } from '../../../design-system/components/LeapHistoryTable';
+import { api } from '../../../api/client';
 
 const lineStyle = { borderBottom: '0.5px solid var(--on-indigo-line)' };
 
@@ -36,6 +39,34 @@ function LockedSection({ title, onUpgrade }) {
   );
 }
 
+/**
+ * The student's leap history, folded into لوحتي rather than living on its own
+ * screen. It belongs beside the performance numbers it explains — "how did I
+ * do" and "what did I do" are one question — and a separate screen reachable
+ * only from a link on Home was easy to never find.
+ *
+ * Fetches its own rows: the parent already receives `report` from a different
+ * endpoint, and threading a second async payload through it would couple the
+ * two loads for no gain.
+ */
+function LeapHistorySection() {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    api.myLeaps().then(setRows).catch((e) => setError(e.message));
+  }, []);
+
+  return (
+    <>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>سجل الوثبات</h2>
+      {error && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>}
+      {!rows && !error && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>جاري التحميل…</p>}
+      {rows && <LeapHistoryTable rows={rows} />}
+    </>
+  );
+}
+
 export default function Performance({ report, onUpgrade }) {
   if (!report) {
     return <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>جاري تحميل الأداء…</p>;
@@ -65,6 +96,10 @@ export default function Performance({ report, onUpgrade }) {
         <LockedSection title="المؤشر المركّب — اتجاه أسبوعي" onUpgrade={onUpgrade} />
         <LockedSection title="الاتساق والسرعة مقابل الهدف" onUpgrade={onUpgrade} />
         <LockedSection title="أخطاء حديثة" onUpgrade={onUpgrade} />
+
+        {/* Not locked: this is the student's own record of what they did,
+            not the diagnostic breakdown the free tier withholds. */}
+        <LeapHistorySection />
       </>
     );
   }
@@ -208,6 +243,8 @@ export default function Performance({ report, onUpgrade }) {
           );
         })}
       </div>
+
+      <LeapHistorySection />
     </>
   );
 }

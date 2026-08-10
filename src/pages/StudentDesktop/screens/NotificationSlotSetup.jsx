@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
+import { NOTIFICATION_SLOTS, slotById, slotIdFromHours, slotTimeRange } from '../../../lib/notification-slots';
 
-// ONB-012 — spec: "a notification-window slot picker (2-hour slots),
-// timezone (default Asia/Riyadh), and a configurable skip-days toggle."
-// The 2-hour slots stop at a 20-22 start (not 22-24) so the window never
-// has to cross midnight — resolveSlotForDay (reactive-scheduler.ts) builds
-// both edges from the same calendar day via setUTCHours, and an end hour
-// of 24 would roll over into the next day.
-const SLOT_STARTS = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
+// ONB-012 — spec: "a notification-window slot picker, timezone (default
+// Asia/Riyadh), and a configurable skip-days toggle." The slots are named
+// parts of the day (صباحاً/ظهراً/…) rather than clock ranges; see
+// src/lib/notification-slots.js for the hour windows behind them.
 const DAYS = [
   { id: 0, label: 'الأحد' },
   { id: 1, label: 'الاثنين' },
@@ -18,15 +16,10 @@ const DAYS = [
   { id: 6, label: 'السبت' },
 ];
 
-function formatSlot(h) {
-  return `${h}:00 – ${h + 2}:00`;
-}
-
 export default function NotificationSlotSetup({ initialStartHour, initialEndHour, initialSkipDays, onSubmit, busy }) {
-  const [slotStart, setSlotStart] = useState(
-    SLOT_STARTS.includes(initialStartHour) && initialEndHour === initialStartHour + 2 ? initialStartHour : 18,
-  );
+  const [slotId, setSlotId] = useState(() => slotIdFromHours(initialStartHour, initialEndHour));
   const [skipDays, setSkipDays] = useState(new Set(initialSkipDays ?? [5]));
+  const slot = slotById(slotId);
 
   const toggleDay = (id) => {
     setSkipDays((prev) => {
@@ -47,24 +40,27 @@ export default function NotificationSlotSetup({ initialStartHour, initialEndHour
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '420px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>النافذة الزمنية (بتوقيت آسيا/الرياض)</span>
+        <span style={{ fontSize: '12px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>وقت التذكير (بتوقيت آسيا/الرياض)</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {SLOT_STARTS.map((h) => (
+          {NOTIFICATION_SLOTS.map((s) => (
             <button
-              key={h}
-              dir="ltr"
-              onClick={() => setSlotStart(h)}
+              key={s.id}
+              aria-pressed={slotId === s.id}
+              onClick={() => setSlotId(s.id)}
               style={{
-                border: 'none', cursor: 'pointer', padding: '8px 12px', borderRadius: '999px',
-                fontFamily: 'var(--font-latin)', fontSize: '12px',
-                background: slotStart === h ? 'var(--lime)' : 'var(--on-indigo-subtle)',
-                color: slotStart === h ? 'var(--lime-ink)' : 'var(--sand)',
+                border: 'none', cursor: 'pointer', minHeight: '44px', padding: '8px 16px', borderRadius: '999px',
+                fontFamily: 'var(--font-arabic)', fontSize: '13px',
+                background: slotId === s.id ? 'var(--lime)' : 'var(--on-indigo-subtle)',
+                color: slotId === s.id ? 'var(--lime-ink)' : 'var(--sand)',
               }}
             >
-              {formatSlot(h)}
+              {s.label}
             </button>
           ))}
         </div>
+        <span style={{ fontSize: '11px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>
+          يصلك التذكير بين <span dir="ltr" style={{ fontFamily: 'var(--font-latin)' }}>{slotTimeRange(slot)}</span>
+        </span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '420px' }}>
@@ -90,7 +86,7 @@ export default function NotificationSlotSetup({ initialStartHour, initialEndHour
       <Button
         variant="primary"
         disabled={busy}
-        onClick={() => onSubmit({ notifSlotStartHour: slotStart, notifSlotEndHour: slotStart + 2, skipDays: [...skipDays] })}
+        onClick={() => onSubmit({ notifSlotStartHour: slot.startHour, notifSlotEndHour: slot.endHour, skipDays: [...skipDays] })}
       >
         {busy ? 'جاري الحفظ…' : 'متابعة'}
       </Button>

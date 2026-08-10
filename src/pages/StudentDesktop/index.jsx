@@ -15,7 +15,6 @@ import Complete from './screens/Complete';
 import Performance from './screens/Performance';
 import Profile from './screens/Profile';
 import Pricing from './screens/Pricing';
-import LeapHistory from './screens/LeapHistory';
 import WeeklyReport from './screens/WeeklyReport';
 
 export default function StudentDesktop() {
@@ -620,10 +619,8 @@ export default function StudentDesktop() {
               goTestPicker={startWathb}
               tests={(myTests?.tests ?? []).filter((t) => t.isActive)}
               focusedTestId={myTests?.focusedTestId}
-              onOpenHistory={() => setScreen('leapHistory')}
             />
           )}
-          {screen === 'leapHistory' && <LeapHistory onBack={goHome} />}
           {screen === 'question' && questionVm && (
             <Question vm={questionVm} selectOption={setSelectedIndex} confirmAnswer={confirmAnswer} />
           )}
@@ -646,7 +643,6 @@ export default function StudentDesktop() {
               onSubscriptionChanged={loadSubscription}
               onLogout={logout}
               onTestsChanged={() => api.myTests().then(setMyTests).catch(() => {})}
-              onOpenHistory={() => setScreen('leapHistory')}
               supervisors={supervisors}
               onInvite={inviteSupervisor}
               onRevoke={revokeSupervisor}
@@ -658,7 +654,7 @@ export default function StudentDesktop() {
           {showBottomNav && (
             <div className="sd-bottom-nav">
               <button onClick={goHome} className={`sd-nav-btn${screen === 'home' ? ' active' : ''}`}>الرئيسية</button>
-              <button onClick={goPerformance} className={`sd-nav-btn${screen === 'performance' ? ' active' : ''}`}>لوحة التحكم</button>
+              <button onClick={goPerformance} className={`sd-nav-btn${screen === 'performance' ? ' active' : ''}`}>لوحة الأداء</button>
               <button onClick={goProfile} className={`sd-nav-btn${screen === 'profile' ? ' active' : ''}`}>ملفي</button>
             </div>
           )}

@@ -45,7 +45,7 @@ export default function Complete({ vm, goDashboard, backHome }) {
         غداً وثبة جديدة — تدريب إضافي عند الطلب جزء من مرحلة لاحقة.
       </p>
 
-      <Button variant="primary" fullWidth onClick={goDashboard}>لوحة التحكم</Button>
+      <Button variant="primary" fullWidth onClick={goDashboard}>لوحة الأداء</Button>
       <button onClick={backHome} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', fontFamily: 'var(--font-arabic)', fontSize: '13px', cursor: 'pointer' }}>الرئيسية</button>
     </>
   );
