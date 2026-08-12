@@ -81,6 +81,30 @@ export class NotificationsController {
     return this.notifications.sendDailyWathbNotification(studentId, resolveDate(forDate));
   }
 
+  // ADM-087 — the admin console's per-student "send now": plans today's
+  // bundle if the 21:00 job hasn't yet, then sends. See sendNowForStudent
+  // for why entitlement rules still apply.
+  @Post('send-now/:studentId')
+  sendNow(@Param('studentId') studentId: string, @Query('forDate') forDate?: string) {
+    return this.notifications.sendNowForStudent(studentId, resolveDate(forDate));
+  }
+
+  // ADM-087 — the same manual send for the weekly report, one recipient at a
+  // time. The bulk /weekly-reports trigger above fires for everyone due;
+  // these two are for support ("resend Ahmad's report") and for verifying a
+  // channel change without messaging the whole roster.
+  @Post('weekly-report/student/:studentId')
+  sendStudentWeeklyReport(@Param('studentId') studentId: string, @Query('forDate') forDate?: string) {
+    return this.weeklyReports.sendStudentWeeklyReport(studentId, resolveDate(forDate));
+  }
+
+  // respectSchedule stays false: an admin pressing send means now, not "only
+  // if this happens to be the supervisor's configured day and hour".
+  @Post('weekly-report/supervisor/:supervisorId')
+  sendSupervisorWeeklyReport(@Param('supervisorId') supervisorId: string, @Query('forDate') forDate?: string) {
+    return this.weeklyReports.sendSupervisorWeeklyReport(supervisorId, resolveDate(forDate), false);
+  }
+
   // weekly_report job (spec §9.4) — student + supervisor, same manual-trigger
   // rationale as plan_day/send_notification above.
   // respectSchedule stays false here: an admin pressing "send weekly reports"

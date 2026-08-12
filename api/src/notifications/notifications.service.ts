@@ -62,6 +62,34 @@ export class NotificationsService {
   }
 
   /**
+   * ADM-087 — "send this student their leap now", from the admin console.
+   *
+   * plan_day runs at 21:00 for the NEXT day, so on any given afternoon there
+   * is usually no notification row for today and a bare send returns
+   * 'not_scheduled'. Planning and sending are therefore one operation here:
+   * an admin pressing the button means "today, now", not "if a job happened
+   * to queue one already".
+   *
+   * Entitlement and preference rules are deliberately NOT overridden. A
+   * free-tier package with notifications off, a student's own skip-day, an
+   * opt-out, a suspension — all still stop the send and are reported back by
+   * reason, so the admin sees why rather than the button silently doing
+   * nothing. Overriding a student's stated preference from a support screen
+   * is not a thing an admin should be able to do by accident.
+   */
+  async sendNowForStudent(studentId: string, forDate: Date) {
+    const scheduledFor = dayKey(forDate);
+    const existing = await this.prisma.notification.findUnique({
+      where: { userId_kind_scheduledFor: { userId: studentId, kind: 'daily_wathb', scheduledFor } },
+    });
+    if (!existing) {
+      const planned = await this.planDayForStudent(studentId, forDate);
+      if ('skipped' in planned) return planned;
+    }
+    return this.sendDailyWathbNotification(studentId, forDate);
+  }
+
+  /**
    * plan_day (spec §9.4) — pre-generate tomorrow's bundle and queue the
    * notification row. Idempotent per (student, day): safe to call twice.
    */

@@ -141,7 +141,7 @@ export class StudentsService {
     });
     if (!student) throw new NotFoundException('student not found');
 
-    const [subscriptions, notifications, sessions, magicLinks] = await Promise.all([
+    const [subscriptions, notifications, sessions, magicLinks, supervisors] = await Promise.all([
       this.prisma.subscription.findMany({ where: { studentId }, orderBy: { createdAt: 'desc' }, include: { package: true } }),
       this.prisma.notification.findMany({ where: { userId: studentId }, orderBy: { createdAt: 'desc' }, take: 50 }),
       this.prisma.wathb.findMany({
@@ -156,9 +156,16 @@ export class StudentsService {
         take: 30,
         include: { accessLog: { orderBy: { accessedAt: 'desc' } } },
       }),
+      // ADM-087 — needed so the detail screen can send this student's weekly
+      // report to a specific supervisor. Only accepted, unrevoked links: an
+      // invite nobody answered has no one to send to.
+      this.prisma.studentSupervisor.findMany({
+        where: { studentId, acceptedAt: { not: null }, revokedAt: null },
+        include: { supervisor: { include: { user: { select: { name: true, mobileE164: true } } } } },
+      }),
     ]);
 
-    return { student, subscriptions, notifications, sessions, magicLinks };
+    return { student, subscriptions, notifications, sessions, magicLinks, supervisors };
   }
 
   /** Admin lookup for manual actions (e.g. wire-transfer activation) — exact mobile match. */

@@ -106,6 +106,10 @@ export const api = {
   previewCampaign: (filter) => request('/admin/notifications/campaign/preview', { method: 'POST', body: filter }),
   sendCampaign: (dto) => request('/admin/notifications/campaign/send', { method: 'POST', body: dto }),
   processRetries: () => request('/admin/notifications/process-retries', { method: 'POST' }),
+  // ADM-087 — per-recipient manual sends from the student detail screen.
+  sendLeapNow: (studentId) => request(`/admin/notifications/send-now/${studentId}`, { method: 'POST' }),
+  sendStudentWeeklyReport: (studentId) => request(`/admin/notifications/weekly-report/student/${studentId}`, { method: 'POST' }),
+  sendSupervisorWeeklyReport: (supervisorId) => request(`/admin/notifications/weekly-report/supervisor/${supervisorId}`, { method: 'POST' }),
   undeliveredNotifications: () => request('/admin/notifications/undelivered'),
 
   listPackages: () => request('/admin/packages'),

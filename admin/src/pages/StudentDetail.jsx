@@ -33,6 +33,37 @@ function Section({ title, children }) {
   );
 }
 
+const sendBtn = {
+  border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px', background: 'transparent',
+  boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--lime)',
+  fontFamily: 'var(--font-arabic)', fontSize: '12px',
+};
+
+// ADM-087 — every reason a send can decline, in the admin's language. The
+// API returns a machine reason; mapping it here keeps the console honest
+// about *why* nothing was sent rather than showing a bare "skipped".
+const SEND_REASONS = {
+  no_goal: 'الطالب لم يحدد اختباره المستهدف بعد.',
+  free_tier: 'باقة الطالب الحالية لا تشمل الإشعارات اليومية — عدّلها من شاشة الباقات.',
+  skip_day: 'اليوم من الأيام التي أوقف الطالب التذكير فيها.',
+  bank_exhausted: 'لا توجد أسئلة كافية لتوليد وثبة اليوم — راجع تنبيهات نفاد الأقسام.',
+  not_scheduled: 'أُرسلت وثبة اليوم بالفعل (أو لم تعد بحالة انتظار).',
+  frequency_cap: 'بلغ الطالب الحد الأقصى للرسائل اليومية.',
+  opted_out: 'الطالب أوقف الرسائل عبر واتساب (STOP).',
+  suspended: 'الحساب موقوف.',
+  already_completed: 'الطالب أنهى وثبة اليوم بالفعل، فلا حاجة للتذكير.',
+};
+
+function describeSendResult(r) {
+  if (!r) return { ok: false, text: 'لا توجد استجابة من الخادم.' };
+  if (r.sent) return { ok: true, text: 'تم الإرسال.' };
+  if (r.skipped) return { ok: false, text: SEND_REASONS[r.skipped] ?? `لم يُرسل: ${r.skipped}` };
+  if (r.failed) return { ok: false, text: `فشل الإرسال${r.error ? `: ${r.error}` : ''} — راجع سجل الإرسال أدناه.` };
+  // sendSupervisorWeeklyReport returns per-link counts rather than a verdict.
+  if (typeof r.sent === 'number' || Array.isArray(r)) return { ok: true, text: 'تم تنفيذ الإرسال — راجع السجل أدناه.' };
+  return { ok: true, text: 'تم التنفيذ — راجع السجل أدناه.' };
+}
+
 // ADM-052 — subscription/payment history, notification-delivery log,
 // session-by-session raw answers, and device/link access log, for support
 // and abuse investigation. The shared student report (ADM-051) covers
@@ -56,6 +87,28 @@ export default function StudentDetail({ studentId, onBack }) {
     }
   };
 
+  // ADM-087 — manual sends. The result is reported rather than assumed:
+  // entitlement and preference rules (free tier, skip-day, opt-out,
+  // suspension, already-done) still stop a send, and an admin pressing a
+  // button deserves to see which one fired instead of silence.
+  const [sendBusy, setSendBusy] = useState(null); // which button is in flight
+  const [sendResult, setSendResult] = useState(null);
+
+  const runSend = async (key, fn) => {
+    setSendBusy(key);
+    setSendResult(null);
+    try {
+      setSendResult(describeSendResult(await fn()));
+    } catch (e) {
+      setSendResult({ ok: false, text: e.message });
+    } finally {
+      setSendBusy(null);
+      // The delivery log below is the record of what happened; refresh it so
+      // the new row is visible without a page reload.
+      api.studentDetail(studentId).then(setData).catch(() => {});
+    }
+  };
+
   useEffect(() => {
     api.studentDetail(studentId).then(setData).catch((e) => setError(e.message));
     api.studentReport(studentId).then(setReport).catch(() => {}); // ADM-051 — non-fatal if not enough data yet
@@ -65,7 +118,7 @@ export default function StudentDetail({ studentId, onBack }) {
   if (error) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>;
   if (!data) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>جاري التحميل…</p>;
 
-  const { student, subscriptions, notifications, sessions, magicLinks } = data;
+  const { student, subscriptions, notifications, sessions, magicLinks, supervisors = [] } = data;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -76,18 +129,61 @@ export default function StudentDetail({ studentId, onBack }) {
             {student.user.mobileE164} · {student.school?.nameAr ?? 'بدون مدرسة'} {student.school ? `· ${student.school.city?.nameAr}` : ''}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => runSend('leap', () => api.sendLeapNow(studentId))}
+            disabled={sendBusy !== null}
+            title="يولّد وثبة اليوم إن لم تكن جاهزة ثم يرسل رابطها للطالب عبر واتساب — تظل قواعد الباقة وتفضيلات الطالب سارية"
+            style={sendBtn}
+          >
+            {sendBusy === 'leap' ? 'جاري الإرسال…' : 'إرسال الوثبة الآن'}
+          </button>
+          <button
+            onClick={() => runSend('weekly', () => api.sendStudentWeeklyReport(studentId))}
+            disabled={sendBusy !== null}
+            title="يرسل التقرير الأسبوعي لهذا الطالب فوراً بدل انتظار موعده"
+            style={sendBtn}
+          >
+            {sendBusy === 'weekly' ? 'جاري الإرسال…' : 'إرسال التقرير الأسبوعي'}
+          </button>
           <button
             onClick={mintLoginLink}
             disabled={linkBusy}
             title="ينشئ رابط دخول صالحاً لمدة 24 ساعة يمكن إرساله للطالب — كل إنشاء يُسجَّل في سجل التدقيق"
-            style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--lime)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+            style={sendBtn}
           >
             {linkBusy ? 'جاري الإنشاء…' : 'إنشاء رابط دخول'}
           </button>
           <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>→ رجوع للقائمة</button>
         </div>
       </div>
+
+      {sendResult && (
+        <p
+          role="status"
+          style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: sendResult.ok ? 'var(--teal-ink)' : 'var(--coral)' }}
+        >
+          {sendResult.text}
+        </p>
+      )}
+
+      {/* ADM-087 — the weekly report goes to the supervisor's own number, so
+          the send is per-supervisor rather than one button on the student. */}
+      {supervisors.length > 0 && (
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '14px 18px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>إرسال التقرير الأسبوعي للمشرف:</span>
+          {supervisors.map((s) => (
+            <button
+              key={s.supervisorId}
+              onClick={() => runSend(`sup-${s.supervisorId}`, () => api.sendSupervisorWeeklyReport(s.supervisorId))}
+              disabled={sendBusy !== null}
+              style={sendBtn}
+            >
+              {sendBusy === `sup-${s.supervisorId}` ? 'جاري الإرسال…' : s.supervisor.user.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loginLink && (
         <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '14px 18px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
