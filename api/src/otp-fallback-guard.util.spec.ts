@@ -31,4 +31,41 @@ describe('assertOtpFallbackNotReachableInProduction', () => {
       assertOtpFallbackNotReachableInProduction({ NODE_ENV: 'production', ALLOW_OTP_FALLBACK_IN_PRODUCTION: 'true' }),
     ).not.toThrow();
   });
+
+  // NOT-013 — Wasender is a first-class transport, so it must satisfy the
+  // guard on its own. Before this, switching provider would have tripped the
+  // boot guard (or, off production, silently enabled the fallback code).
+  it('allows boot in production on Wasender alone', () => {
+    expect(() =>
+      assertOtpFallbackNotReachableInProduction({
+        NODE_ENV: 'production',
+        WHATSAPP_PROVIDER: 'wasender',
+        WASENDER_API_KEY: 'wsk_real',
+      }),
+    ).not.toThrow();
+  });
+
+  // The regression that made this guard inert in production: "..." is a
+  // non-empty string, so the old truthiness check passed while no working
+  // transport existed.
+  it('refuses to boot when the WhatsApp vars are placeholder values', () => {
+    expect(() =>
+      assertOtpFallbackNotReachableInProduction({
+        NODE_ENV: 'production',
+        WHATSAPP_ACCESS_TOKEN: '...',
+        WHATSAPP_PHONE_NUMBER_ID: '...',
+      }),
+    ).toThrow(/refusing to start/);
+  });
+
+  it('refuses to boot when switched to wasender without its key', () => {
+    expect(() =>
+      assertOtpFallbackNotReachableInProduction({
+        NODE_ENV: 'production',
+        WHATSAPP_PROVIDER: 'wasender',
+        WHATSAPP_ACCESS_TOKEN: 'token',
+        WHATSAPP_PHONE_NUMBER_ID: 'id',
+      }),
+    ).toThrow(/refusing to start/);
+  });
 });

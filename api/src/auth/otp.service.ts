@@ -5,6 +5,7 @@ import { SubjectType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/channel.interface';
 import { AuditLogService } from '../admin-ops/audit-log.service';
+import { isWhatsAppConfigured } from '../notifications/whatsapp-provider.util';
 
 const OTP_TTL_MINUTES = 5;
 const MAX_ATTEMPTS = 5;
@@ -31,9 +32,14 @@ export class OtpService {
     private auditLog: AuditLogService,
   ) {}
 
-  /** True only when real WhatsApp Cloud API credentials are configured — see notification-channel.provider.ts's identical check. */
+  /**
+   * True only when a real outbound WhatsApp transport is wired up — Meta
+   * Cloud or Wasender. Delegates to the same resolver the channel provider
+   * and the boot guard use (NOT-013): when these three disagree, the failure
+   * mode is every login OTP silently becoming the fixed public fallback.
+   */
   private hasWhatsAppConfigured(): boolean {
-    return !!this.config.get('WHATSAPP_ACCESS_TOKEN') && !!this.config.get('WHATSAPP_PHONE_NUMBER_ID');
+    return isWhatsAppConfigured(process.env);
   }
 
   async requestOtp(mobile: string, subjectType: SubjectType) {
