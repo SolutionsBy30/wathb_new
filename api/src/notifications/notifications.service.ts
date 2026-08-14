@@ -323,6 +323,40 @@ export class NotificationsService {
   }
 
   /** NOT-009 — "surfacing repeatedly undelivered numbers to the admin console." */
+  /**
+   * NOT-014 — put exhausted notifications back in the queue.
+   *
+   * The retry ladder is finite by design (3 attempts): a number that is
+   * genuinely wrong should stop being dialled. But when the cause was on our
+   * side — a bad provider credential, a rate limit we were not respecting —
+   * every student in the batch ends up permanently undeliverable for a fault
+   * that has since been fixed, with no way back except SQL.
+   *
+   * Resets status and retryCount so the ladder starts over. Scoped to
+   * failures whose recorded error matches, so an operator fixing one cause
+   * does not also re-dial numbers that failed for unrelated reasons.
+   */
+  async requeueFailed(opts: { errorContains?: string; since?: Date } = {}) {
+    const rows = await this.prisma.notification.findMany({
+      where: {
+        status: 'failed',
+        retryCount: { gte: MAX_RETRY_ATTEMPTS },
+        ...(opts.since ? { scheduledFor: { gte: dayKey(opts.since) } } : {}),
+        ...(opts.errorContains ? { error: { contains: opts.errorContains, mode: 'insensitive' as const } } : {}),
+      },
+      select: { id: true },
+    });
+    if (rows.length === 0) return { requeued: 0 };
+    await this.prisma.notification.updateMany({
+      where: { id: { in: rows.map((r) => r.id) } },
+      // nextRetryAt in the past so the very next process_retries tick picks
+      // them up rather than waiting a full ladder step.
+      data: { status: 'failed', retryCount: 0, nextRetryAt: new Date(Date.now() - 1000), error: null },
+    });
+    this.logger.log(`requeued ${rows.length} exhausted notification(s)`);
+    return { requeued: rows.length };
+  }
+
   async repeatedlyUndelivered() {
     const rows = await this.prisma.notification.findMany({
       where: { status: 'failed', retryCount: { gte: MAX_RETRY_ATTEMPTS } },

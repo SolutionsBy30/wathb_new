@@ -71,6 +71,16 @@ export class NotificationsController {
     return this.notifications.processRetries();
   }
 
+  // NOT-014 — reset exhausted notifications so the ladder runs again, after
+  // fixing a fault on our side. `errorContains` narrows it to one cause.
+  @Post('requeue-failed')
+  requeueFailed(@Body() dto: { errorContains?: string; sinceDate?: string }) {
+    return this.notifications.requeueFailed({
+      errorContains: dto?.errorContains,
+      since: dto?.sinceDate ? new Date(dto.sinceDate) : undefined,
+    });
+  }
+
   @Get('undelivered')
   undelivered() {
     return this.notifications.repeatedlyUndelivered();

@@ -111,6 +111,8 @@ export const api = {
   sendStudentWeeklyReport: (studentId) => request(`/admin/notifications/weekly-report/student/${studentId}`, { method: 'POST' }),
   sendSupervisorWeeklyReport: (supervisorId) => request(`/admin/notifications/weekly-report/supervisor/${supervisorId}`, { method: 'POST' }),
   undeliveredNotifications: () => request('/admin/notifications/undelivered'),
+  // NOT-014 — reset exhausted notifications so the retry ladder runs again.
+  requeueFailed: (errorContains) => request('/admin/notifications/requeue-failed', { method: 'POST', body: errorContains ? { errorContains } : {} }),
 
   listPackages: () => request('/admin/packages'),
   createPackage: (dto) => request('/admin/packages', { method: 'POST', body: dto }),

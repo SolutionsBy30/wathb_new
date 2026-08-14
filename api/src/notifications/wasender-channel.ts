@@ -25,16 +25,60 @@ import { FreeformSendParams, NotificationChannel, SendResult, TemplateSendParams
  *    should stay.
  */
 const DEFAULT_BASE_URL = 'https://wasenderapi.com/api';
+// Wasender's "account protection" setting caps a session at one message every
+// five seconds and rejects the rest outright. 5.5s leaves headroom for clock
+// skew and their own measurement window.
+const DEFAULT_MIN_INTERVAL_MS = 5500;
 
 @Injectable()
 export class WasenderChannel implements NotificationChannel {
   private readonly logger = new Logger(WasenderChannel.name);
   private readonly apiKey: string;
   private readonly baseUrl: string;
+  private readonly minIntervalMs: number;
+
+  /**
+   * NOT-014 — outbound pacing, shared by every caller.
+   *
+   * sendDueForAllStudents loops over students awaiting each send with no gap,
+   * so a run fired a dozen messages in a couple of seconds. With account
+   * protection on, Wasender rejected everything after the first — "You can
+   * only send 1 message every 5 seconds" — and the NOT-009 ladder then burned
+   * all three retries against the same wall, marking real students
+   * permanently undeliverable.
+   *
+   * Pacing belongs here rather than in each loop: OTP, invites, weekly
+   * reports and campaigns share one WhatsApp session and therefore one rate
+   * limit, so a per-loop fix would leave the others colliding.
+   *
+   * Static because the limit is per session, not per instance. Same
+   * single-process assumption as the scheduler — two API replicas would each
+   * pace independently and together exceed the limit.
+   */
+  private static gate: Promise<void> = Promise.resolve();
+  private static lastStartedAt = 0;
 
   constructor(private config: ConfigService) {
     this.apiKey = this.config.getOrThrow<string>('WASENDER_API_KEY');
     this.baseUrl = (this.config.get<string>('WASENDER_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/$/, '');
+    const configured = Number(this.config.get<string>('WASENDER_MIN_INTERVAL_MS'));
+    this.minIntervalMs = Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_MIN_INTERVAL_MS;
+  }
+
+  /**
+   * Serialises callers and spaces their *start* times by at least
+   * minIntervalMs. Deliberately not a token bucket: bursting is the exact
+   * behaviour the provider punishes.
+   */
+  private schedule<T>(fn: () => Promise<T>): Promise<T> {
+    const slot = WasenderChannel.gate.then(async () => {
+      const wait = WasenderChannel.lastStartedAt + this.minIntervalMs - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      WasenderChannel.lastStartedAt = Date.now();
+    });
+    // A rejected send must not wedge the queue for everything behind it.
+    WasenderChannel.gate = slot.catch(() => undefined);
+    return slot.then(fn);
   }
 
   /**
@@ -80,10 +124,12 @@ export class WasenderChannel implements NotificationChannel {
   }
 
   async sendFreeform(params: FreeformSendParams): Promise<SendResult> {
-    return this.post('/send-message', {
-      to: WasenderChannel.toRecipient(params.to),
-      text: params.text,
-    });
+    return this.schedule(() =>
+      this.post('/send-message', {
+        to: WasenderChannel.toRecipient(params.to),
+        text: params.text,
+      }),
+    );
   }
 
   async sendTemplate(params: TemplateSendParams): Promise<SendResult> {

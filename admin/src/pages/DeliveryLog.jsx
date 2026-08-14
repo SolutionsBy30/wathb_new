@@ -24,6 +24,30 @@ export default function DeliveryLog() {
   };
   useEffect(() => { load(); }, []);
 
+  // NOT-014 — after fixing a fault on our side (bad credential, rate limit),
+  // put the exhausted rows back in the queue instead of leaving real students
+  // permanently undeliverable for a problem that no longer exists. Requeue
+  // then immediately run the ladder, so one press is the whole recovery.
+  const runRequeue = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { requeued } = await api.requeueFailed();
+      if (requeued === 0) {
+        setMessage('لا توجد رسائل مستنفدة لإعادتها.');
+      } else {
+        const res = await api.processRetries();
+        const sent = res.results.filter((r) => r.sent).length;
+        setMessage(`أُعيدت ${requeued} رسالة إلى الطابور، ونجح إرسال ${sent} منها الآن.`);
+      }
+      await load();
+    } catch (e) {
+      setMessage(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const runProcessRetries = async () => {
     setBusy(true);
     setMessage(null);
@@ -70,6 +94,14 @@ export default function DeliveryLog() {
           <button onClick={runPlanDay} disabled={busy} style={btnStyle}>تشغيل plan_day (غداً)</button>
           <button onClick={runSendDue} disabled={busy} style={btnStyle}>تشغيل send_notification (غداً)</button>
           <button onClick={runProcessRetries} disabled={busy} style={btnStyle}>معالجة إعادة المحاولات</button>
+          <button
+            onClick={runRequeue}
+            disabled={busy}
+            title="يُعيد الرسائل التي استنفدت محاولاتها إلى الطابور ثم يحاول إرسالها — استخدمه بعد إصلاح سبب الفشل (مفتاح خاطئ، تجاوز حد الإرسال)"
+            style={btnStyle}
+          >
+            إعادة المستنفدة إلى الطابور
+          </button>
         </div>
       </div>
       <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
