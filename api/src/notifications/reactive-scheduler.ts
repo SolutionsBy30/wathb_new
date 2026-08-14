@@ -1,3 +1,5 @@
+import { riyadhHourToUtc } from './riyadh-clock.util';
+
 // §7.3 — the reactive scheduler. Pure functions, no DB/Nest dependency, so
 // this is unit-testable exactly like the selection engine.
 //
@@ -42,20 +44,24 @@ export function decideSendChannel(
 }
 
 /**
- * Resolves a student's slot-hour pair to concrete UTC Dates for a given
- * calendar day. Treats slotStartHour/slotEndHour as UTC hours directly —
- * callers in a real deployment must convert from the student's IANA
- * timezone to UTC first (e.g. with date-fns-tz/luxon). Spec §9.3 flags this
- * exact trap: "Riyadh has no DST, which will lull the team into a false
- * sense of security until the first Egyptian or Jordanian student signs up."
- * Kept simple here since Asia/Riyadh (the only seeded tz) is a fixed UTC+3
- * with no DST, and the thing under test is the scheduling *decision*, not
- * timezone conversion.
+ * Resolves a student's slot-hour pair to concrete UTC instants for a given
+ * calendar day, interpreting the hours as ASIA/RIYADH wall-clock time.
+ *
+ * NOT-015 — this used to apply the hours with setUTCHours and left a comment
+ * saying callers "must convert from the student's timezone first". No caller
+ * ever did, so the trap the comment predicted landed: students choose their
+ * window in Riyadh terms (the picker says "بتوقيت آسيا/الرياض") and every
+ * reminder went out three hours late — "مساءً 17:00–20:00" resolved to
+ * 20:00–23:00 Riyadh.
+ *
+ * Doing the conversion here rather than at the call site means there is one
+ * place to be right, and no way to forget. Spec §9.3's warning still stands
+ * for the day a non-KSA student signs up: the zone is hardcoded to Riyadh,
+ * so per-student timezones need User.timezone threaded through here.
  */
 export function resolveSlotForDay(day: Date, slotStartHour: number, slotEndHour: number): SlotWindow {
-  const slotStart = new Date(day);
-  slotStart.setUTCHours(slotStartHour, 0, 0, 0);
-  const slotEnd = new Date(day);
-  slotEnd.setUTCHours(slotEndHour, 0, 0, 0);
-  return { slotStart, slotEnd };
+  return {
+    slotStart: riyadhHourToUtc(day, slotStartHour),
+    slotEnd: riyadhHourToUtc(day, slotEndHour),
+  };
 }

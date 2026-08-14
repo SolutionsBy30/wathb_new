@@ -5,6 +5,7 @@ import { WathbGenerationService } from '../wathb/wathb-generation.service';
 import { MagicLinkService } from '../auth/magic-link.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from './channel.interface';
 import { decideSendChannel, resolveSlotForDay } from './reactive-scheduler';
+import { riyadhDayKey } from './riyadh-clock.util';
 import { EmailChannel } from './email-channel';
 
 const DEFAULT_BUNDLE_SIZE = 5;
@@ -22,9 +23,12 @@ const RETRY_LADDER_MINUTES = [15, 60, 240];
 export const MAX_RETRY_ATTEMPTS = RETRY_LADDER_MINUTES.length;
 
 function dayKey(d: Date): Date {
-  const out = new Date(d);
-  out.setUTCHours(0, 0, 0, 0);
-  return out;
+  // NOT-015 — the Riyadh calendar date, not the UTC one. Between 00:00 and
+  // 03:00 Riyadh, UTC is still on the previous date, so setUTCHours(0,0,0,0)
+  // filed those three hours under "yesterday": a student practising at 1am
+  // had it credited to the wrong day and their streak broke despite showing
+  // up. Same stored shape (UTC midnight of a calendar date), correct date.
+  return riyadhDayKey(d);
 }
 
 @Injectable()
