@@ -19,12 +19,13 @@ import { QuestionStatsService } from './question-stats.service';
 import { ProblemReportsService } from './problem-reports.service';
 import { MAX_IMAGE_BYTES, QuestionMediaService } from './question-media.service';
 import { CreateQuestionDto, ListQuestionsQuery, UpdateQuestionContentDto } from './dto/questions.dto';
-import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 
 @UseGuards(SessionGuard)
 @RequireSession('admin')
+@RequirePermission('bank')
 @Controller('admin/questions')
 export class QuestionsController {
   constructor(
@@ -47,17 +48,20 @@ export class QuestionsController {
 
   // STU-012 — the admin inbox for "report a problem." Must come before
   // ':id' or 'problem-reports' would be parsed as a question id.
+  @RequirePermission('problemReports')
   @Get('problem-reports')
   listProblemReports(@Query('status') status?: 'open' | 'resolved') {
     return this.problemReports.list(status);
   }
 
+  @RequirePermission('problemReports')
   @Post('problem-reports/:id/resolve')
   resolveProblemReport(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
     return this.problemReports.resolve(id, session.sub);
   }
 
   // §6 "refresh_question_stats" — admin-triggered stand-in for the nightly job.
+  @RequirePermission('solutionPerf')
   @Post('refresh-stats')
   refreshStats() {
     return this.questionStats.refreshAll();
@@ -74,6 +78,7 @@ export class QuestionsController {
   }
 
   // ADM-027 — must come before ':id' or 'review-queue' would be parsed as an id.
+  @RequirePermission('reviewQueue')
   @Get('review-queue')
   reviewQueue() {
     return this.questions.reviewQueue();
@@ -99,11 +104,13 @@ export class QuestionsController {
     return this.questions.setStatus(id, status);
   }
 
+  @RequirePermission('reviewQueue')
   @Post(':id/approve')
   approve(@Param('id') id: string, @Body('comment') comment: string | undefined, @CurrentSession() session: SessionPayload) {
     return this.questions.approveReview(id, session.sub, comment);
   }
 
+  @RequirePermission('reviewQueue')
   @Post(':id/reject')
   reject(@Param('id') id: string, @Body('comment') comment: string, @CurrentSession() session: SessionPayload) {
     return this.questions.rejectReview(id, session.sub, comment);
@@ -119,6 +126,7 @@ export class QuestionsController {
     return this.questions.bulkSetStatus(ids, status);
   }
 
+  @RequirePermission('import')
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   importCsv(@UploadedFile() file: Express.Multer.File, @Body('labelId') labelId: string) {
@@ -126,6 +134,7 @@ export class QuestionsController {
     return this.bulkImport.createJob(file.buffer, labelId);
   }
 
+  @RequirePermission('import')
   @Patch('import/:jobId/rows/:rowIndex')
   patchImportRow(
     @Param('jobId') jobId: string,
@@ -135,6 +144,7 @@ export class QuestionsController {
     return this.bulkImport.patchRow(jobId, rowIndex, patch as any);
   }
 
+  @RequirePermission('import')
   @Post('import/:jobId/commit')
   commitImport(@Param('jobId') jobId: string, @CurrentSession() session: SessionPayload) {
     return this.bulkImport.commit(jobId, session.sub);

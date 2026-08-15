@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { CheckoutService } from './checkout.service';
 import { computePaymobHmac } from './paymob-hmac.util';
-import { RequireSession, RequireStepUp, SessionGuard } from '../auth/session.guard';
+import { RequirePermission, RequireSession, RequireStepUp, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 import { StartCheckoutDto, StartCheckoutForStudentDto, ActivateWireTransferDto } from './dto/packages.dto';
@@ -110,6 +110,7 @@ export class CheckoutController {
   // path prominently (gateway not configured) or as a secondary option.
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('subscriptions')
   @Get('admin/payment-status')
   paymentStatus() {
     return { gatewayConfigured: !this.checkout.isDevProviderActive() };
@@ -117,6 +118,7 @@ export class CheckoutController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('subscriptions')
   @Post('admin/subscriptions/activate-wire-transfer')
   activateWireTransfer(@Body() dto: ActivateWireTransferDto, @CurrentSession() session: SessionPayload) {
     return this.checkout.activateViaWireTransfer(dto.studentId, dto.packageId, session.sub);
@@ -126,6 +128,7 @@ export class CheckoutController {
   // same rationale as plan_day/send_notification/refresh-stats.
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('subscriptions')
   @Post('admin/subscriptions/sweep-expired')
   sweepExpired() {
     return this.checkout.sweepExpiredSubscriptions();

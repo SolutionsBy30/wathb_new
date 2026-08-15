@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { SuspensionService } from './suspension.service';
 import { AuditLogService } from './audit-log.service';
 import { SuspendUserDto } from './dto/suspend-user.dto';
-import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 
@@ -16,16 +16,19 @@ export class AdminOpsController {
   ) {}
 
   // ADM-085 — required reason, optional note, reversible, logged.
+  @RequirePermission('students')
   @Post('users/:id/suspend')
   suspend(@Param('id') id: string, @Body() dto: SuspendUserDto, @CurrentSession() session: SessionPayload) {
     return this.suspension.suspend(id, dto.reason, dto.note, session.sub);
   }
 
+  @RequirePermission('students')
   @Post('users/:id/unsuspend')
   unsuspend(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
     return this.suspension.unsuspend(id, session.sub);
   }
 
+  @RequirePermission('auditLog')
   @Get('audit-log')
   auditLog_() {
     return this.auditLog.list();

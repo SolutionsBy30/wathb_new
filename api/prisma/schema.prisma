@@ -108,6 +108,17 @@ model User {
   // login) checks status, and suspending revokes all live magic links.
   suspendedAt      DateTime?
   suspendReason    String?
+  // ADM-088 — per-admin console permissions. Each entry is a nav-section key
+  // (see admin-permissions.ts); an admin sees and can call only what is
+  // listed. Empty means an admin who can log in but reach nothing, which is
+  // the safe default for a freshly created account.
+  //
+  // isSuperAdmin is the only implicit grant: it implies every permission and
+  // is what gates managing other admins. Kept as a flag rather than a
+  // permission string so "who can create admins" can never be handed out by
+  // ticking a box in the same list as everything else.
+  adminPermissions String[]  @default([])
+  isSuperAdmin     Boolean   @default(false)
   createdAt        DateTime  @default(now())
 
   student    Student?

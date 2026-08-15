@@ -3,7 +3,7 @@ import { NotificationsService } from './notifications.service';
 import { WeeklyReportService } from './weekly-report.service';
 import { CampaignService } from './campaign.service';
 import { AdminAlertService } from './admin-alert.service';
-import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 import { TriggerDateDto } from './dto/trigger.dto';
@@ -27,6 +27,7 @@ function resolveDate(forDate?: string, defaultOffsetDays = 0): Date {
  */
 @UseGuards(SessionGuard)
 @RequireSession('admin')
+@RequirePermission('notifications')
 @Controller('admin/notifications')
 export class NotificationsController {
   constructor(

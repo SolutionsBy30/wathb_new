@@ -130,6 +130,13 @@ export const api = {
   unsuspendUser: (userId) => request(`/admin/users/${userId}/unsuspend`, { method: 'POST' }),
   auditLog: () => request('/admin/audit-log'),
 
+  // ADM-088 — admin accounts + per-section permissions.
+  adminMe: () => request('/admin/admins/me'),
+  adminPermissionCatalogue: () => request('/admin/admins/permissions'),
+  listAdmins: () => request('/admin/admins'),
+  createAdmin: (dto) => request('/admin/admins', { method: 'POST', body: dto }),
+  updateAdmin: (id, dto) => request(`/admin/admins/${id}`, { method: 'PATCH', body: dto }),
+
   // ADM-001/002 — overview KPIs + alerts feed
   overviewKpis: () => request('/admin/overview/kpis'),
   overviewAlerts: () => request('/admin/overview/alerts'),

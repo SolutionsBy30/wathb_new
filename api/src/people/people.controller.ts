@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AdminStudentSort, StudentsService } from './students.service';
 import { SupervisorsService } from './supervisors.service';
-import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 import { AdminUpdateAccountDto, CreateStudentDto, CreateSupervisorDto, EmailPrefsDto, GoalSetupDto, InviteSupervisorDto, StudentNotificationPrefsDto, SupervisorPreferencesDto } from './dto/people.dto';
@@ -17,24 +17,28 @@ export class PeopleController {
   ) {}
 
   @RequireSession('admin')
+  @RequirePermission('students')
   @Post('admin/students')
   createStudent(@Body() dto: CreateStudentDto) {
     return this.students.createStudent(dto.mobile, dto.name);
   }
 
   @RequireSession('admin')
+  @RequirePermission('supervisors')
   @Post('admin/supervisors')
   createSupervisor(@Body() dto: CreateSupervisorDto) {
     return this.supervisors.createSupervisor(dto.mobile, dto.name, dto.type);
   }
 
   @RequireSession('admin')
+  @RequirePermission('students')
   @Get('admin/students/search')
   searchStudent(@Query('mobile') mobile: string) {
     return this.students.searchByMobile(mobile);
   }
 
   @RequireSession('admin')
+  @RequirePermission('students')
   @Get('admin/students')
   adminListStudents(
     @Query('search') search?: string,
@@ -57,12 +61,14 @@ export class PeopleController {
   }
 
   @RequireSession('admin')
+  @RequirePermission('students')
   @Patch('admin/students/:id/school')
   setStudentSchool(@Param('id') id: string, @Body('schoolId') schoolId: string | null) {
     return this.students.setSchool(id, schoolId);
   }
 
   @RequireSession('admin')
+  @RequirePermission('students')
   @Get('admin/students/:id/detail')
   adminStudentDetail(@Param('id') id: string) {
     return this.students.adminDetail(id);
@@ -94,6 +100,7 @@ export class PeopleController {
   }
 
   @RequireSession('admin')
+  @RequirePermission('students')
   @Get('admin/students/:id/leaps')
   adminStudentLeaps(@Param('id') id: string) {
     return this.students.leapHistory(id);
@@ -124,18 +131,21 @@ export class PeopleController {
   // account is the existing suspend/unsuspend pair in AdminOpsController,
   // which is audit-logged and revokes live magic links.
   @RequireSession('admin')
+  @RequirePermission('students')
   @Patch('admin/accounts/:id')
   adminUpdateAccount(@Param('id') id: string, @Body() dto: AdminUpdateAccountDto) {
     return this.accounts.adminUpdateAccount(id, dto);
   }
 
   @RequireSession('admin')
+  @RequirePermission('students')
   @Post('admin/students/:id/magic-link')
   mintStudentLoginLink(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
     return this.students.mintLoginLink(id, session.sub);
   }
 
   @RequireSession('admin')
+  @RequirePermission('supervisors')
   @Get('admin/supervisors')
   adminListSupervisors() {
     return this.supervisors.adminList();

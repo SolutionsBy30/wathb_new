@@ -18,6 +18,7 @@ import Students from './pages/Students';
 import StudentDetail from './pages/StudentDetail';
 import Supervisors from './pages/Supervisors';
 import AuditLog from './pages/AuditLog';
+import AdminUsers from './pages/AdminUsers';
 
 // ADM-003 — grouped navigation: Overview; Content; Users; Business; System.
 const NAV_GROUPS = [
@@ -54,9 +55,33 @@ const NAV_GROUPS = [
     items: [
       { id: 'notifications', label: 'الإشعارات' },
       { id: 'auditLog', label: 'سجل التدقيق' },
+      // ADM-088 — super-admin only; filtered out below for everyone else.
+      { id: 'admins', label: 'المسؤولون', superAdminOnly: true },
     ],
   },
 ];
+
+/**
+ * ADM-088 — show only what this admin may reach.
+ *
+ * Nav ids and permission keys are the same strings by design, so there is no
+ * mapping table to drift. 'overview' is ungated: it is the landing screen and
+ * shows only aggregate counts. This is presentation — the API guards every
+ * one of these routes independently, so a hidden tab is not a security
+ * boundary, just an honest menu.
+ */
+function visibleGroups(me) {
+  if (!me) return [];
+  const groups = NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((n) => {
+      if (n.superAdminOnly) return me.isSuperAdmin;
+      if (n.id === 'overview') return true;
+      return me.isSuperAdmin || me.adminPermissions.includes(n.id);
+    }),
+  }));
+  return groups.filter((g) => g.items.length > 0);
+}
 
 export default function App() {
   const [authed, setAuthed] = useState(!!getToken());
@@ -64,10 +89,24 @@ export default function App() {
   const [tests, setTests] = useState([]);
   const [editingQuestionId, setEditingQuestionId] = useState(undefined); // undefined = not editing, null = new
   const [viewingStudentId, setViewingStudentId] = useState(null);
+  // ADM-088 — the caller's own permissions, which decide what the nav shows.
+  const [me, setMe] = useState(null);
 
   useEffect(() => {
-    if (authed) api.listTests().then(setTests).catch(() => {});
+    if (!authed) return;
+    api.adminMe().then(setMe).catch(() => setMe(null));
+    // listTests is only reachable with the taxonomy/bank permissions; a
+    // narrower admin simply gets an empty list rather than an error screen.
+    api.listTests().then(setTests).catch(() => setTests([]));
   }, [authed]);
+
+  // Land on a tab this admin can actually open — otherwise an admin without
+  // 'overview'-adjacent rights would stare at a screen that 403s on load.
+  const groups = visibleGroups(me);
+  const allowed = groups.flatMap((g) => g.items.map((n) => n.id));
+  useEffect(() => {
+    if (me && allowed.length > 0 && !allowed.includes(tab)) setTab(allowed[0]);
+  }, [me, allowed.join(','), tab]);
 
   if (!authed) {
     return <Login onLogin={async (email, password) => {
@@ -90,7 +129,7 @@ export default function App() {
           </button>
         </div>
         <nav style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
-          {NAV_GROUPS.map((g, gi) => (
+          {groups.map((g, gi) => (
             <div key={g.group ?? 'root'} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               {g.group && (
                 <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--mist)', marginInlineEnd: '4px' }}>{g.group}</span>
@@ -109,7 +148,7 @@ export default function App() {
                   {n.label}
                 </button>
               ))}
-              {gi < NAV_GROUPS.length - 1 && <span style={{ width: '0.5px', height: '18px', background: 'var(--on-indigo-line)', marginInlineStart: '10px' }} />}
+              {gi < groups.length - 1 && <span style={{ width: '0.5px', height: '18px', background: 'var(--on-indigo-line)', marginInlineStart: '10px' }} />}
             </div>
           ))}
         </nav>
@@ -117,6 +156,7 @@ export default function App() {
 
       <main style={{ padding: '28px 32px', maxWidth: '1200px', margin: '0 auto' }}>
         {tab === 'overview' && <Overview />}
+        {tab === 'admins' && <AdminUsers me={me} />}
         {tab === 'taxonomy' && <Taxonomy tests={tests} onTestsChanged={() => api.listTests().then(setTests)} />}
         {tab === 'bank' && editingQuestionId === undefined && (
           <QuestionBank tests={tests} onEdit={(id) => setEditingQuestionId(id)} onNew={() => setEditingQuestionId(null)} />

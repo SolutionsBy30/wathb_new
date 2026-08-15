@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { GeographyService } from './geography.service';
-import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 import {
@@ -54,6 +54,7 @@ export class GeographyController {
   // just the active ones the public pickers show.
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Get('admin/geography/regions')
   adminListRegions() {
     return this.geography.listRegions(true);
@@ -61,6 +62,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Get('admin/geography/cities')
   adminListCities(@Query('regionId') regionId?: string) {
     return this.geography.listCities(regionId, true);
@@ -68,6 +70,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/regions')
   createRegion(@Body() dto: CreateRegionDto) {
     return this.geography.createRegion(dto.nameAr, dto.nameEn);
@@ -75,6 +78,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/regions/:id')
   updateRegion(@Param('id') id: string, @Body() dto: UpdateRegionDto) {
     return this.geography.updateRegion(id, dto);
@@ -82,6 +86,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/regions/:id/active')
   setRegionActive(@Param('id') id: string, @Body('isActive') isActive: boolean) {
     return this.geography.setRegionActive(id, isActive);
@@ -89,6 +94,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/cities')
   createCity(@Body() dto: CreateCityDto) {
     return this.geography.createCity(dto.regionId, dto.nameAr, dto.nameEn);
@@ -96,6 +102,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/cities/:id')
   updateCity(@Param('id') id: string, @Body() dto: UpdateCityDto) {
     return this.geography.updateCity(id, dto);
@@ -103,6 +110,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/cities/:id/active')
   setCityActive(@Param('id') id: string, @Body('isActive') isActive: boolean) {
     return this.geography.setCityActive(id, isActive);
@@ -110,6 +118,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/cities/:id/aliases')
   addCityAlias(@Param('id') id: string, @Body() dto: AddCityAliasDto) {
     return this.geography.addCityAlias(id, dto.alias);
@@ -117,6 +126,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Delete('admin/geography/cities/aliases/:aliasId')
   removeCityAlias(@Param('aliasId') aliasId: string) {
     return this.geography.removeCityAlias(aliasId);
@@ -124,6 +134,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/schools')
   createSchool(@Body() dto: CreateSchoolDto) {
     return this.geography.createSchool(dto.cityId, dto.nameAr, dto.nameEn);
@@ -134,6 +145,7 @@ export class GeographyController {
   // NestJS would match this path as updateSchool with id='merge'.
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/schools/merge')
   mergeSchools(@Body() dto: MergeSchoolsDto) {
     return this.geography.mergeSchools(dto.sourceId, dto.targetId);
@@ -141,6 +153,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/schools/:id')
   updateSchool(@Param('id') id: string, @Body() dto: UpdateSchoolDto) {
     return this.geography.updateSchool(id, dto);
@@ -148,6 +161,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Get('admin/geography/schools/pending')
   pendingSchools() {
     return this.geography.listPendingSchools();
@@ -155,6 +169,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Post('admin/geography/schools/:id/approve')
   approveSchool(@Param('id') id: string) {
     return this.geography.approveSchool(id);
@@ -162,6 +177,7 @@ export class GeographyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('geography')
   @Delete('admin/geography/schools/:id')
   rejectSchool(@Param('id') id: string) {
     return this.geography.rejectSchool(id);

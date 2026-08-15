@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { PackagesService } from './packages.service';
-import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { UpsertPackageDto } from './dto/packages.dto';
 
 @Controller()
@@ -15,6 +15,7 @@ export class PackagesController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('packages')
   @Get('admin/packages')
   listAll() {
     return this.packages.listAll();
@@ -22,6 +23,7 @@ export class PackagesController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('packages')
   @Post('admin/packages')
   create(@Body() dto: UpsertPackageDto) {
     return this.packages.create(dto);

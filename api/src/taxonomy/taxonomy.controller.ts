@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { TaxonomyService } from './taxonomy.service';
-import { RequireSession, SessionGuard } from '../auth/session.guard';
+import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { UpsertAreaDto, UpsertLabelDto, UpsertSectionDto, UpsertTestDto } from './dto/taxonomy.dto';
 
 @Controller()
@@ -21,6 +21,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Get('admin/tests')
   listAllTests() {
     return this.taxonomy.listAllTests();
@@ -31,6 +32,7 @@ export class TaxonomyController {
   // was missing them — anyone could create a test.
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Post('admin/tests')
   createTest(@Body() dto: UpsertTestDto) {
     return this.taxonomy.createTest(dto);
@@ -38,6 +40,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Patch('admin/tests/:id')
   updateTest(@Param('id') id: string, @Body() dto: Partial<UpsertTestDto>) {
     return this.taxonomy.updateTest(id, dto);
@@ -45,6 +48,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Post('admin/tests/:testId/sections')
   createSection(@Param('testId') testId: string, @Body() dto: UpsertSectionDto) {
     return this.taxonomy.createSection(testId, dto);
@@ -52,6 +56,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Patch('admin/sections/:id')
   updateSection(@Param('id') id: string, @Body() dto: Partial<UpsertSectionDto>) {
     return this.taxonomy.updateSection(id, dto);
@@ -61,6 +66,7 @@ export class TaxonomyController {
   // a populated one is refused rather than cascaded.
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Delete('admin/sections/:id')
   deleteSection(@Param('id') id: string) {
     return this.taxonomy.deleteSection(id);
@@ -68,6 +74,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Delete('admin/areas/:id')
   deleteArea(@Param('id') id: string) {
     return this.taxonomy.deleteArea(id);
@@ -75,6 +82,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Post('admin/sections/:sectionId/areas')
   createArea(@Param('sectionId') sectionId: string, @Body() dto: UpsertAreaDto) {
     return this.taxonomy.createArea(sectionId, dto);
@@ -82,6 +90,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Patch('admin/areas/:id')
   updateArea(@Param('id') id: string, @Body() dto: Partial<UpsertAreaDto>) {
     return this.taxonomy.updateArea(id, dto);
@@ -89,6 +98,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Post('admin/areas/:areaId/labels')
   createLabel(@Param('areaId') areaId: string, @Body() dto: UpsertLabelDto) {
     return this.taxonomy.createLabel(areaId, dto);
@@ -96,6 +106,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Patch('admin/labels/:id')
   updateLabel(@Param('id') id: string, @Body() dto: Partial<UpsertLabelDto>) {
     return this.taxonomy.updateLabel(id, dto);
@@ -103,6 +114,7 @@ export class TaxonomyController {
 
   @UseGuards(SessionGuard)
   @RequireSession('admin')
+  @RequirePermission('taxonomy')
   @Post('admin/labels/:id/retire')
   retireLabel(@Param('id') id: string) {
     return this.taxonomy.retireLabel(id);
