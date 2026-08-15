@@ -91,13 +91,17 @@ export default function App() {
   const [viewingStudentId, setViewingStudentId] = useState(null);
   // ADM-088 — the caller's own permissions, which decide what the nav shows.
   const [me, setMe] = useState(null);
+  const [testsError, setTestsError] = useState(null);
 
   useEffect(() => {
     if (!authed) return;
     api.adminMe().then(setMe).catch(() => setMe(null));
-    // listTests is only reachable with the taxonomy/bank permissions; a
-    // narrower admin simply gets an empty list rather than an error screen.
-    api.listTests().then(setTests).catch(() => setTests([]));
+    // ADM-088a — a failure here used to be swallowed into an empty array,
+    // which rendered as "no tests" and made every filter look broken rather
+    // than failing loudly. GET /admin/tests is now readable by any admin, so
+    // this should not fail; if it does, say so instead of lying.
+    api.listTests().then((t) => { setTests(t); setTestsError(null); })
+      .catch((e) => { setTests([]); setTestsError(e.message); });
   }, [authed]);
 
   // Land on a tab this admin can actually open — otherwise an admin without
@@ -155,6 +159,11 @@ export default function App() {
       </header>
 
       <main style={{ padding: '28px 32px', maxWidth: '1200px', margin: '0 auto' }}>
+        {testsError && (
+          <p style={{ margin: '0 0 14px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>
+            تعذّر تحميل قائمة الاختبارات ({testsError}) — قوائم التصفية ستظهر فارغة.
+          </p>
+        )}
         {tab === 'overview' && <Overview />}
         {tab === 'admins' && <AdminUsers me={me} />}
         {tab === 'taxonomy' && <Taxonomy tests={tests} onTestsChanged={() => api.listTests().then(setTests)} />}

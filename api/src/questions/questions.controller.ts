@@ -67,11 +67,18 @@ export class QuestionsController {
     return this.questionStats.refreshAll();
   }
 
+  /**
+   * ADM-088a — question performance and the review queue both list questions.
+   * Class-level 'bank' alone meant an admin granted only "أداء الأسئلة" got a
+   * 403 on the screen's first call and saw nothing.
+   */
+  @RequirePermission('bank', 'reviewQueue', 'problemReports', 'import', 'solutionPerf')
   @Get()
   list(@Query() query: ListQuestionsQuery) {
     return this.questions.list(query);
   }
 
+  @RequirePermission('bank', 'reviewQueue', 'problemReports', 'import', 'solutionPerf')
   @Get('similar')
   similar(@Query('stem') stem: string) {
     return this.questions.findSimilar(stem);
@@ -84,6 +91,7 @@ export class QuestionsController {
     return this.questions.reviewQueue();
   }
 
+  @RequirePermission('bank', 'reviewQueue', 'problemReports', 'import', 'solutionPerf')
   @Get(':id')
   get(@Param('id') id: string) {
     return this.questions.get(id);

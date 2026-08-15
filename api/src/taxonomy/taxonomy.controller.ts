@@ -19,9 +19,20 @@ export class TaxonomyController {
     return this.taxonomy.tree(id);
   }
 
+  /**
+   * ADM-088a — reference data, readable by any admin, NOT gated on 'taxonomy'.
+   *
+   * Every content screen filters by test: the question bank, bulk import, the
+   * review queue, question performance. Gating this read on the permission to
+   * *edit* the taxonomy meant an admin granted only "بنك الأسئلة" got a 403
+   * here, and the app swallowed it into an empty list — so the test filter
+   * silently had no options and the bank looked broken.
+   *
+   * Test names are the console's vocabulary, not a secret. Editing the
+   * taxonomy stays gated on 'taxonomy' (every write route below).
+   */
   @UseGuards(SessionGuard)
   @RequireSession('admin')
-  @RequirePermission('taxonomy')
   @Get('admin/tests')
   listAllTests() {
     return this.taxonomy.listAllTests();

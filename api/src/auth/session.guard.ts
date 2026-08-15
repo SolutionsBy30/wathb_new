@@ -3,21 +3,25 @@ import { Reflector } from '@nestjs/core';
 import { AuthService } from './auth.service';
 import { SessionKind } from './auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { AdminPermission, hasAdminPermission } from '../admin-ops/admin-permissions';
+import { AdminPermission, hasAnyAdminPermission } from '../admin-ops/admin-permissions';
 
 export const RequireSession = (...kinds: SessionKind[]) => SetMetadata('sessionKinds', kinds);
 
 /**
- * ADM-088 — gate an admin route on a console permission.
+ * ADM-088 — gate an admin route on console permissions.
  *
- * Hiding a nav item is a courtesy; this is the control. Every admin route
- * that maps to a nav section carries one of these, so an admin without the
+ * Hiding a nav item is a courtesy; this is the control. An admin without the
  * permission gets a 403 whether they came through the UI or curl.
+ *
+ * Variadic and ANY-of: several screens legitimately read the same endpoint.
+ * Question performance and the review queue both need to list questions, so
+ * that route names all of them rather than forcing an admin to hold "bank"
+ * just to open a different screen (ADM-088a — how this shipped broken).
  *
  * Class-level works, method-level overrides — same resolution as
  * @RequireSession, via getAllAndOverride.
  */
-export const RequirePermission = (permission: AdminPermission) => SetMetadata('adminPermission', permission);
+export const RequirePermission = (...permissions: AdminPermission[]) => SetMetadata('adminPermission', permissions);
 
 // STU-029 — "sensitive account actions ... shall require step-up
 // authentication via a fresh OTP." A step-up-elevated session is only valid
@@ -79,11 +83,11 @@ export class SessionGuard implements CanActivate {
     // keep working until evening. One indexed primary-key lookup is a fair
     // price for "revoke means revoke", and it closes the same staleness gap
     // for suspension, which the token also could not express.
-    const requiredPermission = this.reflector.getAllAndOverride<AdminPermission>('adminPermission', [
+    const requiredPermissions = this.reflector.getAllAndOverride<AdminPermission[]>('adminPermission', [
       ctx.getHandler(),
       ctx.getClass(),
     ]);
-    if (requiredPermission) {
+    if (requiredPermissions?.length) {
       if (session.kind !== 'admin') throw new ForbiddenException('admin session required');
       const admin = await this.prisma.user.findUnique({
         where: { id: session.sub },
@@ -92,8 +96,8 @@ export class SessionGuard implements CanActivate {
       if (!admin || admin.role !== 'admin' || admin.status === 'suspended') {
         throw new UnauthorizedException('admin account is no longer active');
       }
-      if (!hasAdminPermission(admin, requiredPermission)) {
-        throw new ForbiddenException(`missing permission: ${requiredPermission}`);
+      if (!hasAnyAdminPermission(admin, requiredPermissions)) {
+        throw new ForbiddenException(`missing permission: ${requiredPermissions.join(' or ')}`);
       }
       req.admin = admin;
     }

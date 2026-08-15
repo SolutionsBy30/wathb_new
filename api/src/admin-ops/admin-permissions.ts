@@ -71,3 +71,15 @@ export function hasAdminPermission(
 ): boolean {
   return user.isSuperAdmin || user.adminPermissions.includes(permission);
 }
+
+/**
+ * ADM-088a — ANY-of. Several screens share one endpoint (listing questions
+ * serves the bank, the review queue and question performance), so requiring
+ * a single permission there locked admins out of screens they were granted.
+ */
+export function hasAnyAdminPermission(
+  user: { isSuperAdmin: boolean; adminPermissions: string[] },
+  permissions: AdminPermission[],
+): boolean {
+  return permissions.some((p) => hasAdminPermission(user, p));
+}

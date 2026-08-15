@@ -1,4 +1,4 @@
-import { ADMIN_PERMISSIONS, ADMIN_PERMISSION_GROUPS, ADMIN_PERMISSION_LABELS, hasAdminPermission, isAdminPermission } from './admin-permissions';
+import { ADMIN_PERMISSIONS, ADMIN_PERMISSION_GROUPS, ADMIN_PERMISSION_LABELS, hasAdminPermission, hasAnyAdminPermission, isAdminPermission } from './admin-permissions';
 
 describe('admin permission vocabulary', () => {
   it('labels every permission', () => {
@@ -39,5 +39,27 @@ describe('hasAdminPermission', () => {
   it('gives a super admin every permission, including ones added later', () => {
     const admin = { isSuperAdmin: true, adminPermissions: [] };
     for (const p of ADMIN_PERMISSIONS) expect(hasAdminPermission(admin, p)).toBe(true);
+  });
+});
+
+// ADM-088a — the regression this locks: an admin granted only "أداء الأسئلة"
+// could not list questions, because that shared endpoint demanded 'bank'.
+describe('hasAnyAdminPermission', () => {
+  const SHARED_READ = ['bank', 'reviewQueue', 'problemReports', 'import', 'solutionPerf'] as const;
+
+  it('lets any one of the sharing screens through', () => {
+    for (const held of SHARED_READ) {
+      const admin = { isSuperAdmin: false, adminPermissions: [held] };
+      expect(hasAnyAdminPermission(admin, [...SHARED_READ])).toBe(true);
+    }
+  });
+
+  it('still refuses an admin holding none of them', () => {
+    const admin = { isSuperAdmin: false, adminPermissions: ['students', 'packages'] };
+    expect(hasAnyAdminPermission(admin, [...SHARED_READ])).toBe(false);
+  });
+
+  it('refuses an empty grant list outright', () => {
+    expect(hasAnyAdminPermission({ isSuperAdmin: false, adminPermissions: [] }, [...SHARED_READ])).toBe(false);
   });
 });
