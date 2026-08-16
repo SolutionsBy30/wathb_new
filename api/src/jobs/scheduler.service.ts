@@ -6,6 +6,7 @@ import { WeeklyReportService } from '../notifications/weekly-report.service';
 import { AdminAlertService } from '../notifications/admin-alert.service';
 import { WathbService } from '../wathb/wathb.service';
 import { CheckoutService } from '../payments/checkout.service';
+import { QuestionStatsService } from '../questions/question-stats.service';
 
 const TZ = 'Asia/Riyadh';
 
@@ -41,6 +42,7 @@ export class SchedulerService {
     private wathb: WathbService,
     private checkout: CheckoutService,
     private adminAlerts: AdminAlertService,
+    private questionStats: QuestionStatsService,
   ) {}
 
   /**
@@ -115,6 +117,29 @@ export class SchedulerService {
   @Cron('30 0 * * *', { timeZone: TZ })
   sweepExpired() {
     return this.run('sweep_expired', () => this.checkout.sweepExpiredSubscriptions());
+  }
+
+  /**
+   * ADM-090 — nightly item statistics: p-value, discrimination, mean time,
+   * timeout rate, distractor distribution.
+   *
+   * These used to move only when an admin pressed "تحديث الإحصائيات", so the
+   * numbers on أداء الأسئلة were as stale as the last time somebody
+   * remembered. A flagged question (negative discrimination, p-value at an
+   * extreme) is a content bug sitting in front of students until it is
+   * noticed — that should not wait on a human refreshing a screen.
+   *
+   * 03:00 Riyadh: after the day's answers are all in and after plan_day
+   * (21:00) and sweepExpired (00:30), before the 07:00 exhaustion digest —
+   * so the morning's alerts are computed from fresh numbers.
+   *
+   * Note this walks every question version and queries per version, so its
+   * runtime grows with the bank. run() logs the duration; if it starts taking
+   * minutes, that is the signal to batch it rather than to move the hour.
+   */
+  @Cron('0 3 * * *', { timeZone: TZ })
+  refreshQuestionStats() {
+    return this.run('refresh_question_stats', () => this.questionStats.refreshAll());
   }
 
   /**

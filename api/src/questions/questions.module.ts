@@ -12,6 +12,6 @@ import { AuditLogModule } from '../admin-ops/audit-log.module';
   imports: [AuthModule, AuditLogModule],
   providers: [QuestionsService, BulkImportService, QuestionStatsService, ProblemReportsService, QuestionMediaService],
   controllers: [QuestionsController],
-  exports: [QuestionsService],
+  exports: [QuestionsService, QuestionStatsService],
 })
 export class QuestionsModule {}

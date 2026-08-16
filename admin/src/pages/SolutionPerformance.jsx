@@ -40,6 +40,11 @@ export default function SolutionPerformance({ tests }) {
         <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>أداء الأسئلة</h1>
         <Button variant="primary" disabled={busy} onClick={refresh}>{busy ? 'جاري التحديث…' : 'تحديث الإحصاءات'}</Button>
       </div>
+      {/* ADM-090 — the numbers refresh on their own now; the button is for
+          seeing today's answers reflected before tomorrow's run. */}
+      <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)', lineHeight: 1.8 }}>
+        تُحدَّث هذه الإحصاءات تلقائياً كل ليلة الساعة ٣:٠٠ بتوقيت الرياض. استخدم الزر أعلاه لتضمين إجابات اليوم قبل التحديث التالي.
+      </p>
       {refreshed && (
         <p style={{ margin: 0, fontSize: '12px', color: 'var(--mist)', fontFamily: 'var(--font-arabic)' }}>
           تمت معالجة {refreshed.versionsProcessed} سؤال · {refreshed.studentsRanked} طالباً في العينة
