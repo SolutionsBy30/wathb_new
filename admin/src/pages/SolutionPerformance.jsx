@@ -1,18 +1,27 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
+import { Pager } from '../components/Pager';
 
 export default function SolutionPerformance({ tests }) {
   const [testId, setTestId] = useState(tests[0]?.id);
   const [questions, setQuestions] = useState([]);
+  const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [refreshed, setRefreshed] = useState(null);
+  // ADM-089 — same cap as the bank: only the first 100 were ever fetched, so
+  // the weakest questions in a large test could not be reached at all.
+  const [page, setPage] = useState({ offset: 0, limit: 50 });
 
   const load = () => {
     if (!testId) return;
-    api.listQuestions({ testId, limit: 100 }).then((r) => setQuestions(r.items));
+    api.listQuestions({ testId, offset: page.offset, limit: page.limit }).then((r) => {
+      setQuestions(r.items);
+      setTotal(r.total);
+    });
   };
-  useEffect(() => { load(); }, [testId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage((p) => ({ ...p, offset: 0 })); }, [testId]);
+  useEffect(() => { load(); }, [testId, page.offset, page.limit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = async () => {
     setBusy(true);
@@ -100,6 +109,7 @@ export default function SolutionPerformance({ tests }) {
             })}
           </tbody>
         </table>
+        <Pager total={total} offset={page.offset} limit={page.limit} onChange={setPage} />
         {questions.length === 0 && <p style={{ margin: 0, padding: '20px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>لا توجد أسئلة لهذا الاختبار.</p>}
       </div>
     </div>

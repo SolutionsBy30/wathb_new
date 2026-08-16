@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
+import { Pager } from '../components/Pager';
 
 const STATUS_LABEL = { draft: 'مسودة', in_review: 'قيد المراجعة', published: 'منشور', retired: 'متقاعد' };
 const STATUS_COLOR = { draft: 'var(--mist)', in_review: 'var(--lime)', published: 'var(--teal-ink)', retired: 'var(--coral)' };
@@ -11,13 +12,25 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
   const [search, setSearch] = useState('');
   const [data, setData] = useState({ total: 0, items: [] });
   const [selected, setSelected] = useState(new Set());
+  // ADM-089 — the list was capped at 100 with no pager, so a bank larger than
+  // that simply hid the rest.
+  const [page, setPage] = useState({ offset: 0, limit: 50 });
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const res = await api.listQuestions({ testId, status, search, limit: 100 });
-    setData(res);
-    setSelected(new Set());
+    setBusy(true);
+    try {
+      const res = await api.listQuestions({ testId, status, search, offset: page.offset, limit: page.limit });
+      setData(res);
+      setSelected(new Set());
+    } finally {
+      setBusy(false);
+    }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [testId, status]);
+  // Changing a filter must reset to the first page — otherwise a narrower
+  // filter with an old offset shows an empty list that looks like no results.
+  useEffect(() => { setPage((p) => ({ ...p, offset: 0 })); }, [testId, status]);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [testId, status, page.offset, page.limit]);
 
   const toggle = (id) => setSelected((s) => {
     const next = new Set(s);
@@ -69,7 +82,7 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
           placeholder="بحث في نص السؤال…"
           style={{ ...selectStyle, minWidth: '220px' }}
         />
-        <button onClick={load} style={{ border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>بحث</button>
+        <button onClick={() => (page.offset === 0 ? load() : setPage((p) => ({ ...p, offset: 0 })))} style={{ border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>بحث</button>
         {selected.size > 0 && (
           <>
             <select defaultValue="" onChange={(e) => { bulkSetStatus(e.target.value); e.target.value = ''; }} style={selectStyle}>
@@ -117,6 +130,7 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
             ))}
           </tbody>
         </table>
+        <Pager total={data.total} offset={page.offset} limit={page.limit} busy={busy} onChange={setPage} />
         {data.items.length === 0 && (
           <p style={{ margin: 0, padding: '20px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>لا توجد أسئلة مطابقة.</p>
         )}

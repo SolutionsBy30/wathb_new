@@ -83,3 +83,41 @@ describe('resolveSlotForDay', () => {
     expect(slot.slotEnd.toISOString().slice(0, 10)).toBe('2026-07-20');
   });
 });
+
+/**
+ * NOT-016 — the window is now enforced, not merely consulted.
+ *
+ * These assert the boundary arithmetic that sendDailyWathbNotification uses.
+ * The bug they guard against: plan_day queues tomorrow's row at 21:00, so the
+ * instant the Riyadh date rolled over the row became "today's" and the next
+ * send_due tick fired it — every reminder arriving near midnight regardless of
+ * what the student picked.
+ */
+describe('send-window enforcement', () => {
+  const WINDOW_GRACE_MINUTES = 60;
+  const inWindow = (now: Date, slot: { slotStart: Date; slotEnd: Date }) =>
+    now >= slot.slotStart && now.getTime() <= slot.slotEnd.getTime() + WINDOW_GRACE_MINUTES * 60_000;
+
+  // مساءً = 17:00–20:00 Riyadh = 14:00Z–17:00Z.
+  const slot = resolveSlotForDay(DAY, 17, 20);
+
+  it('refuses the midnight send that started this', () => {
+    // 00:05 Riyadh on the same date is 21:05Z the day before.
+    expect(inWindow(new Date('2026-07-19T21:05:00Z'), slot)).toBe(false);
+  });
+
+  it('refuses any time before the window opens', () => {
+    expect(inWindow(new Date('2026-07-20T13:59:00Z'), slot)).toBe(false);
+  });
+
+  it('sends from the moment the window opens', () => {
+    expect(inWindow(new Date('2026-07-20T14:00:00Z'), slot)).toBe(true);
+    expect(inWindow(new Date('2026-07-20T15:30:00Z'), slot)).toBe(true);
+    expect(inWindow(new Date('2026-07-20T17:00:00Z'), slot)).toBe(true);
+  });
+
+  it('allows a short grace past the close, for a missed tick', () => {
+    expect(inWindow(new Date('2026-07-20T17:59:00Z'), slot)).toBe(true);
+    expect(inWindow(new Date('2026-07-20T18:01:00Z'), slot)).toBe(false);
+  });
+});

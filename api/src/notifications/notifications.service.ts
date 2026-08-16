@@ -20,6 +20,11 @@ export const MAX_STUDENT_MESSAGES_PER_DAY = 2;
 // exhausted (nextRetryAt left null) is what "repeatedly undelivered"
 // means for admin surfacing, not a single one-off failure.
 const RETRY_LADDER_MINUTES = [15, 60, 240];
+
+// NOT-016 — how long after a student's window closes a reminder may still go
+// out. Covers a missed tick or a short outage without ever turning into a
+// message at 3am for a window that ended at 20:00.
+const WINDOW_GRACE_MINUTES = 60;
 export const MAX_RETRY_ATTEMPTS = RETRY_LADDER_MINUTES.length;
 
 function dayKey(d: Date): Date {
@@ -90,7 +95,7 @@ export class NotificationsService {
       const planned = await this.planDayForStudent(studentId, forDate);
       if ('skipped' in planned) return planned;
     }
-    return this.sendDailyWathbNotification(studentId, forDate);
+    return this.sendDailyWathbNotification(studentId, forDate, { respectWindow: false });
   }
 
   /**
@@ -150,7 +155,11 @@ export class NotificationsService {
    * send_notification (spec §9.4) — chooses template vs free-form off
    * wa_sessions (§7.3) and actually calls the NotificationChannel adapter.
    */
-  async sendDailyWathbNotification(studentId: string, forDate: Date) {
+  async sendDailyWathbNotification(
+    studentId: string,
+    forDate: Date,
+    opts: { respectWindow?: boolean; now?: Date } = {},
+  ) {
     const scheduledFor = dayKey(forDate);
     const notif = await this.prisma.notification.findUnique({
       where: { userId_kind_scheduledFor: { userId: studentId, kind: 'daily_wathb', scheduledFor } },
@@ -187,6 +196,29 @@ export class NotificationsService {
     if (wathb.status === 'completed' || wathb.status === 'partial') {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'skipped', error: 'already_completed' } });
       return { skipped: 'already_completed' as const };
+    }
+
+    // NOT-016 — the student's chosen window is now enforced, not merely
+    // consulted.
+    //
+    // decideSendChannel already computed a sendAt, but nothing ever compared
+    // it to the clock: the slot only chose template vs freeform, and the send
+    // itself went out on whichever send_due tick first saw a scheduled row.
+    // plan_day queues tomorrow's row at 21:00, so the moment the Riyadh date
+    // rolled over the row became "today's" and the next tick fired it — which
+    // is exactly why every reminder arrived around midnight regardless of what
+    // the student picked.
+    //
+    // Skipped, not failed: the row stays 'scheduled' so a later tick inside
+    // the window sends it. respectWindow is off only for the admin's explicit
+    // "send now" button, where the operator means now.
+    if (opts.respectWindow !== false) {
+      const slot = resolveSlotForDay(scheduledFor, student.notifSlotStartHour, student.notifSlotEndHour);
+      const now = opts.now ?? new Date();
+      if (now < slot.slotStart) return { skipped: 'before_window' as const };
+      if (now.getTime() > slot.slotEnd.getTime() + WINDOW_GRACE_MINUTES * 60_000) {
+        return { skipped: 'window_missed' as const };
+      }
     }
 
     return this.attemptSend(student, wathb, notif.id, 0);
@@ -304,6 +336,14 @@ export class NotificationsService {
       if (!student) continue; // retry ladder only covers student-facing notifications today
       const wathb = await this.prisma.wathb.findFirst({ where: { studentId: student.userId, scheduledFor: notif.scheduledFor, sequence: 0 } });
       if (!wathb) continue;
+      // NOT-016 — a retry is still a message to a student, so it obeys the
+      // same window. The ladder's 4-hour step can easily land past midnight;
+      // waiting for tomorrow's send beats waking them now.
+      const retrySlot = resolveSlotForDay(notif.scheduledFor, student.notifSlotStartHour, student.notifSlotEndHour);
+      if (now < retrySlot.slotStart || now.getTime() > retrySlot.slotEnd.getTime() + WINDOW_GRACE_MINUTES * 60_000) {
+        results.push({ notificationId: notif.id, skipped: 'outside_window' as const });
+        continue;
+      }
       const result = await this.attemptSend(
         {
           userId: student.userId,
