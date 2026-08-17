@@ -27,6 +27,19 @@ export default function Home({ vm, student, goTestPicker, tests = [], focusedTes
           </span>
         </div>
 
+        {/* A second entry to the same action, directly under the student's
+            own card. The one at the foot of the right column sits below the
+            tip, today's status and the test picker, so on a short viewport it
+            can fall under the fold. Same handler, same label and same
+            disabled rule as that one — deliberately not a second source of
+            truth. Hidden when no test is enabled, where it could only fail;
+            that case already has its own "تفعيل اختبار" call to action. */}
+        {!noTestEnabled && (
+          <Button variant="primary" fullWidth disabled={vm.alreadyDoneToday} onClick={() => goTestPicker(chosenTest)}>
+            {vm.startButtonLabel}
+          </Button>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>سلسلة الوثبات</span>
