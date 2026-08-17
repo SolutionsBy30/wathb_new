@@ -91,28 +91,52 @@ export default function Pricing({ packages, onSubscribe, blockedMessage, onBack,
         <Button variant="secondary" disabled={promoBusy || !promo.trim()} onClick={applyPromo}>
           {promoBusy ? 'جاري التحقق…' : 'تطبيق'}
         </Button>
+        {/* --teal-ink is the ink for teal *tints* (light grounds); on this
+            dark card it reads as near-black. --teal is the on-dark tone. */}
         {promoState && (
-          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: promoState.ok ? 'var(--teal-ink)' : 'var(--coral)' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: promoState.ok ? 'var(--teal)' : 'var(--coral)' }}>
             {promoState.message}
           </span>
         )}
       </div>
 
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-        {packages.map((p) => (
+        {packages.map((p) => {
+          // Once a code applies to this package, the amount actually charged
+          // is the promo total — so that becomes the big number and the list
+          // price is demoted to a struck-through reference. Two prices at
+          // equal weight would leave the student guessing which one they pay.
+          const promo = promoFor(p.id);
+          return (
           <div key={p.id} style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '22px', minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '16px', fontWeight: 500, color: 'var(--sand)' }}>{p.nameAr}</span>
             {p.priceHalalas === 0 ? (
               <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '28px', fontWeight: 500, color: 'var(--lime)' }}>مجاناً</span>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <span style={{ fontFamily: 'var(--font-latin)', fontSize: '28px', fontWeight: 500, color: 'var(--lime)' }}>
+                <span style={{
+                  fontFamily: 'var(--font-latin)',
+                  fontSize: promo ? '17px' : '28px',
+                  fontWeight: 500,
+                  color: promo ? 'var(--mist)' : 'var(--lime)',
+                  textDecoration: promo ? 'line-through' : 'none',
+                }}>
                   {halalasToSar(p.priceHalalas)} <span style={{ fontSize: '14px', color: 'var(--mist)' }}>ريال</span>
                 </span>
+                {promo && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                    <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>بعد الخصم</span>
+                    <span style={{ fontFamily: 'var(--font-latin)', fontSize: '30px', fontWeight: 700, color: 'var(--lime)', lineHeight: 1.15 }}>
+                      {halalasToSar(promo.totalHalalas)} <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '14px', fontWeight: 400, color: 'var(--mist)' }}>ريال</span>
+                    </span>
+                  </div>
+                )}
                 {/* PAY-010 — only rendered when the API reports a genuine
                     saving; a was-price at or below the real one is dropped
-                    server-side rather than shown as "0% off". */}
-                {p.compareAtHalalas && (
+                    server-side rather than shown as "0% off". Hidden once a
+                    promo applies, so the card never shows three prices at
+                    once — the comparison that matters is then list vs. promo. */}
+                {p.compareAtHalalas && !promo && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontFamily: 'var(--font-latin)', fontSize: '14px', color: 'var(--mist)', textDecoration: 'line-through' }}>
                       {halalasToSar(p.compareAtHalalas)}
@@ -129,11 +153,6 @@ export default function Pricing({ packages, onSubscribe, blockedMessage, onBack,
               <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>شامل ضريبة القيمة المضافة (15%)</span>
             )}
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{p.durationMonths} شهر · {p.questionsPerDay} أسئلة يومياً</span>
-            {promoFor(p.id) && (
-              <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--teal-ink)' }}>
-                بعد الخصم: <span style={{ fontFamily: 'var(--font-latin)' }}>{halalasToSar(promoFor(p.id).totalHalalas)}</span> ريال
-              </span>
-            )}
             <Button variant="primary" disabled={busyId === p.id || p.id === currentPackageId} onClick={() => subscribe(p.id)}>
               {busyId === p.id
                 ? (p.priceHalalas === 0 ? 'جاري التفعيل…' : 'جاري التحويل…')
@@ -144,7 +163,8 @@ export default function Pricing({ packages, onSubscribe, blockedMessage, onBack,
                     : (p.priceHalalas === 0 ? 'ابدأ مجاناً' : 'اشترك الآن')}
             </Button>
           </div>
-        ))}
+          );
+        })}
       </div>
       {packages.length === 0 && <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>لا توجد باقات متاحة حالياً.</p>}
     </>

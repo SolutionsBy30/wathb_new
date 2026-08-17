@@ -94,23 +94,46 @@ export default function PayForStudent({ studentId, studentName, onBack }) {
         <Button variant="secondary" disabled={promoBusy || !promo.trim()} onClick={applyPromo}>
           {promoBusy ? 'جاري التحقق…' : 'تطبيق'}
         </Button>
+        {/* --teal-ink is the ink for teal *tints* (light grounds); on this
+            dark card it reads as near-black. --teal is the on-dark tone. */}
         {promoState && (
-          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: promoState.ok ? 'var(--teal-ink)' : 'var(--coral)' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: promoState.ok ? 'var(--teal)' : 'var(--coral)' }}>
             {promoState.message}
           </span>
         )}
       </div>
 
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-        {packages.map((p) => (
+        {packages.map((p) => {
+          // Same hierarchy as the student's pricing screen: once a code
+          // applies, the promo total is the amount charged, so it takes the
+          // prominent slot and the list price is struck through.
+          const promo = promoFor(p.id);
+          return (
           <div key={p.id} style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '22px', minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '16px', fontWeight: 500, color: 'var(--sand)' }}>{p.nameAr}</span>
-            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '28px', fontWeight: 500, color: 'var(--lime)' }}>
+            <span style={{
+              fontFamily: 'var(--font-latin)',
+              fontSize: promo ? '17px' : '28px',
+              fontWeight: 500,
+              color: promo ? 'var(--mist)' : 'var(--lime)',
+              textDecoration: promo ? 'line-through' : 'none',
+            }}>
               {halalasToSar(p.priceHalalas)} <span style={{ fontSize: '14px', color: 'var(--mist)' }}>ريال</span>
             </span>
+            {promo && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>بعد الخصم</span>
+                <span style={{ fontFamily: 'var(--font-latin)', fontSize: '30px', fontWeight: 700, color: 'var(--lime)', lineHeight: 1.15 }}>
+                  {halalasToSar(promo.totalHalalas)} <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '14px', fontWeight: 400, color: 'var(--mist)' }}>ريال</span>
+                </span>
+              </div>
+            )}
             {/* PAY-010 — same decorated fields the student and landing pages
-                read; the supervisor paying on behalf sees the same offer. */}
-            {p.compareAtHalalas && (
+                read; the supervisor paying on behalf sees the same offer.
+                Hidden once a promo applies, so the card never shows three
+                prices at once. */}
+            {p.compareAtHalalas && !promo && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontFamily: 'var(--font-latin)', fontSize: '14px', color: 'var(--mist)', textDecoration: 'line-through' }}>
                   {halalasToSar(p.compareAtHalalas)}
@@ -121,16 +144,12 @@ export default function PayForStudent({ studentId, studentName, onBack }) {
               </div>
             )}
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{p.durationMonths} شهر · {p.questionsPerDay} أسئلة يومياً</span>
-            {promoFor(p.id) && (
-              <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--teal-ink)' }}>
-                بعد الخصم: <span style={{ fontFamily: 'var(--font-latin)' }}>{halalasToSar(promoFor(p.id).totalHalalas)}</span> ريال
-              </span>
-            )}
             <Button variant="primary" disabled={busyId === p.id} onClick={() => pay(p.id)}>
               {busyId === p.id ? 'جاري التحويل…' : 'ادفع الآن'}
             </Button>
           </div>
-        ))}
+          );
+        })}
       </div>
       {packages.length === 0 && <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>لا توجد باقات متاحة حالياً.</p>}
     </div>
