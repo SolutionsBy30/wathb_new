@@ -14,13 +14,52 @@ export default function PayForStudent({ studentId, studentName, onBack }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState(null);
 
+  // PAY-011 — the supervisor gets the same promo box as the student, priced
+  // against every paid package at once so each card shows its own total. The
+  // server re-validates and re-prices at checkout, so nothing here decides
+  // what is actually charged.
+  const [promo, setPromo] = useState('');
+  const [promoState, setPromoState] = useState(null); // {ok, message, byPackage}
+  const [promoBusy, setPromoBusy] = useState(false);
+
   useEffect(() => { api.listPackages().then(setPackages).catch(() => {}); }, []);
+
+  const applyPromo = async () => {
+    const code = promo.trim();
+    if (!code) return;
+    setPromoBusy(true);
+    setPromoState(null);
+    try {
+      const paid = packages.filter((p) => p.priceHalalas > 0);
+      const results = await Promise.all(paid.map((p) => api.previewPromo(code, p.id).then((r) => [p.id, r])));
+      const byPackage = Object.fromEntries(results);
+      const anyOk = results.some(([, r]) => r.ok);
+      const firstReason = results.find(([, r]) => !r.ok)?.[1]?.message;
+      setPromoState({
+        ok: anyOk,
+        message: anyOk ? 'تم تطبيق رمز الخصم.' : (firstReason ?? 'رمز الخصم غير صحيح.'),
+        byPackage,
+      });
+    } catch (e) {
+      setPromoState({ ok: false, message: e.message, byPackage: {} });
+    } finally {
+      setPromoBusy(false);
+    }
+  };
+
+  const promoFor = (pkgId) => {
+    const r = promoState?.byPackage?.[pkgId];
+    return r?.ok ? r : null;
+  };
 
   const pay = async (packageId) => {
     setBusyId(packageId);
     setError(null);
     try {
-      const { checkoutUrl, free } = await api.startCheckoutForStudent(studentId, packageId);
+      // Only send a code that previewed OK for THIS package — sending one the
+      // server will reject would fail the whole checkout instead of simply
+      // charging full price.
+      const { checkoutUrl, free } = await api.startCheckoutForStudent(studentId, packageId, promoFor(packageId) ? promo.trim() : undefined);
       // A zero-price package is already active — no gateway to hand off to,
       // so go straight back to the dashboard instead of redirecting out.
       if (free) {
@@ -44,6 +83,24 @@ export default function PayForStudent({ studentId, studentName, onBack }) {
         الدفع نيابة عن {studentName}
       </h1>
       {error && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>}
+
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          value={promo}
+          onChange={(e) => { setPromo(e.target.value); setPromoState(null); }}
+          placeholder="رمز الخصم (اختياري)"
+          style={{ padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px', minWidth: '180px' }}
+        />
+        <Button variant="secondary" disabled={promoBusy || !promo.trim()} onClick={applyPromo}>
+          {promoBusy ? 'جاري التحقق…' : 'تطبيق'}
+        </Button>
+        {promoState && (
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: promoState.ok ? 'var(--teal-ink)' : 'var(--coral)' }}>
+            {promoState.message}
+          </span>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
         {packages.map((p) => (
           <div key={p.id} style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '22px', minWidth: '220px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -64,6 +121,11 @@ export default function PayForStudent({ studentId, studentName, onBack }) {
               </div>
             )}
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{p.durationMonths} شهر · {p.questionsPerDay} أسئلة يومياً</span>
+            {promoFor(p.id) && (
+              <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--teal-ink)' }}>
+                بعد الخصم: <span style={{ fontFamily: 'var(--font-latin)' }}>{halalasToSar(promoFor(p.id).totalHalalas)}</span> ريال
+              </span>
+            )}
             <Button variant="primary" disabled={busyId === p.id} onClick={() => pay(p.id)}>
               {busyId === p.id ? 'جاري التحويل…' : 'ادفع الآن'}
             </Button>

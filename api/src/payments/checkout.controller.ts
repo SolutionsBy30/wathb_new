@@ -85,13 +85,25 @@ export class CheckoutController {
   }
 
   // STU-029 — subscription cancellation, same step-up requirement.
+  //
+  // Decorators bind to the *next* method declaration. Inserting a route
+  // between this block and cancelSubscription silently moves the step-up
+  // requirement onto the new route and leaves cancellation unguarded — which
+  // is exactly what happened when the promo routes first landed here. Add new
+  // routes below, never between a decorator block and its method.
   @UseGuards(SessionGuard)
   @RequireSession('student')
   @RequireStepUp()
-  // PAY-011 — price a code before committing, so the student sees the total
+  @Post('checkout/me/cancel')
+  cancelSubscription(@CurrentSession() session: SessionPayload) {
+    return this.checkout.cancelSubscription(session.sub);
+  }
+
+  // PAY-011 — price a code before committing, so the payer sees the total
   // rather than discovering it at the gateway. Any signed-in student or
   // supervisor may call it; it reveals only whether a code they already typed
-  // is valid for one package.
+  // is valid for one package. Deliberately NOT step-up gated: it is a
+  // read-only price quote, not a sensitive action.
   @UseGuards(SessionGuard)
   @RequireSession('student', 'supervisor')
   @Post('checkout/promo/preview')
@@ -121,11 +133,6 @@ export class CheckoutController {
   @Patch('admin/discount-codes/:id')
   updateDiscountCode(@Param('id') id: string, @Body() dto: UpsertDiscountCodeDto) {
     return this.discountCodes.update(id, dto as any);
-  }
-
-  @Post('checkout/me/cancel')
-  cancelSubscription(@CurrentSession() session: SessionPayload) {
-    return this.checkout.cancelSubscription(session.sub);
   }
 
   /**

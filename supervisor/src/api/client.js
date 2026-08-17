@@ -52,7 +52,12 @@ export const api = {
   dashboard: () => request('/supervisors/me/dashboard'),
   listPackages: () => request('/packages', { auth: false }),
   studentLeaps: (studentId) => request(`/supervisors/me/students/${studentId}/leaps`),
-  startCheckoutForStudent: (studentId, packageId) => request('/checkout/start-for-student', { method: 'POST', body: { studentId, packageId } }),
+  startCheckoutForStudent: (studentId, packageId, promoCode) =>
+    request('/checkout/start-for-student', { method: 'POST', body: { studentId, packageId, ...(promoCode ? { promoCode } : {}) } }),
+  // PAY-011 — price a code before committing. Same endpoint the student app
+  // uses; it accepts a supervisor session so the payer-on-behalf sees the same
+  // total the student would.
+  previewPromo: (code, packageId) => request('/checkout/promo/preview', { method: 'POST', body: { code, packageId } }),
   acceptInvite: (id) => request(`/supervisors/me/invites/${id}/accept`, { method: 'POST' }),
   rejectInvite: (id) => request(`/supervisors/me/invites/${id}/reject`, { method: 'POST' }),
   listPendingInvites: () => request('/supervisors/me/invites'),
