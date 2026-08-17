@@ -12,5 +12,7 @@ import { AuditLogModule } from '../admin-ops/audit-log.module';
   imports: [AuthModule, AccountsModule, ReportsModule, NotificationChannelModule, AuditLogModule],
   providers: [StudentsService, SupervisorsService],
   controllers: [PeopleController],
+  // SUP-009 — the scheduler drives the pending-invite reminder ladder.
+  exports: [SupervisorsService],
 })
 export class PeopleModule {}

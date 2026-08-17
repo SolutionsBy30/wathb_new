@@ -163,8 +163,21 @@ export function renderTemplate(templateName: string, p: string[]): string {
     case 'weekly_report_supervisor':
       return `تقرير الأسبوع، ${p[0]}:\n${p[1]}\n\n${p[2]}`;
 
+    // SUP-009 — four variants, because the right ask differs on two axes.
+    // Whether they already have an account decides between "join" and "open
+    // your account", and a reminder must not read as a duplicate of the first
+    // message. p[0] supervisor name, p[1] student name, p[2] link.
     case 'wathb_supervisor_invite':
-      return `مرحباً ${p[0]}، تمت دعوتك لمتابعة تقدّم طالب في وثب.\n${p[1]}`;
+      return `مرحباً ${p[0]}، دعاك ${p[1]} لمتابعة تقدّمه في وثب.\nافتح الرابط لإنشاء حسابك وقبول الدعوة:\n${p[2]}`;
+
+    case 'wathb_supervisor_invite_existing':
+      return `مرحباً ${p[0]}، دعاك ${p[1]} لمتابعة تقدّمه في وثب.\nالدعوة بانتظارك في حسابك:\n${p[2]}`;
+
+    case 'wathb_supervisor_invite_reminder':
+      return `تذكير: دعوة ${p[1]} لمتابعة تقدّمه في وثب ما زالت بانتظارك.\nافتح الرابط لإنشاء حسابك وقبول الدعوة:\n${p[2]}`;
+
+    case 'wathb_supervisor_invite_reminder_existing':
+      return `تذكير: دعوة ${p[1]} لمتابعة تقدّمه في وثب ما زالت بانتظارك في حسابك:\n${p[2]}`;
 
     case 'wathb_campaign':
       return `${p[0]}،\n${p[1]}`;

@@ -263,7 +263,20 @@ model StudentSupervisor {
   acceptedAt   DateTime?
   revokedAt    DateTime?
 
+  // SUP-009 — the pending-invite reminder ladder. invitedAt is the ladder's
+  // origin and is reset when a student re-invites, so a fresh invite starts a
+  // fresh schedule rather than inheriting a spent one. reminderCount is the
+  // rung already sent, which is what nextReminderAt() advances; it is the
+  // count, not lastRemindedAt, that decides the next due time, so a late tick
+  // never compounds the delay into every later rung.
+  invitedAt      DateTime?
+  lastRemindedAt DateTime?
+  reminderCount  Int       @default(0)
+
   @@unique([studentId, supervisorId])
+  // The reminder sweep scans pending, un-revoked invites only; without this
+  // it is a full-table scan every morning as the link table grows.
+  @@index([acceptedAt, revokedAt])
   @@map("student_supervisors")
 }
 

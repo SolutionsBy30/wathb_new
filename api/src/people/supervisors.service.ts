@@ -5,6 +5,7 @@ import { MagicLinkService } from '../auth/magic-link.service';
 import { MIN_SAMPLE_FOR_REPORTING, ReportsService } from '../reports/reports.service';
 import { AccountsService } from './accounts.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/channel.interface';
+import { isReminderDue } from './invite-reminder.util';
 
 @Injectable()
 export class SupervisorsService {
@@ -81,51 +82,162 @@ export class SupervisorsService {
       throw new BadRequestException('this mobile number belongs to a non-supervisor account');
     }
 
+    // SUP-009 — invitedAt is reset on every invite, including a re-invite of
+    // a link that already exists, so the reminder ladder restarts from this
+    // moment instead of inheriting rungs already spent on the earlier attempt.
+    const invitedAt = new Date();
     const link = await this.prisma.studentSupervisor.upsert({
       where: { studentId_supervisorId: { studentId, supervisorId: supervisorUser.id } },
-      create: { studentId, supervisorId: supervisorUser.id },
-      update: { revokedAt: null },
+      create: { studentId, supervisorId: supervisorUser.id, invitedAt },
+      update: { revokedAt: null, invitedAt, reminderCount: 0, lastRemindedAt: null },
     });
 
-    const magicLink = await this.magicLinks.mint({
-      subjectId: supervisorUser.id,
-      subjectType: 'supervisor',
-      purpose: 'link_invite',
-      targetId: link.id,
+    const student = await this.prisma.student.findUnique({
+      where: { userId: studentId },
+      include: { user: true },
     });
 
-    // STU-027 — "the system shall send that number a WhatsApp invitation
-    // message containing a magic link." Only for the newly-created branch:
-    // an already-registered supervisor instead sees it as a pending invite
-    // in their own console (SupervisorsService.listPendingInvites) per spec,
-    // with no separate message pushed at them.
-    let delivered = false;
-    if (wasUnregistered) {
-      const appUrl = this.config.get<string>('SUPERVISOR_APP_URL', 'http://localhost:5175/supervisor');
-      const url = `${appUrl}/#magic=${magicLink.token}`;
-      try {
-        // A dedicated Utility-category template is required here, not
-        // free-form — this is the first-ever contact with this number, so
-        // there is no open customer-service window yet (spec §7.2), same
-        // reasoning as OTP's first-time-login send (auth/otp.service.ts).
-        // No config-gate needed: the injected channel is already the safe
-        // ConsoleChannel dev stand-in when WhatsApp isn't configured, same
-        // as every other outbound send in this codebase.
-        await this.channel.sendTemplate({
-          to: mobile,
-          templateName: this.config.get('WHATSAPP_TEMPLATE_SUPERVISOR_INVITE', 'wathb_supervisor_invite'),
-          languageCode: 'ar',
-          bodyParams: [name, url],
-        });
-        delivered = true;
-      } catch {
-        // Non-fatal — the account and pending link already exist; a failed
-        // send shouldn't fail the whole invite request (mirrors OTP's
-        // tolerant delivery-failure handling).
-      }
+    // SUP-009 — both scenarios are now messaged. Previously only the
+    // newly-created branch was, on the reading that an existing supervisor
+    // would find the invite in their console; in practice nothing told them
+    // to go and look, so invites to registered supervisors sat unanswered.
+    const established = wasUnregistered ? false : await this.isEstablished(supervisorUser);
+    const delivered = await this.deliverInvite({
+      linkId: link.id,
+      supervisorUser,
+      studentName: student?.user.name ?? 'طالب',
+      established,
+      isReminder: false,
+    });
+
+    return { studentSupervisorId: link.id, delivered };
+  }
+
+  /**
+   * Does this supervisor already have an account they know how to get into?
+   *
+   * Decides which of the two message variants to send, and — more importantly
+   * — whether the message carries a magic link at all. Someone auto-created by
+   * an invite has no other way in, so they get one. Someone already using Wathb
+   * is pointed at the app and logs in as usual, because a magic link is a
+   * bearer credential and there is no reason to mint a fresh one every week for
+   * an account that has a working login.
+   */
+  private async isEstablished(supervisorUser: { id: string; whatsappOptInAt: Date | null }): Promise<boolean> {
+    if (supervisorUser.whatsappOptInAt) return true; // signed themselves up
+    const accepted = await this.prisma.studentSupervisor.findFirst({
+      where: { supervisorId: supervisorUser.id, acceptedAt: { not: null } },
+      select: { id: true },
+    });
+    return !!accepted;
+  }
+
+  /**
+   * The one place an invite or a reminder is actually put on the wire.
+   *
+   * A dedicated Utility-category template rather than free-form text: for an
+   * unregistered number this is first contact, so there is no open
+   * customer-service window (spec §7.2) — same reasoning as OTP's
+   * first-time-login send. No config gate is needed because the injected
+   * channel is already the ConsoleChannel dev stand-in when WhatsApp is not
+   * configured.
+   */
+  private async deliverInvite(params: {
+    linkId: string;
+    supervisorUser: { id: string; name: string; mobileE164: string | null; whatsappOptedOutAt: Date | null; status: string };
+    studentName: string;
+    established: boolean;
+    isReminder: boolean;
+  }): Promise<boolean> {
+    const { supervisorUser, studentName, established, isReminder } = params;
+    // NOT-010 — STOP is permanent and applies to reminders above all: chasing
+    // someone who has asked to be left alone is exactly the behaviour that
+    // gets the sending number blocked.
+    if (!supervisorUser.mobileE164) return false;
+    if (supervisorUser.whatsappOptedOutAt) return false;
+    if (supervisorUser.status === 'suspended') return false;
+
+    const appUrl = this.config.get<string>('SUPERVISOR_APP_URL', 'http://localhost:5175/supervisor');
+    let url = appUrl;
+    if (!established) {
+      // NOT-004 — magic links live 24h, so a reminder cannot reuse the token
+      // minted with the original invite; by rung 1 it is already dead. Each
+      // send mints its own.
+      const magicLink = await this.magicLinks.mint({
+        subjectId: supervisorUser.id,
+        subjectType: 'supervisor',
+        purpose: 'link_invite',
+        targetId: params.linkId,
+      });
+      url = `${appUrl}/#magic=${magicLink.token}`;
     }
 
-    return { studentSupervisorId: link.id, inviteToken: magicLink.token, expiresAt: magicLink.expiresAt, delivered };
+    const templateKey = isReminder
+      ? established
+        ? ['WHATSAPP_TEMPLATE_SUPERVISOR_INVITE_REMINDER_EXISTING', 'wathb_supervisor_invite_reminder_existing']
+        : ['WHATSAPP_TEMPLATE_SUPERVISOR_INVITE_REMINDER', 'wathb_supervisor_invite_reminder']
+      : established
+        ? ['WHATSAPP_TEMPLATE_SUPERVISOR_INVITE_EXISTING', 'wathb_supervisor_invite_existing']
+        : ['WHATSAPP_TEMPLATE_SUPERVISOR_INVITE', 'wathb_supervisor_invite'];
+
+    try {
+      await this.channel.sendTemplate({
+        to: supervisorUser.mobileE164,
+        templateName: this.config.get(templateKey[0], templateKey[1]),
+        languageCode: 'ar',
+        bodyParams: [supervisorUser.name, studentName, url],
+      });
+      return true;
+    } catch {
+      // Non-fatal — the account and pending link already exist; a failed send
+      // must not fail the whole invite request (mirrors OTP's tolerant
+      // delivery-failure handling).
+      return false;
+    }
+  }
+
+  /**
+   * SUP-009 — one pass of the pending-invite reminder ladder, driven by the
+   * scheduler. See invite-reminder.util for the cadence.
+   *
+   * The rung advances whether or not the send succeeded. Retrying a failed
+   * send on the next tick would collapse the ladder into a daily nag for
+   * exactly the numbers that are already failing to receive; NOT-009's retry
+   * ladder is the mechanism for delivery failure, not this one.
+   */
+  async sendDueInviteReminders(now = new Date()) {
+    const pending = await this.prisma.studentSupervisor.findMany({
+      where: { acceptedAt: null, revokedAt: null, invitedAt: { not: null } },
+      include: { supervisor: { include: { user: true } }, student: { include: { user: true } } },
+    });
+
+    const due = pending.filter((l) => isReminderDue(l.invitedAt!, l.reminderCount, now));
+    if (due.length === 0) return { considered: pending.length, due: 0, sent: 0 };
+
+    // One query for the whole batch rather than isEstablished() per row.
+    const acceptedElsewhere = await this.prisma.studentSupervisor.findMany({
+      where: { supervisorId: { in: [...new Set(due.map((l) => l.supervisorId))] }, acceptedAt: { not: null } },
+      select: { supervisorId: true },
+      distinct: ['supervisorId'],
+    });
+    const establishedIds = new Set(acceptedElsewhere.map((r) => r.supervisorId));
+
+    let sent = 0;
+    for (const l of due) {
+      const delivered = await this.deliverInvite({
+        linkId: l.id,
+        supervisorUser: l.supervisor.user,
+        studentName: l.student.user.name,
+        established: !!l.supervisor.user.whatsappOptInAt || establishedIds.has(l.supervisorId),
+        isReminder: true,
+      });
+      if (delivered) sent++;
+      await this.prisma.studentSupervisor.update({
+        where: { id: l.id },
+        data: { reminderCount: { increment: 1 }, lastRemindedAt: now },
+      });
+    }
+    return { considered: pending.length, due: due.length, sent };
   }
 
   /** Shared trust boundary: a supervisor may only read a student they're accepted on. */

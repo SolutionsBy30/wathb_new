@@ -7,6 +7,7 @@ import { AdminAlertService } from '../notifications/admin-alert.service';
 import { WathbService } from '../wathb/wathb.service';
 import { CheckoutService } from '../payments/checkout.service';
 import { QuestionStatsService } from '../questions/question-stats.service';
+import { SupervisorsService } from '../people/supervisors.service';
 
 const TZ = 'Asia/Riyadh';
 
@@ -43,6 +44,7 @@ export class SchedulerService {
     private checkout: CheckoutService,
     private adminAlerts: AdminAlertService,
     private questionStats: QuestionStatsService,
+    private supervisors: SupervisorsService,
   ) {}
 
   /**
@@ -151,6 +153,22 @@ export class SchedulerService {
   @Cron('0 7 * * *', { timeZone: TZ })
   exhaustionDigest() {
     return this.run('exhaustion_digest', () => this.adminAlerts.sendExhaustionDigest());
+  }
+
+  /**
+   * SUP-009 — chase supervisors who have not answered an invite yet. The
+   * cadence lives in people/invite-reminder.util; this only decides when to
+   * look.
+   *
+   * Once a day at 10:00 Riyadh. Daily is enough because the tightest rung is a
+   * day apart, and a fixed civil hour means a reminder never lands at 3am the
+   * way the daily leap notification once did — nothing here consults a
+   * student's notification window, so the hour of the tick *is* the hour the
+   * message arrives.
+   */
+  @Cron('0 10 * * *', { timeZone: TZ })
+  inviteReminders() {
+    return this.run('invite_reminders', () => this.supervisors.sendDueInviteReminders(new Date()));
   }
 }
 
