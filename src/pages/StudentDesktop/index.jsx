@@ -51,6 +51,14 @@ export default function StudentDesktop() {
   const [myTests, setMyTests] = useState(null);
   // STU-031 — set when the API refuses a leap because no test is switched on.
   const [needsTestActivation, setNeedsTestActivation] = useState(false);
+  // STU-032 — the test the current leap was started against, so "وثبة جديدة"
+  // on the summary screen continues with the same test instead of silently
+  // falling back to whatever is focused.
+  const [activeTestId, setActiveTestId] = useState(null);
+  // Set when the API hands back the already-completed bundle, i.e. the
+  // package's daily limit is reached. Shown on the summary screen so the
+  // button explains itself instead of appearing to do nothing.
+  const [dailyLimitReached, setDailyLimitReached] = useState(false);
 
   const timerRef = useRef(null);
   const submittingRef = useRef(false);
@@ -318,10 +326,17 @@ export default function StudentDesktop() {
     setWathbError(null);
     setAlreadyDoneToday(false);
     setNeedsTestActivation(false);
+    setDailyLimitReached(false);
     try {
       const result = await api.today(testId);
+      setActiveTestId(testId ?? null);
       if (result.status === 'completed') {
+        // today() returns the finished bundle rather than a new one once the
+        // package's dailyWathbLimit is spent. Both callers need to know:
+        // Home shows "done today", the summary screen explains why its
+        // new-leap button did not move.
         setAlreadyDoneToday(true);
+        setDailyLimitReached(true);
         return;
       }
       setWathb(result);
@@ -639,7 +654,13 @@ export default function StudentDesktop() {
             <Explanations result={completeResult} onContinue={() => setScreen('complete')} />
           )}
           {screen === 'complete' && completeVm && (
-            <Complete vm={completeVm} goDashboard={goPerformance} backHome={goHome} />
+            <Complete
+              vm={completeVm}
+              goDashboard={goPerformance}
+              backHome={goHome}
+              onStartNew={() => startWathb(activeTestId ?? myTests?.focusedTestId)}
+              dailyLimitReached={dailyLimitReached}
+            />
           )}
           {screen === 'performance' && <Performance report={report} onUpgrade={() => goPricing()} />}
           {screen === 'weeklyReport' && <WeeklyReport report={report} onOpenPerformance={goPerformance} />}

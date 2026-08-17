@@ -2,12 +2,29 @@ import { Button } from '../../../design-system/components/Button';
 import { StreakStrip } from '../../../design-system/components/StreakStrip';
 import { RuleSpark } from '../../../design-system/components/RuleSpark';
 
-export default function Complete({ vm, goDashboard, backHome }) {
+export default function Complete({ vm, goDashboard, backHome, onStartNew, dailyLimitReached }) {
   return (
     <>
       <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>{vm.activeTestName}</span>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '24px', fontWeight: 500, color: 'var(--sand)' }}>ملخص الوثبة</h1>
       <p style={{ margin: '-8px 0 0', fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--mist)' }}>{vm.completeHeadline}</p>
+
+      {/* STU-032 — the next leap is the thing a student most wants from this
+          screen, so it sits at the top rather than below the breakdown. It
+          is offered, not promised: today() hands back the finished bundle
+          once the package's daily limit is spent, and dailyLimitReached
+          turns that refusal into a sentence instead of a button that looks
+          broken. */}
+      {onStartNew && !dailyLimitReached && (
+        <Button variant="primary" fullWidth onClick={onStartNew}>ابدأ وثبة جديدة</Button>
+      )}
+      {dailyLimitReached && (
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)', lineHeight: 1.8 }}>
+            أكملت وثبات اليوم في باقتك. نراك غداً بوثبة جديدة.
+          </p>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '28px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -41,11 +58,7 @@ export default function Complete({ vm, goDashboard, backHome }) {
         </>
       )}
 
-      <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
-        غداً وثبة جديدة — تدريب إضافي عند الطلب جزء من مرحلة لاحقة.
-      </p>
-
-      <Button variant="primary" fullWidth onClick={goDashboard}>لوحة الأداء</Button>
+      <Button variant="secondary" fullWidth onClick={goDashboard}>لوحة الأداء</Button>
       <button onClick={backHome} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', fontFamily: 'var(--font-arabic)', fontSize: '13px', cursor: 'pointer' }}>الرئيسية</button>
     </>
   );
