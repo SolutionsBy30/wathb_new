@@ -21,6 +21,15 @@ const STEP_UP_VALIDITY_MS = 10 * 60 * 1000;
 const SUB_STATUS_LABEL = { active: 'نشط', pending: 'بانتظار الدفع', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
 const SUB_STATUS_COLOR = { active: 'var(--teal-ink)', pending: 'var(--mist)', expired: 'var(--coral)', cancelled: 'var(--coral)', refunded: 'var(--coral)' };
 const TRACK_LABEL = { scientific: 'علمي', humanities: 'أدبي' };
+
+// STU-026 — the invite fields borrow the login screen's shape (a fixed +966
+// badge beside a 9-digit local number) so a student meets the same phone
+// control in both places. The metrics stay this card's, not the login
+// screen's, since these sit on --on-indigo-subtle rather than the page.
+const INVITE_FIELD = {
+  padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: 'none',
+  background: 'var(--indigo)', color: 'var(--sand)', fontSize: '13px',
+};
 const DAYS = [
   { id: 0, label: 'الأحد' },
   { id: 1, label: 'الاثنين' },
@@ -37,9 +46,13 @@ export default function Profile({ student, subscription, onManageSubscription, o
   // (SupervisorsService.invite throws 403) — this is just the honest UI.
   const inviteLocked = subscription?.package?.supervisorLinkingAllowed === false;
   const [name, setName] = useState('');
-  const [mobile, setMobile] = useState('+9665');
+  // Only the 9 local digits are held in state; the country code is fixed
+  // furniture, so it can't be edited into something the API will reject.
+  const [local, setLocal] = useState('');
+  const [phoneError, setPhoneError] = useState(false);
   const [type, setType] = useState('parent');
   const [sent, setSent] = useState(false);
+  const mobile = `+966${local}`;
 
   // ONB-012 — same named day-parts as the onboarding step, so the choice a
   // student made at signup is the choice they see here.
@@ -70,10 +83,19 @@ export default function Profile({ student, subscription, onManageSubscription, o
   };
 
   const submit = async () => {
-    if (!name.trim() || !mobile.trim()) return;
-    await onInvite(mobile.trim(), name.trim(), type);
+    if (!name.trim()) return;
+    // Same rule the login screen applies: a Saudi mobile is 5 followed by 8
+    // digits. Caught here rather than at the API so a typo doesn't cost a
+    // round trip and an invite addressed to nobody.
+    if (!/^5\d{8}$/.test(local)) {
+      setPhoneError(true);
+      return;
+    }
+    setPhoneError(false);
+    await onInvite(mobile, name.trim(), type);
     setSent(true);
     setName('');
+    setLocal('');
   };
 
   const saveNotifPrefs = async () => {
@@ -316,14 +338,33 @@ export default function Profile({ student, subscription, onManageSubscription, o
                 placeholder="الاسم"
                 value={name}
                 onChange={(e) => { setName(e.target.value); setSent(false); }}
-                style={{ padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+                style={{ ...INVITE_FIELD, fontFamily: 'var(--font-arabic)' }}
               />
-              <input
-                placeholder="رقم الجوال"
-                value={mobile}
-                onChange={(e) => { setMobile(e.target.value); setSent(false); }}
-                style={{ padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}
-              />
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <span style={{ ...INVITE_FIELD, fontFamily: 'var(--font-latin)', display: 'flex', alignItems: 'center' }}>+966</span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  placeholder="5xxxxxxxx"
+                  dir="ltr"
+                  value={local}
+                  onChange={(e) => {
+                    // Non-digits are dropped as they are typed and the length
+                    // is capped at 9, so the field cannot hold a number the
+                    // submit rule would then reject.
+                    setLocal(e.target.value.replace(/\D/g, '').slice(0, 9));
+                    setSent(false);
+                    setPhoneError(false);
+                  }}
+                  style={{ ...INVITE_FIELD, flex: 1, fontFamily: 'var(--font-latin)', textAlign: 'right' }}
+                />
+              </div>
+              {phoneError && (
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)', fontFamily: 'var(--font-arabic)' }}>
+                  أدخل رقم جوال صحيح — 9 أرقام تبدأ بـ 5.
+                </p>
+              )}
               <div style={{ display: 'flex', gap: '6px' }}>
                 {[{ id: 'parent', label: 'ولي أمر' }, { id: 'instructor', label: 'معلّم' }].map((o) => (
                   <button
@@ -340,7 +381,7 @@ export default function Profile({ student, subscription, onManageSubscription, o
                   </button>
                 ))}
               </div>
-              <Button variant="primary" disabled={inviteBusy || !name.trim() || !mobile.trim()} onClick={submit}>
+              <Button variant="primary" disabled={inviteBusy || !name.trim() || local.length !== 9} onClick={submit}>
                 {inviteBusy ? 'جاري الإرسال…' : 'إرسال الدعوة'}
               </Button>
               {inviteError && <p style={{ margin: 0, fontSize: '12px', color: 'var(--coral)' }}>{inviteError}</p>}
