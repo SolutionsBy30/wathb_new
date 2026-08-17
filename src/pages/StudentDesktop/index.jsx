@@ -651,7 +651,12 @@ export default function StudentDesktop() {
             <Question vm={questionVm} selectOption={setSelectedIndex} confirmAnswer={confirmAnswer} />
           )}
           {screen === 'explanations' && completeResult && (
-            <Explanations result={completeResult} onContinue={() => setScreen('complete')} />
+            <Explanations
+              result={completeResult}
+              onStartNew={() => startWathb(activeTestId ?? myTests?.focusedTestId)}
+              onHome={goHome}
+              dailyLimitReached={dailyLimitReached}
+            />
           )}
           {screen === 'complete' && completeVm && (
             <Complete

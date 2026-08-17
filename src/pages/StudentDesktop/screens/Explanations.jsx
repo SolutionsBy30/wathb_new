@@ -85,7 +85,7 @@ function ExplanationFeedback({ answerId }) {
 // S8 in the spec: correctness is revealed here, all at once, after the bundle
 // is finished — never mid-bundle (§6.3), so a wrong answer can't poison focus
 // on the next question.
-export default function Explanations({ result, onContinue }) {
+export default function Explanations({ result, onStartNew, onHome, dailyLimitReached }) {
   return (
     <>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>
@@ -136,7 +136,27 @@ export default function Explanations({ result, onContinue }) {
         })}
       </div>
 
-      <Button variant="primary" onClick={onContinue}>متابعة</Button>
+      {/* STU-033 — the review ends where the student wants to go next: another
+          leap. Same honesty as the summary screen — today() hands back the
+          finished bundle once the package's daily limit is spent, so the
+          refusal is spelled out rather than left as a button that does
+          nothing. */}
+      {!dailyLimitReached && (
+        <Button variant="primary" fullWidth onClick={onStartNew}>ابدأ وثبة جديدة</Button>
+      )}
+      {dailyLimitReached && (
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '14px 16px' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)', lineHeight: 1.8 }}>
+            أكملت وثبات اليوم في باقتك. نراك غداً بوثبة جديدة.
+          </p>
+        </div>
+      )}
+      <button
+        onClick={onHome}
+        style={{ border: 'none', background: 'transparent', color: 'var(--mist)', fontFamily: 'var(--font-arabic)', fontSize: '13px', cursor: 'pointer' }}
+      >
+        الرئيسية
+      </button>
     </>
   );
 }
