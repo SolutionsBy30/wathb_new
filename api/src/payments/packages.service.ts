@@ -1,17 +1,31 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertPackageDto } from './dto/packages.dto';
+import { packagePriceView } from './pricing.util';
 
 @Injectable()
 export class PackagesService {
   constructor(private prisma: PrismaService) {}
 
-  listPublic() {
-    return this.prisma.package.findMany({ where: { isActive: true, visibility: 'public' }, orderBy: [{ sort: 'asc' }, { priceHalalas: 'asc' }] });
+  /**
+   * PAY-010 — every list decorates each package with its price view, so the
+   * rule for what counts as a genuine saving lives in one tested place
+   * (pricing.util) instead of being re-implemented in the student app, the
+   * landing page and the supervisor app. compareAtHalalas comes back null
+   * unless it is strictly greater than the price.
+   */
+  private withPriceView<T extends { priceHalalas: number; compareAtHalalas: number | null }>(pkg: T) {
+    return { ...pkg, ...packagePriceView(pkg) };
   }
 
-  listAll() {
-    return this.prisma.package.findMany({ orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }] });
+  async listPublic() {
+    const rows = await this.prisma.package.findMany({ where: { isActive: true, visibility: 'public' }, orderBy: [{ sort: 'asc' }, { priceHalalas: 'asc' }] });
+    return rows.map((p) => this.withPriceView(p));
+  }
+
+  async listAll() {
+    const rows = await this.prisma.package.findMany({ orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }] });
+    return rows.map((p) => this.withPriceView(p));
   }
 
   create(dto: UpsertPackageDto) {

@@ -706,6 +706,13 @@ model Package {
   testIds         String[]
   durationMonths  Int
   priceHalalas    Int // VAT-inclusive, 15% KSA — spec §4.5
+  // PAY-010 — the "was" price, for a strikethrough next to priceHalalas.
+  // Deliberately NOT a percentage: the amount charged stays the single source
+  // of truth in priceHalalas, and this is presentation only, so a discount can
+  // never drift from what the gateway is actually asked for. Null = no
+  // discount shown. Ignored when it is not strictly greater than priceHalalas,
+  // so a stale "was" price can't render as a 0% or negative saving.
+  compareAtHalalas Int?
   questionsPerDay Int               @default(5)
   // Display order on the student pricing screen, admin-controlled.
   sort            Int               @default(0)
@@ -727,6 +734,36 @@ model Package {
   subscriptions Subscription[]
 
   @@map("packages")
+}
+
+// PAY-011 — promo codes. Percent or fixed amount, optionally scoped to
+// specific packages, optionally limited by redemption count and/or expiry.
+enum DiscountKind {
+  percent
+  fixed
+}
+
+model DiscountCode {
+  id              String       @id @default(uuid())
+  // Stored uppercase and matched case-insensitively — students type these by
+  // hand off a poster or a WhatsApp message.
+  code            String       @unique
+  kind            DiscountKind
+  // percent: 1..100. fixed: halalas off, clamped so a total never goes below
+  // zero (a code worth more than the package makes it free, not negative).
+  value           Int
+  // Empty = every package. Otherwise only these.
+  packageIds      String[]     @default([])
+  maxRedemptions  Int?
+  timesRedeemed   Int          @default(0)
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+
+  subscriptions Subscription[]
+
+  @@map("discount_codes")
 }
 
 enum SubscriptionStatus {
@@ -756,6 +793,12 @@ model Subscription {
   // existing default; a supervisor checkout sets both fields.
   payerId              String?
   payerType            SubjectType?
+  // PAY-011 — which promo code was redeemed, and how much it took off. Both
+  // snapshotted: the code's value may be edited later, and an invoice must
+  // still explain the amount that was charged.
+  discountCodeId       String?
+  discountCode         DiscountCode? @relation(fields: [discountCodeId], references: [id])
+  discountHalalas      Int           @default(0)
 
   @@map("subscriptions")
 }

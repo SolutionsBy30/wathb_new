@@ -103,7 +103,9 @@ export const api = {
   revokeSupervisor: (id) => request(`/students/me/supervisors/${id}/revoke`, { method: 'POST' }),
 
   listPackages: () => request('/packages', { auth: false }),
-  startCheckout: (packageId) => request('/checkout/start', { method: 'POST', body: { packageId } }),
+  startCheckout: (packageId, promoCode) => request('/checkout/start', { method: 'POST', body: { packageId, ...(promoCode ? { promoCode } : {}) } }),
+  // PAY-011 — price a code before committing.
+  previewPromo: (code, packageId) => request('/checkout/promo/preview', { method: 'POST', body: { code, packageId } }),
   mySubscription: () => request('/checkout/me'),
 
   // STU-029 — sensitive actions behind step-up auth (fresh OTP). Request the

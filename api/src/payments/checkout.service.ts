@@ -5,6 +5,8 @@ import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider.interface'
 import { AuditLogService } from '../admin-ops/audit-log.service';
 import { MagicLinkService } from '../auth/magic-link.service';
 import { DefaultEnrolmentService } from './default-enrolment.service';
+import { applyPromoCode, PROMO_REJECTION_AR } from './pricing.util';
+import { normaliseCode } from './discount-codes.service';
 
 @Injectable()
 export class CheckoutService {
@@ -30,9 +32,24 @@ export class CheckoutService {
    * receiving the receipt), while the subscription itself is still the
    * student's — payerId/payerType record who actually paid.
    */
-  async startCheckout(studentId: string, packageId: string, payer?: { id: string; type: 'supervisor' }) {
+  async startCheckout(studentId: string, packageId: string, payer?: { id: string; type: 'supervisor' }, promoCode?: string) {
     const pkg = await this.prisma.package.findUnique({ where: { id: packageId } });
     if (!pkg || !pkg.isActive) throw new NotFoundException('package not found or inactive');
+
+    // PAY-011 — the discount is recomputed here from the stored code, never
+    // taken from the client. The preview endpoint exists so the student sees
+    // the total before committing; trusting the number it returned would let
+    // anyone post their own price.
+    let discountCodeId: string | null = null;
+    let discountHalalas = 0;
+    if (promoCode?.trim()) {
+      const code = await this.prisma.discountCode.findUnique({ where: { code: normaliseCode(promoCode) } });
+      const applied = applyPromoCode(code as any, packageId, pkg.priceHalalas);
+      if (!applied.ok) throw new BadRequestException(PROMO_REJECTION_AR[applied.reason]);
+      discountCodeId = code!.id;
+      discountHalalas = applied.discountHalalas;
+    }
+    const payableHalalas = pkg.priceHalalas - discountHalalas;
 
     const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId }, include: { user: true } });
     const payerUser = payer ? await this.prisma.user.findUniqueOrThrow({ where: { id: payer.id } }) : student.user;
@@ -44,7 +61,12 @@ export class CheckoutService {
       data: {
         studentId,
         packageId,
-        priceSnapshotHalalas: pkg.priceHalalas,
+        // The snapshot is what the student actually pays, so history and any
+        // future invoice reconcile against the charge rather than the list
+        // price; discountHalalas keeps the "before" recoverable.
+        priceSnapshotHalalas: payableHalalas,
+        discountCodeId,
+        discountHalalas,
         status: 'pending',
         payerId: payer?.id,
         payerType: payer?.type,
@@ -56,7 +78,7 @@ export class CheckoutService {
     // and even where it didn't, bouncing a student through a card form to
     // pay nothing is wrong). Activate it directly and hand back the same
     // success URL the paid path produces, so callers need no special case.
-    if (pkg.priceHalalas === 0) {
+    if (payableHalalas === 0) {
       await this.confirmPayment(subscription.id);
       return { subscriptionId: subscription.id, checkoutUrl: `${this.appReturnUrl(payer?.type)}/#subscription=success`, free: true };
     }
@@ -70,7 +92,7 @@ export class CheckoutService {
     // undeliverable), while the webhook remains as reinforcement.
     const apiUrl = this.config.get<string>('API_PUBLIC_URL', 'http://localhost:4000/api');
     const { checkoutUrl, providerRef } = await this.provider.createCheckout({
-      amountHalalas: pkg.priceHalalas,
+      amountHalalas: payableHalalas,
       currency: 'SAR',
       merchantOrderId: subscription.id,
       customerName: payerUser.name,
@@ -121,14 +143,14 @@ export class CheckoutService {
    * supervisor can only ever pay for a student who has actually accepted
    * their invite, never an arbitrary studentId.
    */
-  async startCheckoutForLinkedStudent(supervisorId: string, studentId: string, packageId: string) {
+  async startCheckoutForLinkedStudent(supervisorId: string, studentId: string, packageId: string, promoCode?: string) {
     const link = await this.prisma.studentSupervisor.findUnique({
       where: { studentId_supervisorId: { studentId, supervisorId } },
     });
     if (!link || !link.acceptedAt || link.revokedAt) {
       throw new BadRequestException('no accepted supervisor link to this student');
     }
-    return this.startCheckout(studentId, packageId, { id: supervisorId, type: 'supervisor' });
+    return this.startCheckout(studentId, packageId, { id: supervisorId, type: 'supervisor' }, promoCode);
   }
 
   /** Idempotent — a webhook or dev-complete hit twice must not double-extend the subscription. */
@@ -140,6 +162,18 @@ export class CheckoutService {
     const startsAt = new Date();
     const endsAt = new Date(startsAt);
     endsAt.setUTCMonth(endsAt.getUTCMonth() + subscription.package.durationMonths);
+
+    // PAY-011 — count the redemption only once the money is actually in.
+    // Counting at checkout-start would let an abandoned card form burn a
+    // limited code, and the early return above (status already 'active')
+    // keeps this idempotent when the gateway return and the webhook both
+    // land.
+    if (subscription.discountCodeId) {
+      await this.prisma.discountCode.update({
+        where: { id: subscription.discountCodeId },
+        data: { timesRedeemed: { increment: 1 } },
+      });
+    }
 
     return this.prisma.subscription.update({
       where: { id: subscriptionId },

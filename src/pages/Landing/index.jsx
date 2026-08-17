@@ -133,6 +133,18 @@ export default function Landing({ onGoLogin, onGoSignup }) {
                       </span>
                       <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: highlighted ? 'var(--lime-ink)' : 'var(--mist)' }}>ريال</span>
                     </div>
+                    {/* PAY-010 — the API only sends compareAtHalalas when it
+                        is a genuine saving, so no client-side rule here. */}
+                    {p.compareAtHalalas && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontFamily: 'var(--font-latin)', fontSize: '15px', textDecoration: 'line-through', color: highlighted ? 'var(--lime-ink)' : 'var(--mist)', opacity: 0.75 }}>
+                          {formatSar(p.compareAtHalalas)}
+                        </span>
+                        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', borderRadius: '999px', padding: '2px 8px', background: highlighted ? 'var(--indigo)' : 'var(--lime)', color: highlighted ? 'var(--lime)' : 'var(--lime-ink)' }}>
+                          خصم {p.discountPercent}%
+                        </span>
+                      </div>
+                    )}
                     <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: highlighted ? 'var(--lime-ink)' : 'var(--mist)' }}>{durationLabel(p.durationMonths)}</span>
                     <button
                       onClick={onGoSignup}

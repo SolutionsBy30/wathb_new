@@ -51,6 +51,18 @@ export default function PayForStudent({ studentId, studentName, onBack }) {
             <span style={{ fontFamily: 'var(--font-latin)', fontSize: '28px', fontWeight: 500, color: 'var(--lime)' }}>
               {halalasToSar(p.priceHalalas)} <span style={{ fontSize: '14px', color: 'var(--mist)' }}>ريال</span>
             </span>
+            {/* PAY-010 — same decorated fields the student and landing pages
+                read; the supervisor paying on behalf sees the same offer. */}
+            {p.compareAtHalalas && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontFamily: 'var(--font-latin)', fontSize: '14px', color: 'var(--mist)', textDecoration: 'line-through' }}>
+                  {halalasToSar(p.compareAtHalalas)}
+                </span>
+                <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--lime-ink)', background: 'var(--lime)', borderRadius: '999px', padding: '2px 8px' }}>
+                  خصم {p.discountPercent}%
+                </span>
+              </div>
+            )}
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>{p.durationMonths} شهر · {p.questionsPerDay} أسئلة يومياً</span>
             <Button variant="primary" disabled={busyId === p.id} onClick={() => pay(p.id)}>
               {busyId === p.id ? 'جاري التحويل…' : 'ادفع الآن'}

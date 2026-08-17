@@ -19,6 +19,7 @@ import StudentDetail from './pages/StudentDetail';
 import Supervisors from './pages/Supervisors';
 import AuditLog from './pages/AuditLog';
 import AdminUsers from './pages/AdminUsers';
+import DiscountCodes from './pages/DiscountCodes';
 
 // ADM-003 — grouped navigation: Overview; Content; Users; Business; System.
 const NAV_GROUPS = [
@@ -48,6 +49,9 @@ const NAV_GROUPS = [
     items: [
       { id: 'subscriptions', label: 'الاشتراكات' },
       { id: 'packages', label: 'الباقات والتسعير' },
+      // PAY-011 — same 'packages' permission gates both, so it is not a new
+      // grant to hand out; it is the pricing section growing a screen.
+      { id: 'discountCodes', label: 'رموز الخصم', permission: 'packages' },
     ],
   },
   {
@@ -77,7 +81,9 @@ function visibleGroups(me) {
     items: g.items.filter((n) => {
       if (n.superAdminOnly) return me.isSuperAdmin;
       if (n.id === 'overview') return true;
-      return me.isSuperAdmin || me.adminPermissions.includes(n.id);
+      // A screen may declare which permission it rides on when its id is not
+      // itself a permission key.
+      return me.isSuperAdmin || me.adminPermissions.includes(n.permission ?? n.id);
     }),
   }));
   return groups.filter((g) => g.items.length > 0);
@@ -166,6 +172,7 @@ export default function App() {
         )}
         {tab === 'overview' && <Overview />}
         {tab === 'admins' && <AdminUsers me={me} />}
+        {tab === 'discountCodes' && <DiscountCodes />}
         {tab === 'taxonomy' && <Taxonomy tests={tests} onTestsChanged={() => api.listTests().then(setTests)} />}
         {tab === 'bank' && editingQuestionId === undefined && (
           <QuestionBank tests={tests} onEdit={(id) => setEditingQuestionId(id)} onNew={() => setEditingQuestionId(null)} />

@@ -221,6 +221,8 @@ function NewPackageForm({ tests, onCreated }) {
   const [testIds, setTestIds] = useState([]);
   const [durationMonths, setDurationMonths] = useState(1);
   const [priceSar, setPriceSar] = useState('');
+  // PAY-010 — the "was" price, shown struck through next to the real one.
+  const [compareAtSar, setCompareAtSar] = useState('');
   const [dailyNotificationEnabled, setDailyNotificationEnabled] = useState(true);
   const [dailyWathbLimit, setDailyWathbLimit] = useState('');
   const [questionsPerDay, setQuestionsPerDay] = useState(5);
@@ -241,12 +243,13 @@ function NewPackageForm({ tests, onCreated }) {
       await api.createPackage({
         nameAr: nameAr.trim(), nameEn: nameEn.trim(), testIds,
         durationMonths: Number(durationMonths), priceHalalas: Math.round(Number(priceSar) * 100),
+        compareAtHalalas: compareAtSar === '' ? null : Math.round(Number(compareAtSar) * 100),
         dailyNotificationEnabled, reportVisibility, weeklyReportEnabled, supervisorLinkingAllowed,
         dailyWathbLimit: dailyWathbLimit === '' ? null : Number(dailyWathbLimit),
         questionsPerDay: Number(questionsPerDay) || 5,
         sort: Number(sort) || 0,
       });
-      setNameAr(''); setNameEn(''); setTestIds([]); setDurationMonths(1); setPriceSar('');
+      setNameAr(''); setNameEn(''); setTestIds([]); setDurationMonths(1); setPriceSar(''); setCompareAtSar('');
       setDailyNotificationEnabled(true); setReportVisibility('full'); setWeeklyReportEnabled(true); setSupervisorLinkingAllowed(true);
       onCreated();
     } catch (e) {
@@ -279,6 +282,14 @@ function NewPackageForm({ tests, onCreated }) {
         <input style={{ ...fieldStyle, flex: 1 }} type="number" min={1} placeholder="المدة (أشهر)" value={durationMonths} onChange={(e) => setDurationMonths(e.target.value)} />
         <input style={{ ...fieldStyle, flex: 1 }} type="number" min={0} step="0.01" placeholder="السعر (ريال، شامل الضريبة)" value={priceSar} onChange={(e) => setPriceSar(e.target.value)} />
       </div>
+      <input
+        style={fieldStyle}
+        type="number" min={0} step="0.01"
+        placeholder="السعر قبل الخصم (اختياري)"
+        value={compareAtSar}
+        onChange={(e) => setCompareAtSar(e.target.value)}
+        title="يظهر مشطوباً بجانب السعر مع نسبة الخصم. اتركه فارغاً لإخفاء الخصم — ويُتجاهل إن لم يكن أعلى من السعر."
+      />
       <input
         style={fieldStyle}
         type="number"
@@ -375,7 +386,14 @@ export default function Packages({ tests }) {
                   )}
                 </td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>{p.durationMonths} شهر</span></td>
-                <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>{halalasToSar(p.priceHalalas)} ريال</span></td>
+                <td style={td}>
+                  <span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--sand)' }}>{halalasToSar(p.priceHalalas)} ريال</span>
+                  {p.compareAtHalalas && (
+                    <span style={{ marginInlineStart: '6px', fontFamily: 'var(--font-latin)', fontSize: '11px', color: 'var(--mist)', textDecoration: 'line-through' }}>
+                      {halalasToSar(p.compareAtHalalas)}
+                    </span>
+                  )}
+                </td>
                 <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '11px', color: 'var(--mist)' }}>{p.testIds.length}</span></td>
                 <td style={td}>
                   <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', maxWidth: '220px' }}>

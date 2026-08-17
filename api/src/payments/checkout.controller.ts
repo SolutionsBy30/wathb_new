@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Logger, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Logger, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { CheckoutService } from './checkout.service';
@@ -6,7 +6,8 @@ import { computePaymobHmac } from './paymob-hmac.util';
 import { RequirePermission, RequireSession, RequireStepUp, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
-import { StartCheckoutDto, StartCheckoutForStudentDto, ActivateWireTransferDto } from './dto/packages.dto';
+import { StartCheckoutDto, StartCheckoutForStudentDto, ActivateWireTransferDto, PreviewPromoDto, UpsertDiscountCodeDto } from './dto/packages.dto';
+import { DiscountCodesService } from './discount-codes.service';
 
 @Controller()
 export class CheckoutController {
@@ -14,6 +15,7 @@ export class CheckoutController {
 
   constructor(
     private checkout: CheckoutService,
+    private discountCodes: DiscountCodesService,
     private config: ConfigService,
   ) {}
 
@@ -51,7 +53,7 @@ export class CheckoutController {
   @RequireSession('student')
   @Post('checkout/start')
   start(@Body() dto: StartCheckoutDto, @CurrentSession() session: SessionPayload) {
-    return this.checkout.startCheckout(session.sub, dto.packageId);
+    return this.checkout.startCheckout(session.sub, dto.packageId, undefined, dto.promoCode);
   }
 
   // SUP-008 — a supervisor pays on behalf of a linked (accepted, not
@@ -61,7 +63,7 @@ export class CheckoutController {
   @RequireSession('supervisor')
   @Post('checkout/start-for-student')
   startForStudent(@Body() dto: StartCheckoutForStudentDto, @CurrentSession() session: SessionPayload) {
-    return this.checkout.startCheckoutForLinkedStudent(session.sub, dto.studentId, dto.packageId);
+    return this.checkout.startCheckoutForLinkedStudent(session.sub, dto.studentId, dto.packageId, dto.promoCode);
   }
 
   @UseGuards(SessionGuard)
@@ -86,6 +88,41 @@ export class CheckoutController {
   @UseGuards(SessionGuard)
   @RequireSession('student')
   @RequireStepUp()
+  // PAY-011 — price a code before committing, so the student sees the total
+  // rather than discovering it at the gateway. Any signed-in student or
+  // supervisor may call it; it reveals only whether a code they already typed
+  // is valid for one package.
+  @UseGuards(SessionGuard)
+  @RequireSession('student', 'supervisor')
+  @Post('checkout/promo/preview')
+  previewPromo(@Body() dto: PreviewPromoDto) {
+    return this.discountCodes.preview(dto.code, dto.packageId);
+  }
+
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('packages')
+  @Get('admin/discount-codes')
+  listDiscountCodes() {
+    return this.discountCodes.list();
+  }
+
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('packages')
+  @Post('admin/discount-codes')
+  createDiscountCode(@Body() dto: UpsertDiscountCodeDto) {
+    return this.discountCodes.create(dto as any);
+  }
+
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('packages')
+  @Patch('admin/discount-codes/:id')
+  updateDiscountCode(@Param('id') id: string, @Body() dto: UpsertDiscountCodeDto) {
+    return this.discountCodes.update(id, dto as any);
+  }
+
   @Post('checkout/me/cancel')
   cancelSubscription(@CurrentSession() session: SessionPayload) {
     return this.checkout.cancelSubscription(session.sub);
