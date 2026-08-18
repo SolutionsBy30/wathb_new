@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
+import { downloadCsv } from '../lib/csv';
 
 const card = { background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '16px' };
 const label13 = { fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' };
@@ -338,6 +339,21 @@ export default function Taxonomy({ tests, onTestsChanged }) {
   const [testId, setTestId] = useState(null);
   const [tree, setTree] = useState(null);
   const [newTestOpen, setNewTestOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // ADM-093 — the whole tree, every test, not just the one on screen: the
+  // point of the sheet is to see and compare all of it at once, and to look
+  // up the label ids the bulk importer needs.
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const rows = await api.exportTaxonomy();
+      const today = new Date().toISOString().slice(0, 10);
+      downloadCsv(`wathb-taxonomy-${today}.csv`, rows);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (!testId && tests.length) setTestId(tests[0].id);
@@ -350,6 +366,13 @@ export default function Taxonomy({ tests, onTestsChanged }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الاختبارات والتصنيف</h1>
+        <Button variant="secondary" disabled={exporting} onClick={exportAll}>
+          {exporting ? 'جاري التصدير…' : 'تصدير الشجرة (CSV)'}
+        </Button>
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         {tests.map((t) => (
           <button

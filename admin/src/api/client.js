@@ -64,6 +64,8 @@ export const api = {
   createLabel: (areaId, dto) => request(`/admin/areas/${areaId}/labels`, { method: 'POST', body: dto }),
   updateLabel: (id, dto) => request(`/admin/labels/${id}`, { method: 'PATCH', body: dto }),
   retireLabel: (id) => request(`/admin/labels/${id}/retire`, { method: 'POST' }),
+  // ADM-093 — الاختبار ← القسم ← المجال ← التصنيف, one row per label.
+  exportTaxonomy: () => request('/admin/taxonomy/export'),
 
   listQuestions: (params = {}) => {
     const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''))).toString();

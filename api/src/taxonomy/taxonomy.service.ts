@@ -35,6 +35,104 @@ export class TaxonomyService {
     return test;
   }
 
+  /**
+   * ADM-093 — the whole taxonomy flattened to one row per label:
+   * الاختبار ← القسم ← المجال ← التصنيف, with the question counts under each.
+   *
+   * LEFT joins throughout (Prisma nested includes are already outer), unlike
+   * scripts/taxonomy-export.sql, whose inner JOINs silently drop a test with
+   * no sections yet or an area with no labels — exactly the empty branches
+   * someone auditing the tree needs to see.
+   *
+   * Retired labels are included and flagged rather than filtered: they still
+   * hold questions, so omitting them would make the counts fail to add up.
+   */
+  async exportRows() {
+    const [tests, counts] = await Promise.all([
+      this.prisma.test.findMany({
+        orderBy: { nameAr: 'asc' },
+        include: {
+          sections: {
+            orderBy: [{ sort: 'asc' }, { nameAr: 'asc' }],
+            include: {
+              areas: {
+                orderBy: [{ sort: 'asc' }, { nameAr: 'asc' }],
+                include: { labels: { orderBy: [{ sort: 'asc' }, { nameAr: 'asc' }] } },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.question.groupBy({ by: ['labelId', 'status'], _count: { _all: true } }),
+    ]);
+
+    // One grouped query rather than a count per label: a few thousand labels
+    // would otherwise be a few thousand round trips.
+    const byLabel = new Map<string, Record<string, number>>();
+    for (const c of counts) {
+      const row = byLabel.get(c.labelId) ?? {};
+      row[c.status] = c._count._all;
+      byLabel.set(c.labelId, row);
+    }
+
+    const rows: Record<string, unknown>[] = [];
+    for (const t of tests) {
+      if (t.sections.length === 0) {
+        rows.push(this.exportRow(t, null, null, null, {}));
+        continue;
+      }
+      for (const s of t.sections) {
+        if (s.areas.length === 0) {
+          rows.push(this.exportRow(t, s, null, null, {}));
+          continue;
+        }
+        for (const a of s.areas) {
+          if (a.labels.length === 0) {
+            rows.push(this.exportRow(t, s, a, null, {}));
+            continue;
+          }
+          for (const l of a.labels) {
+            rows.push(this.exportRow(t, s, a, l, byLabel.get(l.id) ?? {}));
+          }
+        }
+      }
+    }
+    return rows;
+  }
+
+  private exportRow(t: any, s: any, a: any, l: any, counts: Record<string, number>) {
+    const published = counts['published'] ?? 0;
+    const draft = counts['draft'] ?? 0;
+    const inReview = counts['in_review'] ?? 0;
+    const retired = counts['retired'] ?? 0;
+    return {
+      test_ar: t.nameAr,
+      test_en: t.nameEn,
+      test_lang: t.language,
+      test_active: t.isActive,
+      section_ar: s?.nameAr ?? '',
+      section_en: s?.nameEn ?? '',
+      section_weight: s?.weight ?? '',
+      section_sort: s?.sort ?? '',
+      area_ar: a?.nameAr ?? '',
+      area_en: a?.nameEn ?? '',
+      area_sort: a?.sort ?? '',
+      label_ar: l?.nameAr ?? '',
+      label_en: l?.nameEn ?? '',
+      label_sort: l?.sort ?? '',
+      time_limit_s: l?.defaultTimeLimitS ?? '',
+      label_retired: l ? l.isRetired : '',
+      // The bulk importer takes this as its destination, which is the main
+      // reason anyone exports this sheet.
+      label_id: l?.id ?? '',
+      q_published: published,
+      q_draft: draft,
+      q_in_review: inReview,
+      q_retired: retired,
+      q_total: published + draft + inReview + retired,
+    };
+  }
+
   createTest(dto: UpsertTestDto) {
     return this.prisma.test.create({ data: dto });
   }

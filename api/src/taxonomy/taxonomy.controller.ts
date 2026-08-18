@@ -38,6 +38,24 @@ export class TaxonomyController {
     return this.taxonomy.listAllTests();
   }
 
+  /**
+   * ADM-093 — the whole tree flattened for export, one row per label.
+   *
+   * Any content permission may read it: the bank, bulk import and the review
+   * queue all work from label ids, and this sheet is how you find them.
+   * Editing the taxonomy stays gated on 'taxonomy' below.
+   *
+   * Decorators bind to the next method declaration — do not insert a route
+   * between this block and exportTaxonomy.
+   */
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('taxonomy', 'bank', 'import', 'solutionPerf')
+  @Get('admin/taxonomy/export')
+  exportTaxonomy() {
+    return this.taxonomy.exportRows();
+  }
+
   // SessionGuard is not registered as an APP_GUARD (only ThrottlerGuard is),
   // so an admin route without these decorators is genuinely public. This one
   // was missing them — anyone could create a test.
