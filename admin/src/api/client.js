@@ -64,6 +64,8 @@ export const api = {
   createLabel: (areaId, dto) => request(`/admin/areas/${areaId}/labels`, { method: 'POST', body: dto }),
   updateLabel: (id, dto) => request(`/admin/labels/${id}`, { method: 'PATCH', body: dto }),
   retireLabel: (id) => request(`/admin/labels/${id}/retire`, { method: 'POST' }),
+  // ADM-095 — hard delete; the API refuses it unless the label is empty.
+  deleteLabel: (id) => request(`/admin/labels/${id}`, { method: 'DELETE' }),
   // ADM-093 — الاختبار ← القسم ← المجال ← التصنيف, one row per label.
   exportTaxonomy: () => request('/admin/taxonomy/export'),
 

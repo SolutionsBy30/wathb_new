@@ -189,8 +189,16 @@ function NewTestForm({ onAdd, onCancel }) {
   );
 }
 
+// ADM-095 — a label pill carries the same three actions its parent area does:
+// rename, retire (reversible, keeps the history) and delete (only ever
+// possible for a label nothing was ever filed under). Editing was previously
+// impossible at this level — a typo in a label name could only be fixed by
+// retiring it and creating a replacement, which orphaned nothing but left a
+// struck-through ghost in the tree forever.
 function LabelPill({ label: l, index, labels, persistOrder, onReload }) {
   const { onDragStart, onDragOver, onDrop } = useDragReorder(labels, persistOrder);
+  const [editing, setEditing] = useState(false);
+
   const retire = async () => {
     const res = await api.retireLabel(l.id);
     if (res.activeQuestionsNeedingReassignment > 0) {
@@ -198,6 +206,39 @@ function LabelPill({ label: l, index, labels, persistOrder, onReload }) {
     }
     await onReload();
   };
+
+  // Retiring was one-way from this screen, so a mis-click was unrecoverable
+  // without database access. isRetired is an ordinary field on the same PATCH.
+  const restore = async () => {
+    await api.updateLabel(l.id, { isRetired: false });
+    await onReload();
+  };
+
+  if (editing) {
+    return (
+      <span style={{ background: 'var(--indigo)', padding: '8px 10px', borderRadius: 'var(--radius-sm)' }}>
+        <InlineEdit
+          nameAr={l.nameAr}
+          nameEn={l.nameEn}
+          extra={{ label: 'المهلة (ثانية)', value: l.defaultTimeLimitS }}
+          onSave={async ({ nameAr, nameEn, extra }) => {
+            const seconds = parseInt(extra, 10);
+            await api.updateLabel(l.id, {
+              nameAr,
+              nameEn,
+              // Left untouched when the box is blank or not a number, rather
+              // than writing NaN over a working time limit.
+              ...(Number.isFinite(seconds) && seconds > 0 ? { defaultTimeLimitS: seconds } : {}),
+            });
+            setEditing(false);
+            await onReload();
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </span>
+    );
+  }
+
   return (
     <span
       draggable
@@ -205,17 +246,27 @@ function LabelPill({ label: l, index, labels, persistOrder, onReload }) {
       onDragOver={onDragOver}
       onDrop={() => onDrop(index)}
       style={{
-        display: 'flex', alignItems: 'center', gap: '5px',
+        display: 'flex', alignItems: 'center', gap: '6px',
         fontFamily: 'var(--font-arabic)', fontSize: '11px', color: l.isRetired ? 'var(--mist)' : 'var(--sand)',
         background: 'var(--indigo)', padding: '5px 10px', borderRadius: '999px',
-        textDecoration: l.isRetired ? 'line-through' : 'none',
       }}
     >
       <DragHandle />
-      {l.nameAr} · {l.defaultTimeLimitS}ث
-      {!l.isRetired && (
-        <button onClick={retire} title="إيقاف التصنيف" style={{ border: 'none', background: 'transparent', color: 'var(--coral)', cursor: 'pointer', fontSize: '11px', padding: 0 }}>×</button>
+      <span style={{ textDecoration: l.isRetired ? 'line-through' : 'none' }}>
+        {l.nameAr} · {l.defaultTimeLimitS}ث
+      </span>
+      <button onClick={() => setEditing(true)} title="تحرير التصنيف" style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontSize: '11px', padding: 0 }}>تحرير</button>
+      {l.isRetired ? (
+        <button onClick={restore} title="إعادة تفعيل التصنيف" style={{ border: 'none', background: 'transparent', color: 'var(--teal)', cursor: 'pointer', fontSize: '11px', padding: 0 }}>تفعيل</button>
+      ) : (
+        <button onClick={retire} title="إيقاف التصنيف" style={{ border: 'none', background: 'transparent', color: 'var(--coral)', cursor: 'pointer', fontSize: '11px', padding: 0 }}>إيقاف</button>
       )}
+      <DeleteControl
+        what="التصنيف"
+        childCount={0}
+        childNoun="سؤال"
+        onDelete={async () => { await api.deleteLabel(l.id); await onReload(); }}
+      />
     </span>
   );
 }

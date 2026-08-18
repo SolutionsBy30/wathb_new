@@ -141,6 +141,16 @@ export class TaxonomyController {
     return this.taxonomy.updateLabel(id, dto);
   }
 
+  // ADM-095 — hard delete, refused unless the label is genuinely empty (see
+  // the service). Decorators bind to the next method — nothing goes between.
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('taxonomy')
+  @Delete('admin/labels/:id')
+  deleteLabel(@Param('id') id: string) {
+    return this.taxonomy.deleteLabel(id);
+  }
+
   @UseGuards(SessionGuard)
   @RequireSession('admin')
   @RequirePermission('taxonomy')

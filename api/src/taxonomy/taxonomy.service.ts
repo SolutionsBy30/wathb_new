@@ -224,6 +224,49 @@ export class TaxonomyService {
     return { deleted: true, areasRemoved: section.areas.length, labelsRemoved: labelCount };
   }
 
+  /**
+   * ADM-095 — hard-delete a label that has never held a question.
+   *
+   * The sibling of retireLabel, not a replacement for it. Retiring keeps the
+   * row and its history and merely takes it out of circulation; deleting
+   * removes it outright, which is only ever right for a label created by
+   * mistake — a typo, a duplicate, a branch that was restructured before any
+   * content landed under it.
+   *
+   * The guard counts questions of ANY status, including retired ones, unlike
+   * retireLabel which only counts the active ones. A retired question still
+   * carries answers, and Label → StudentLabelStat cascades, so deleting a
+   * label with retired questions beneath it would silently destroy per-student
+   * performance history that nothing else can reconstruct.
+   */
+  async deleteLabel(id: string) {
+    const label = await this.prisma.label.findUnique({ where: { id } });
+    if (!label) throw new BadRequestException('label not found');
+
+    const questionCount = await this.prisma.question.count({ where: { labelId: id } });
+    if (questionCount > 0) {
+      throw new BadRequestException(
+        `cannot delete this label: ${questionCount} question(s) are filed under it ` +
+          `(retired ones included). Move them to another label, or retire this label ` +
+          `instead — deleting would destroy their per-student performance history.`,
+      );
+    }
+
+    // Answered questions are covered above, but a label can also accumulate
+    // stat rows without live questions (a question moved away afterwards), and
+    // those are the history itself.
+    const statCount = await this.prisma.studentLabelStat.count({ where: { labelId: id } });
+    if (statCount > 0) {
+      throw new BadRequestException(
+        `cannot delete this label: ${statCount} student performance record(s) reference it. ` +
+          `Retire it instead — deleting would destroy that history.`,
+      );
+    }
+
+    await this.prisma.label.delete({ where: { id } });
+    return { deleted: true };
+  }
+
   async deleteArea(id: string) {
     const area = await this.prisma.area.findUnique({
       where: { id },
