@@ -850,3 +850,23 @@ model DailyTip {
 
   @@map("daily_tips")
 }
+
+/// NOT-017 — the pool of admin-authored daily-leap message bodies. One is
+/// picked at random per send; an empty pool falls back to the built-in
+/// wording, so deleting every row degrades to today's behaviour rather than
+/// to silence.
+model NotificationMessage {
+  id        String   @id @default(uuid())
+  /// Which message this varies. Only 'daily_wathb' is wired up today; the
+  /// column exists so weekly reports can join without a migration.
+  kind      String   @default("daily_wathb")
+  /// Arabic body with {student_name} / {magic_link} / {test_name}
+  /// placeholders. Validated on write — see message-template.util.
+  body      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, isActive])
+  @@map("notification_messages")
+}

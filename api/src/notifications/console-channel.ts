@@ -13,7 +13,9 @@ export class ConsoleChannel implements NotificationChannel {
 
   async sendTemplate(params: TemplateSendParams): Promise<SendResult> {
     this.logger.log(
-      `[template] to=${params.to} name=${params.templateName} lang=${params.languageCode} params=${JSON.stringify(params.bodyParams ?? [])}`,
+      params.bodyOverride
+        ? `[template:override] to=${params.to} name=${params.templateName} text="${params.bodyOverride}"`
+        : `[template] to=${params.to} name=${params.templateName} lang=${params.languageCode} params=${JSON.stringify(params.bodyParams ?? [])}`,
     );
     return { providerMessageId: `console-${randomUUID()}` };
   }

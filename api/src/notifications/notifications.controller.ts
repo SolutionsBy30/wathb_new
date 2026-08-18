@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { WeeklyReportService } from './weekly-report.service';
 import { CampaignService } from './campaign.service';
@@ -8,6 +8,8 @@ import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 import { TriggerDateDto } from './dto/trigger.dto';
 import { CampaignAudienceDto, CampaignSendDto } from './dto/campaign.dto';
+import { NotificationMessagesService } from './notification-messages.service';
+import { CreateNotificationMessageDto, PreviewMessageDto, UpdateNotificationMessageDto } from './dto/notification-message.dto';
 
 function resolveDate(forDate?: string, defaultOffsetDays = 0): Date {
   if (forDate) return new Date(forDate);
@@ -35,6 +37,7 @@ export class NotificationsController {
     private weeklyReports: WeeklyReportService,
     private campaigns: CampaignService,
     private adminAlerts: AdminAlertService,
+    private messages: NotificationMessagesService,
   ) {}
 
   @Get()
@@ -136,5 +139,47 @@ export class NotificationsController {
   @Post('campaign/send')
   sendCampaign(@Body() dto: CampaignSendDto, @CurrentSession() session: SessionPayload) {
     return this.campaigns.send(dto, session.sub);
+  }
+
+  /**
+   * NOT-017 — the pool of daily-leap message variants.
+   *
+   * Class-level @UseGuards/@RequireSession/@RequirePermission('notifications')
+   * cover every route here, so these carry only their verb decorator — and
+   * nothing may be inserted between a decorator and the method it binds to.
+   *
+   * 'messages/placeholders' and 'messages/preview' are declared with literal
+   * paths and there is no 'messages/:id' GET, so no static path can be
+   * swallowed by a parameter route.
+   */
+  @Get('messages')
+  listMessages() {
+    return this.messages.list();
+  }
+
+  /** The placeholder vocabulary, so the console never hardcodes it. */
+  @Get('messages/placeholders')
+  messagePlaceholders() {
+    return this.messages.placeholders();
+  }
+
+  @Post('messages/preview')
+  previewMessage(@Body() dto: PreviewMessageDto) {
+    return this.messages.preview(dto.body);
+  }
+
+  @Post('messages')
+  createMessage(@Body() dto: CreateNotificationMessageDto) {
+    return this.messages.create(dto.body, dto.isActive ?? true);
+  }
+
+  @Patch('messages/:id')
+  updateMessage(@Param('id') id: string, @Body() dto: UpdateNotificationMessageDto) {
+    return this.messages.update(id, dto);
+  }
+
+  @Delete('messages/:id')
+  deleteMessage(@Param('id') id: string) {
+    return this.messages.remove(id);
   }
 }

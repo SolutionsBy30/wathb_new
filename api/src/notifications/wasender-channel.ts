@@ -135,7 +135,10 @@ export class WasenderChannel implements NotificationChannel {
   async sendTemplate(params: TemplateSendParams): Promise<SendResult> {
     return this.sendFreeform({
       to: params.to,
-      text: renderTemplate(params.templateName, params.bodyParams ?? []),
+      // NOT-017 — there is no template concept here (see the note at the top
+      // of this file), so an admin-authored body is simply the text we send.
+      // Meta's adapter cannot do this and deliberately ignores the override.
+      text: params.bodyOverride ?? renderTemplate(params.templateName, params.bodyParams ?? []),
     });
   }
 }

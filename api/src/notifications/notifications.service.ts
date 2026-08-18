@@ -6,6 +6,7 @@ import { MagicLinkService } from '../auth/magic-link.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from './channel.interface';
 import { decideSendChannel, resolveSlotForDay } from './reactive-scheduler';
 import { riyadhDayKey } from './riyadh-clock.util';
+import { NotificationMessagesService } from './notification-messages.service';
 import { EmailChannel } from './email-channel';
 
 const DEFAULT_BUNDLE_SIZE = 5;
@@ -47,6 +48,7 @@ export class NotificationsService {
     @Inject(NOTIFICATION_CHANNEL) private channel: NotificationChannel,
     private config: ConfigService,
     private email: EmailChannel,
+    private messages: NotificationMessagesService,
   ) {}
 
   /**
@@ -186,7 +188,7 @@ export class NotificationsService {
       return { failed: true as const };
     }
 
-    const wathb = await this.prisma.wathb.findFirst({ where: { studentId, scheduledFor, sequence: 0 } });
+    const wathb = await this.prisma.wathb.findFirst({ where: { studentId, scheduledFor, sequence: 0 }, include: { test: true } });
     if (!wathb) {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: 'no wathb planned for this day' } });
       return { failed: true as const };
@@ -243,7 +245,7 @@ export class NotificationsService {
         suspendedAt: Date | null;
       };
     },
-    wathb: { id: string; scheduledFor: Date },
+    wathb: { id: string; scheduledFor: Date; test?: { nameAr: string } | null },
     notifId: string,
     retryCount: number,
   ) {
@@ -273,6 +275,15 @@ export class NotificationsService {
       `${student.user.name}، وثبتك اليومية جاهزة:\n${url}`,
     );
 
+    // NOT-017 — the same sentence every morning stops being read. An admin
+    // pool of variants is drawn from at random; null means the pool is empty
+    // (or the chosen body rendered blank), and the built-in wording stands.
+    const customBody = await this.messages.renderRandom({
+      student_name: student.user.name,
+      magic_link: url,
+      test_name: wathb.test?.nameAr ?? '',
+    });
+
     try {
       const result =
         decision.channelType === 'template'
@@ -280,9 +291,15 @@ export class NotificationsService {
               to: student.user.mobileE164!,
               templateName: this.config.get('WHATSAPP_TEMPLATE_DAILY_WATHB', 'daily_wathb_reminder'),
               languageCode: 'ar',
+              // Kept populated alongside the override: Meta's adapter cannot
+              // honour a custom body and falls back to these (channel.interface).
               bodyParams: [student.user.name, url],
+              bodyOverride: customBody ?? undefined,
             })
-          : await this.channel.sendFreeform({ to: student.user.mobileE164!, text: `وثبتك اليومية جاهزة، ${student.user.name}: ${url}` });
+          : await this.channel.sendFreeform({
+              to: student.user.mobileE164!,
+              text: customBody ?? `وثبتك اليومية جاهزة، ${student.user.name}: ${url}`,
+            });
 
       await this.prisma.notification.update({
         where: { id: notifId },
@@ -334,7 +351,7 @@ export class NotificationsService {
     for (const notif of due) {
       const student = notif.user.student;
       if (!student) continue; // retry ladder only covers student-facing notifications today
-      const wathb = await this.prisma.wathb.findFirst({ where: { studentId: student.userId, scheduledFor: notif.scheduledFor, sequence: 0 } });
+      const wathb = await this.prisma.wathb.findFirst({ where: { studentId: student.userId, scheduledFor: notif.scheduledFor, sequence: 0 }, include: { test: true } });
       if (!wathb) continue;
       // NOT-016 — a retry is still a message to a student, so it obeys the
       // same window. The ladder's 4-hour step can easily land past midnight;
