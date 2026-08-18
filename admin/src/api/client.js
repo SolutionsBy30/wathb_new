@@ -100,7 +100,8 @@ export const api = {
     return request('/admin/questions/import', { method: 'POST', body: form, isForm: true });
   },
   patchImportRow: (jobId, rowIndex, patch) => request(`/admin/questions/import/${jobId}/rows/${rowIndex}`, { method: 'PATCH', body: patch }),
-  commitImport: (jobId) => request(`/admin/questions/import/${jobId}/commit`, { method: 'POST' }),
+  // ADM-094 — skipInvalid imports the valid rows and drops the rest.
+  commitImport: (jobId, skipInvalid = false) => request(`/admin/questions/import/${jobId}/commit`, { method: 'POST', body: { skipInvalid } }),
 
   deliveryLog: () => request('/admin/notifications'),
   // NOT-017 — the pool of daily-leap message variants.

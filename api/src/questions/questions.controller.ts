@@ -154,7 +154,12 @@ export class QuestionsController {
 
   @RequirePermission('import')
   @Post('import/:jobId/commit')
-  commitImport(@Param('jobId') jobId: string, @CurrentSession() session: SessionPayload) {
-    return this.bulkImport.commit(jobId, session.sub);
+  commitImport(
+    @Param('jobId') jobId: string,
+    @CurrentSession() session: SessionPayload,
+    // ADM-094 — opt in to importing the valid rows and skipping the rest.
+    @Body('skipInvalid') skipInvalid?: boolean,
+  ) {
+    return this.bulkImport.commit(jobId, session.sub, skipInvalid === true);
   }
 }

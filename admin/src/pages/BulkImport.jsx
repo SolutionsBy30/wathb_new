@@ -98,11 +98,11 @@ export default function BulkImport({ tests }) {
     setReport(updated);
   };
 
-  const commit = async () => {
+  const commit = async (skipInvalid = false) => {
     setBusy(true);
     setError(null);
     try {
-      setResult(await api.commitImport(report.jobId));
+      setResult(await api.commitImport(report.jobId, skipInvalid));
       setReport(null);
     } catch (e) {
       setError(e.message);
@@ -120,7 +120,7 @@ export default function BulkImport({ tests }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>استيراد جماعي</h1>
       <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>
-        اختر الوجهة → ارفع → تحقق → تأكيد. كل سؤال في الملف يُستورد إلى الوجهة المختارة أدناه. لن يتم استيراد أي صف طالما توجد أخطاء في الملف.
+        اختر الوجهة → ارفع → تحقق → تأكيد. كل سؤال في الملف يُستورد إلى الوجهة المختارة أدناه. إذا وُجدت صفوف بها أخطاء (مثل سؤال مكرر) يمكنك تصحيحها هنا، أو استيراد الصفوف الصحيحة فقط وتجاهل الباقي.
       </p>
 
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -146,7 +146,30 @@ export default function BulkImport({ tests }) {
       </div>
 
       {error && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>}
-      {result && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--teal-ink)' }}>تم استيراد {result.created} سؤالاً بنجاح.</p>}
+      {/* ADM-094 — a partial import must say what it left behind, by row
+          number and reason. Reporting only "created N" on a file of 200 would
+          leave the author to work out which rows never landed. */}
+      {result && (
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--teal)' }}>
+            تم استيراد {result.created} سؤالاً بنجاح.
+          </p>
+          {result.skipped > 0 && (
+            <>
+              <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>
+                وتم تجاهل {result.skipped} صفاً:
+              </p>
+              <ul style={{ margin: 0, paddingInlineStart: '18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {result.skippedRows?.map((r) => (
+                  <li key={r.row} style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)', lineHeight: 1.8 }}>
+                    صف {r.row}: {r.stem || '—'} <span style={{ color: 'var(--coral)' }}>({r.errors.join('، ')})</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
 
       {report && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -194,9 +217,29 @@ export default function BulkImport({ tests }) {
             </table>
           </div>
 
-          <Button variant="primary" disabled={busy || report.errorRows > 0} onClick={commit}>
-            {busy ? 'جاري التأكيد…' : `تأكيد استيراد ${report.validRows} سؤال`}
-          </Button>
+          {/* ADM-094 — the strict commit stays the primary action when the
+              file is clean. With errors present it would only ever fail, so
+              it is replaced by the explicit partial import rather than left
+              disabled with no way forward. A file with nothing valid in it
+              offers neither. */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {report.errorRows === 0 ? (
+              <Button variant="primary" disabled={busy || report.validRows === 0} onClick={() => commit(false)}>
+                {busy ? 'جاري التأكيد…' : `تأكيد استيراد ${report.validRows} سؤال`}
+              </Button>
+            ) : (
+              <>
+                <Button variant="primary" disabled={busy || report.validRows === 0} onClick={() => commit(true)}>
+                  {busy ? 'جاري التأكيد…' : `استيراد الصفوف الصحيحة فقط (${report.validRows})`}
+                </Button>
+                <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
+                  {report.validRows === 0
+                    ? 'لا يوجد أي صف صالح للاستيراد.'
+                    : `سيتم تجاهل ${report.errorRows} صفاً بها أخطاء. صحّحها أعلاه إن أردت استيرادها.`}
+                </span>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

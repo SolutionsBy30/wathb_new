@@ -176,16 +176,46 @@ export class BulkImportService {
     return this.report(job);
   }
 
-  async commit(jobId: string, createdBy?: string) {
+  /**
+   * ADM-094 — commit the job.
+   *
+   * Default stays all-or-nothing (spec §4.2 #3): a file whose errors are
+   * typos should be fixed and re-imported whole, not half-landed leaving the
+   * author to work out which half.
+   *
+   * skipInvalid opts into importing the good rows and dropping the rest. The
+   * case that made this necessary is a file of mostly-new questions where a
+   * handful are duplicates of ones already in the bank — nothing to "fix",
+   * since the correct outcome for those rows is precisely to not import them,
+   * and requiring the author to delete them by hand first is busywork on a
+   * file of hundreds.
+   *
+   * It is an explicit flag rather than the default so a partial import is
+   * always something someone chose, and the skipped rows come back in the
+   * response so the screen can say exactly what was left behind rather than
+   * reporting a smaller number than the author expected with no explanation.
+   */
+  async commit(jobId: string, createdBy?: string, skipInvalid = false) {
     const job = this.getJob(jobId);
+    // Re-validated here, not trusted from upload time: another import may
+    // have landed the same stem in between, so a row valid a minute ago can
+    // be a duplicate now.
     await this.validateRows(job.rows);
-    const errorCount = job.rows.filter((r) => r.errors.length > 0).length;
-    if (errorCount > 0) {
-      // Never partial-commit a bad import — spec §4.2 #3.
-      throw new BadRequestException({ message: `${errorCount} row(s) still have errors`, report: this.report(job) });
+    const invalid = job.rows.filter((r) => r.errors.length > 0);
+
+    if (invalid.length > 0 && !skipInvalid) {
+      throw new BadRequestException({ message: `${invalid.length} row(s) still have errors`, report: this.report(job) });
     }
+
+    const toImport = job.rows.filter((r) => r.errors.length === 0);
+    if (toImport.length === 0) {
+      // Nothing to do, and silently reporting "0 created" would look like the
+      // import worked.
+      throw new BadRequestException({ message: 'no valid rows to import', report: this.report(job) });
+    }
+
     let created = 0;
-    for (const row of job.rows) {
+    for (const row of toImport) {
       await this.questions.create(
         {
           labelId: row.labelId,
@@ -204,6 +234,12 @@ export class BulkImportService {
       created++;
     }
     this.jobs.delete(jobId);
-    return { created };
+    return {
+      created,
+      skipped: invalid.length,
+      // +1 so the row number matches the spreadsheet the author is looking at
+      // (header is row 1, so data row 0 is row 2).
+      skippedRows: invalid.map((r) => ({ row: r.rowIndex + 2, stem: r.stem.slice(0, 80), errors: r.errors })),
+    };
   }
 }
