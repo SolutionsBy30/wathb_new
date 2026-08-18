@@ -98,6 +98,13 @@ export default function Explanations({ result, onStartNew, onHome, dailyLimitRea
       <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', maxWidth: '640px' }}>
         {result.questions.map((q) => {
           const correctText = (q.options || []).find((o) => o.key === q.correctKey)?.text ?? q.correctKey;
+          // STU-034 — the student's own choice, echoed back beside the right
+          // one. selectedKey has always come back from complete(); the review
+          // simply never showed it, so by question 5 nobody remembered what
+          // they had picked. null covers an unanswered/timed-out question.
+          const yourText = q.selectedKey
+            ? ((q.options || []).find((o) => o.key === q.selectedKey)?.text ?? q.selectedKey)
+            : null;
           // ADM-012 — the stem/explanation follow the test's content
           // language; the surrounding chrome (question number, timers) stays app-RTL.
           const contentDir = result.contentLanguage === 'en' ? 'ltr' : 'rtl';
@@ -112,11 +119,18 @@ export default function Explanations({ result, onStartNew, onHome, dailyLimitRea
                 <AnswerState
                   status={q.isCorrect ? 'correct' : 'wrong'}
                   correctAnswer={correctText}
+                  yourAnswer={yourText}
                   reason={q.explanation}
                 />
               </div>
-              {q.timedOut && (
+              {/* The comparison block already says "لم تجب" when nothing was
+                  selected, so this line would repeat it; it stays for the case
+                  where an answer was recorded but the clock had run out. */}
+              {q.timedOut && q.selectedKey && (
                 <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>انتهى الوقت قبل الإجابة.</span>
+              )}
+              {q.timedOut && !q.selectedKey && (
+                <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>انتهى الوقت.</span>
               )}
               {(q.cohortMeanTimeMs != null || q.cohortAccuracy != null) && (
                 <div style={{ display: 'flex', gap: '14px', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
