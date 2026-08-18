@@ -31,20 +31,109 @@ export class QuestionsService {
       ];
     }
 
-    const [total, items] = await this.prisma.$transaction([
-      this.prisma.question.count({ where }),
-      this.prisma.question.findMany({
-        where,
-        skip: query.offset ?? 0,
-        take: query.limit ?? 50,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          label: { include: { area: { include: { section: { include: { test: true } } } } } },
-          versions: { orderBy: { version: 'desc' }, take: 1, include: { stats: true } },
-        },
-      }),
-    ]);
-    return { total, items };
+    const include = {
+      label: { include: { area: { include: { section: { include: { test: true } } } } } },
+      versions: { orderBy: { version: 'desc' as const }, take: 1, include: { stats: true } },
+    };
+    const skip = query.offset ?? 0;
+    const take = query.limit ?? 50;
+    const dir = query.sortDir === 'asc' ? 'asc' : 'desc';
+
+    // ADM-096 — columns that live on Question itself sort through Prisma.
+    const PLAIN_SORTS: Record<string, Prisma.QuestionOrderByWithRelationInput> = {
+      createdAt: { createdAt: dir },
+      difficulty: { difficulty: dir },
+      status: { status: dir },
+      label: { label: { nameAr: dir } },
+    };
+
+    if (!query.sortBy || PLAIN_SORTS[query.sortBy]) {
+      const [total, items] = await this.prisma.$transaction([
+        this.prisma.question.count({ where }),
+        this.prisma.question.findMany({
+          where,
+          skip,
+          take,
+          orderBy: PLAIN_SORTS[query.sortBy ?? 'createdAt'] ?? { createdAt: 'desc' },
+          include,
+        }),
+      ]);
+      return { total, items };
+    }
+
+    return this.listSortedByStats(where, query.sortBy, dir, skip, take, include);
+  }
+
+  /**
+   * ADM-096 — sort by a column that lives on QuestionStats (or the version's
+   * stem), which Prisma cannot order by: the stats hang off the latest of a
+   * to-many `versions` relation, and orderBy has no path through that.
+   *
+   * Sorting client-side over the current page was the tempting shortcut and
+   * would have been quietly wrong — the point of "sort by lowest p-value" is
+   * to find the worst questions in the whole test, not the worst 50 that
+   * happened to be on screen.
+   *
+   * The filter stays in Prisma and only the ORDER BY is raw: the id set is
+   * resolved with the same `where` every other path uses, then ordered in
+   * SQL. Two queries instead of one, but no second implementation of the
+   * filter semantics to drift out of step.
+   *
+   * NULLS LAST throughout: a question with no stats yet is "unknown", and
+   * unknown sorting above a genuinely bad p-value would bury the thing the
+   * admin opened this screen to find.
+   */
+  private async listSortedByStats(
+    where: Prisma.QuestionWhereInput,
+    sortBy: string,
+    dir: 'asc' | 'desc',
+    skip: number,
+    take: number,
+    include: any,
+  ) {
+    // Whitelist — these strings are interpolated into SQL, so nothing may
+    // reach Prisma.$queryRawUnsafe that did not come from this map.
+    const COLUMNS: Record<string, string> = {
+      stem: 'qv.stem',
+      nServed: 'qs."nServed"',
+      pValue: 'qs."pValue"',
+      discrimination: 'qs.discrimination',
+      meanTimeMs: 'qs."meanTimeMs"',
+      timeoutRate: 'qs."timeoutRate"',
+      explanationScore: 'COALESCE(qs."explanationUpvotes", 0) - COALESCE(qs."explanationDownvotes", 0)',
+    };
+    const column = COLUMNS[sortBy];
+    if (!column) throw new BadRequestException(`cannot sort by ${sortBy}`);
+
+    const matching = await this.prisma.question.findMany({ where, select: { id: true } });
+    const total = matching.length;
+    if (total === 0) return { total: 0, items: [] };
+    const ids = matching.map((q) => q.id);
+
+    // Tagged $queryRaw, not $queryRawUnsafe: only the whitelisted ORDER BY
+    // fragment is Prisma.raw, while every value stays a bound parameter.
+    // The id set goes in as ONE array parameter rather than an IN list —
+    // Prisma.join would emit a placeholder per id and a large bank would run
+    // into Postgres's parameter ceiling.
+    const ordered = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT q.id
+        FROM questions q
+        LEFT JOIN LATERAL (
+          SELECT v.id, v.stem FROM question_versions v
+           WHERE v."questionId" = q.id
+           ORDER BY v.version DESC
+           LIMIT 1
+        ) qv ON TRUE
+        LEFT JOIN question_stats qs ON qs."questionVersionId" = qv.id
+       WHERE q.id = ANY(${ids}::text[])
+       ORDER BY ${Prisma.raw(column)} ${Prisma.raw(dir.toUpperCase())} NULLS LAST, q."createdAt" DESC
+       LIMIT ${take} OFFSET ${skip}`;
+
+    const pageIds = ordered.map((r) => r.id);
+    const items = await this.prisma.question.findMany({ where: { id: { in: pageIds } }, include });
+    // findMany does not preserve the id order, so re-apply it.
+    const byId = new Map(items.map((q) => [q.id, q]));
+    return { total, items: pageIds.map((id) => byId.get(id)).filter(Boolean) };
   }
 
   async get(id: string) {

@@ -9,10 +9,44 @@ import TaxonomyFilter from '../components/TaxonomyFilter';
 // if it moves there, move it here too.
 const MIN_SERVED_FOR_STATS = 5;
 
+function SortHeader({ label, field, sortBy, sortDir, onSort }) {
+  const active = sortBy === field;
+  return (
+    <th style={th}>
+      <button
+        onClick={() => onSort(field)}
+        style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: active ? 'var(--sand)' : 'var(--mist)' }}
+      >
+        {label}
+        {active && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+      </button>
+    </th>
+  );
+}
+
 export default function SolutionPerformance({ tests }) {
   // ADM-091 — section/area narrowing, same control as the question bank.
   const [scope, setScope] = useState({ testId: tests[0]?.id ?? '', sectionId: '', areaId: '' });
   const testId = scope.testId;
+  // ADM-096 — sorting is applied by the API across the whole filtered set,
+  // not over the page on screen: "lowest نسبة صحيحة" has to mean the worst
+  // questions in the test, not the worst of the 50 currently visible.
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortDir, setSortDir] = useState('desc');
+
+  const onSort = (field) => {
+    if (sortBy === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      // Most of these columns are opened to find the worst offenders, and
+      // for every one of them that is the low end — a near-zero p-value, a
+      // negative discrimination, an unserved question. Ascending first saves
+      // a second click on the column that matters.
+      setSortDir(field === 'createdAt' ? 'desc' : 'asc');
+    }
+    setPage((p) => ({ ...p, offset: 0 }));
+  };
   const [questions, setQuestions] = useState([]);
   const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -23,13 +57,13 @@ export default function SolutionPerformance({ tests }) {
 
   const load = () => {
     if (!testId) return;
-    api.listQuestions({ ...scope, offset: page.offset, limit: page.limit }).then((r) => {
+    api.listQuestions({ ...scope, sortBy, sortDir, offset: page.offset, limit: page.limit }).then((r) => {
       setQuestions(r.items);
       setTotal(r.total);
     });
   };
   useEffect(() => { setPage((p) => ({ ...p, offset: 0 })); }, [scope.testId, scope.sectionId, scope.areaId]);
-  useEffect(() => { load(); }, [scope.testId, scope.sectionId, scope.areaId, page.offset, page.limit]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [scope.testId, scope.sectionId, scope.areaId, sortBy, sortDir, page.offset, page.limit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = async () => {
     setBusy(true);
@@ -80,12 +114,15 @@ export default function SolutionPerformance({ tests }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ textAlign: 'start', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
-              <th style={th}>نص السؤال</th>
-              <th style={th}>التصنيف</th>
-              <th style={th}>مرات العرض</th>
-              <th style={th}>نسبة من أجابوا صحيحاً</th>
-              <th style={th}>يفرّق بين المستويات</th>
-              <th style={th}>تقييم الشرح</th>
+              <SortHeader label="نص السؤال" field="stem" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortHeader label="التصنيف" field="label" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortHeader label="مرات العرض" field="nServed" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortHeader label="نسبة من أجابوا صحيحاً" field="pValue" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortHeader label="يفرّق بين المستويات" field="discrimination" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortHeader label="تقييم الشرح" field="explanationScore" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              {/* الحالة is derived in the browser from p-value and
+                  discrimination, so there is no column to sort on. Sorting by
+                  either of those two reaches the same rows. */}
               <th style={th}>الحالة</th>
             </tr>
           </thead>
