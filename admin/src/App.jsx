@@ -9,7 +9,7 @@ import ReviewQueue from './pages/ReviewQueue';
 import ProblemReports from './pages/ProblemReports';
 import DailyTips from './pages/DailyTips';
 import BulkImport from './pages/BulkImport';
-import DeliveryLog from './pages/DeliveryLog';
+import NotificationsSection from './pages/NotificationsSection';
 import Packages from './pages/Packages';
 import Subscriptions from './pages/Subscriptions';
 import SolutionPerformance from './pages/SolutionPerformance';
@@ -198,7 +198,7 @@ export default function App() {
           <StudentDetail studentId={viewingStudentId} onBack={() => setViewingStudentId(null)} />
         )}
         {tab === 'geography' && <Geography />}
-        {tab === 'notifications' && <DeliveryLog />}
+        {tab === 'notifications' && <NotificationsSection />}
         {tab === 'supervisors' && <Supervisors />}
         {tab === 'packages' && <Packages tests={tests} />}
         {tab === 'subscriptions' && <Subscriptions />}

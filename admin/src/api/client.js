@@ -101,6 +101,13 @@ export const api = {
   commitImport: (jobId) => request(`/admin/questions/import/${jobId}/commit`, { method: 'POST' }),
 
   deliveryLog: () => request('/admin/notifications'),
+  // NOT-017 — the pool of daily-leap message variants.
+  listNotificationMessages: () => request('/admin/notifications/messages'),
+  messagePlaceholders: () => request('/admin/notifications/messages/placeholders'),
+  previewNotificationMessage: (body) => request('/admin/notifications/messages/preview', { method: 'POST', body: { body } }),
+  createNotificationMessage: (dto) => request('/admin/notifications/messages', { method: 'POST', body: dto }),
+  updateNotificationMessage: (id, dto) => request(`/admin/notifications/messages/${id}`, { method: 'PATCH', body: dto }),
+  deleteNotificationMessage: (id) => request(`/admin/notifications/messages/${id}`, { method: 'DELETE' }),
   planDayAll: () => request('/admin/notifications/plan-day', { method: 'POST', body: {} }),
   sendDueAll: (forDate) => request(`/admin/notifications/send-due${forDate ? `?forDate=${forDate}` : ''}`, { method: 'POST' }),
   previewCampaign: (filter) => request('/admin/notifications/campaign/preview', { method: 'POST', body: filter }),
