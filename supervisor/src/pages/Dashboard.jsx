@@ -42,7 +42,7 @@ function StudentCard({ s, onOpen, onPay }) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>المؤشر المركّب</span>
+        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>المستوى العام</span>
         {s.compositeIndex == null ? (
           <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>قيد الجمع</span>
         ) : (
@@ -150,7 +150,7 @@ export default function Dashboard({ data, onOpenStudent, onPayForStudent }) {
               <th style={th}>الاسم</th>
               <th style={th}>السلسلة</th>
               <th style={th}>هذا الأسبوع</th>
-              <th style={th}>المؤشر المركّب</th>
+              <th style={th}>المستوى العام</th>
               <th style={th}>أضعف مجال</th>
               <th style={th}></th>
             </tr>

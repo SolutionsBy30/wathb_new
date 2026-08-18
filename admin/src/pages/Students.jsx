@@ -82,7 +82,7 @@ export default function Students({ onOpenStudent }) {
               <th style={th}>المدرسة</th>
               <th style={th}>الأسئلة المكتملة</th>
               <th style={th}>السلسلة</th>
-              <SortHeader label="المؤشر المركّب" field="performance" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+              <SortHeader label="المستوى العام" field="performance" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <SortHeader label="نهاية الاشتراك" field="subscriptionEnd" sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
               <th style={th}>الحالة</th>
               <th style={th}>إجراءات</th>

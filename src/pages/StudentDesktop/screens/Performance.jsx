@@ -93,7 +93,7 @@ export default function Performance({ report, onUpgrade }) {
         </div>
 
         <LockedSection title="الدقة حسب المجال" onUpgrade={onUpgrade} />
-        <LockedSection title="المؤشر المركّب — اتجاه أسبوعي" onUpgrade={onUpgrade} />
+        <LockedSection title="مستواك العام — تغيّره أسبوعياً" onUpgrade={onUpgrade} />
         <LockedSection title="الاتساق والسرعة مقابل الهدف" onUpgrade={onUpgrade} />
         <LockedSection title="أخطاء حديثة" onUpgrade={onUpgrade} />
 
@@ -126,7 +126,7 @@ export default function Performance({ report, onUpgrade }) {
           <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--lime)' }}>{report.streak.current}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--mist)' }}>المؤشر المركّب</span>
+          <span style={{ fontSize: '11px', color: 'var(--mist)' }}>مستواك العام</span>
           <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <span style={{ fontFamily: 'var(--font-latin)', fontSize: '22px', fontWeight: 500, color: 'var(--sand)' }}>
               {report.compositeIndex === null ? '—' : report.compositeIndex}
@@ -174,7 +174,7 @@ export default function Performance({ report, onUpgrade }) {
 
       <div className="sd-card-grid" style={{ gap: '20px' }}>
         <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المؤشر المركّب — اتجاه أسبوعي</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>مستواك العام — تغيّره أسبوعياً</h2>
           {trend.length === 0 ? (
             <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>لا توجد بيانات كافية بعد.</p>
           ) : (

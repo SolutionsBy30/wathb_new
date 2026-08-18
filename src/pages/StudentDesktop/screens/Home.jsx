@@ -49,7 +49,7 @@ export default function Home({ vm, student, goTestPicker, tests = [], focusedTes
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
-          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>المؤشر المركّب</span>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>مستواك العام</span>
           {vm.restricted ? (
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>🔒 للباقات المدفوعة</span>
           ) : vm.compositeIndex === null ? (

@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
 import { Pager } from '../components/Pager';
+import TaxonomyFilter from '../components/TaxonomyFilter';
 
 const STATUS_LABEL = { draft: 'مسودة', in_review: 'قيد المراجعة', published: 'منشور', retired: 'متقاعد' };
 const STATUS_COLOR = { draft: 'var(--mist)', in_review: 'var(--lime)', published: 'var(--teal-ink)', retired: 'var(--coral)' };
 
 export default function QuestionBank({ tests, onEdit, onNew }) {
-  const [testId, setTestId] = useState('');
+  // ADM-091 — one object rather than three states: changing a level must
+  // clear the ones below it, and TaxonomyFilter returns the whole triple so
+  // the two can never be left inconsistent.
+  const [scope, setScope] = useState({ testId: '', sectionId: '', areaId: '' });
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [data, setData] = useState({ total: 0, items: [] });
@@ -20,7 +24,7 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
   const load = async () => {
     setBusy(true);
     try {
-      const res = await api.listQuestions({ testId, status, search, offset: page.offset, limit: page.limit });
+      const res = await api.listQuestions({ ...scope, status, search, offset: page.offset, limit: page.limit });
       setData(res);
       setSelected(new Set());
     } finally {
@@ -29,8 +33,8 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
   };
   // Changing a filter must reset to the first page — otherwise a narrower
   // filter with an old offset shows an empty list that looks like no results.
-  useEffect(() => { setPage((p) => ({ ...p, offset: 0 })); }, [testId, status]);
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [testId, status, page.offset, page.limit]);
+  useEffect(() => { setPage((p) => ({ ...p, offset: 0 })); }, [scope.testId, scope.sectionId, scope.areaId, status]);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [scope.testId, scope.sectionId, scope.areaId, status, page.offset, page.limit]);
 
   const toggle = (id) => setSelected((s) => {
     const next = new Set(s);
@@ -67,10 +71,7 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
       </div>
 
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <select value={testId} onChange={(e) => setTestId(e.target.value)} style={selectStyle}>
-          <option value="">كل الاختبارات</option>
-          {tests.map((t) => <option key={t.id} value={t.id}>{t.nameAr}</option>)}
-        </select>
+        <TaxonomyFilter tests={tests} value={scope} onChange={setScope} includeAllTests />
         <select value={status} onChange={(e) => setStatus(e.target.value)} style={selectStyle}>
           <option value="">كل الحالات</option>
           {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

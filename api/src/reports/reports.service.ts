@@ -6,7 +6,19 @@ import { compositeDelta } from './weekly-report.util';
 
 // Statistical honesty requirement, spec §5.2: never render a percentage for
 // an area/label with fewer than this many answers.
-export const MIN_SAMPLE_FOR_REPORTING = 20;
+//
+// Lowered from 20 to 5 on request: at 20 a student practising 5 questions a
+// day saw "قيد الجمع" on every label for their first four days, which reads
+// as a broken screen rather than as caution. 5 is genuinely noisy — one
+// question swings a label by 20 points — so the UI keeps showing the answer
+// count beside every percentage, and the wording stays "so far" rather than
+// stating a level as settled.
+//
+// This does NOT loosen the item-analysis discrimination floor, which counts
+// distinct students rather than answers and keeps its own
+// MIN_STUDENTS_FOR_DISCRIMINATION = 20 (question-stats.service.ts). A
+// top-vs-bottom split needs a cohort; it cannot be rescued by a smaller n.
+export const MIN_SAMPLE_FOR_REPORTING = 5;
 // FRE-010 — fallback only, for a student with no active package at all. The
 // real target is Package.questionsPerDay, so the "5 per day" the progress bar
 // measures against follows whatever the admin set for that student's tier.
