@@ -278,11 +278,25 @@ export class NotificationsService {
     // NOT-017 — the same sentence every morning stops being read. An admin
     // pool of variants is drawn from at random; null means the pool is empty
     // (or the chosen body rendered blank), and the built-in wording stands.
-    const customBody = await this.messages.renderRandom({
-      student_name: student.user.name,
-      magic_link: url,
-      test_name: wathb.test?.nameAr ?? '',
-    });
+    //
+    // The pool is decoration, so a failure to read it must never cost the
+    // student their leap. This lookup originally sat here unguarded and threw
+    // straight out of attemptSend when the notification_messages table was
+    // missing — code deployed ahead of its migration — which killed every
+    // daily send, scheduled and manual alike, before WhatsApp was even
+    // reached, while OTP (a different path) kept working and made the
+    // integration look healthy. Degrading to the built-in wording is always
+    // better than sending nothing.
+    const customBody = await this.messages
+      .renderRandom({
+        student_name: student.user.name,
+        magic_link: url,
+        test_name: wathb.test?.nameAr ?? '',
+      })
+      .catch((e: any) => {
+        this.logger.warn(`daily message pool unreadable, using the built-in wording — ${e?.message ?? e}`);
+        return null;
+      });
 
     try {
       const result =
