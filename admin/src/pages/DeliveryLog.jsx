@@ -86,11 +86,34 @@ export default function DeliveryLog() {
     }
   };
 
+  // NOT-018 — recovery for a day that was missed wholesale. Confirmed first
+  // because it messages every student at once, outside the hours they chose.
+  const runSendNowAll = async () => {
+    if (!window.confirm('سيتم إرسال وثبة اليوم الآن إلى جميع الطلاب النشطين، بغض النظر عن الوقت المفضّل لكل طالب. متابعة؟')) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await api.sendLeapNowAll();
+      setMessage(`أُرسلت ${res.sent} من ${res.total} · فشل ${res.failed} · تم تخطي ${res.skipped}.`);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>سجل الإشعارات</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={runSendNowAll}
+            disabled={busy}
+            title="إرسال وثبة اليوم فوراً لكل الطلاب النشطين، متجاوزاً وقت الإشعار المفضّل — للتعويض عن يوم لم تُرسل فيه الإشعارات"
+            style={{ ...btnStyle, background: 'var(--lime)', color: 'var(--lime-ink)' }}
+          >
+            إرسال وثبة اليوم للجميع الآن
+          </button>
           <button onClick={runPlanDay} disabled={busy} style={btnStyle}>تشغيل plan_day (غداً)</button>
           <button onClick={runSendDue} disabled={busy} style={btnStyle}>تشغيل send_notification (غداً)</button>
           <button onClick={runProcessRetries} disabled={busy} style={btnStyle}>معالجة إعادة المحاولات</button>

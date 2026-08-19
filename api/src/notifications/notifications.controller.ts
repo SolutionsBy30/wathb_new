@@ -98,6 +98,15 @@ export class NotificationsController {
   // ADM-087 — the admin console's per-student "send now": plans today's
   // bundle if the 21:00 job hasn't yet, then sends. See sendNowForStudent
   // for why entitlement rules still apply.
+  // NOT-018 — bulk recovery: every active student, window ignored. Declared
+  // before the :studentId route purely for readability; the paths are
+  // distinct so order does not decide matching. Nothing may be inserted
+  // between this decorator and its method.
+  @Post('send-now')
+  sendNowAll(@Query('forDate') forDate?: string) {
+    return this.notifications.sendNowForAllStudents(resolveDate(forDate));
+  }
+
   @Post('send-now/:studentId')
   sendNow(@Param('studentId') studentId: string, @Query('forDate') forDate?: string) {
     return this.notifications.sendNowForStudent(studentId, resolveDate(forDate));

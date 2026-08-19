@@ -343,6 +343,37 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * NOT-018 — send today's leap to every active student right now, ignoring
+   * the notification window.
+   *
+   * Recovery for a day that was missed wholesale: an outage, a bad deploy, a
+   * scheduler that was off. sendDueForAllStudents only reaches students whose
+   * window is open at this exact moment, which is a fraction of them at any
+   * hour, so it cannot rescue a day on its own — and the per-student "send
+   * now" button does not scale past a handful.
+   *
+   * Deliberately kept as an explicit admin action rather than anything
+   * automatic. It messages every student at once, outside the hours they
+   * chose, so it should only ever be reached by a person who has decided that
+   * is the right trade.
+   *
+   * Plans the bundle first where one is missing, exactly as the per-student
+   * path does, so a day that was never planned can still be recovered.
+   */
+  async sendNowForAllStudents(forDate: Date) {
+    const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
+    const results = [];
+    for (const s of students) {
+      results.push({ studentId: s.userId, ...(await this.sendNowForStudent(s.userId, forDate)) });
+    }
+    // Counts only — the delivery log is where per-message detail belongs.
+    const sent = results.filter((r: any) => r.sent).length;
+    const failed = results.filter((r: any) => r.failed).length;
+    const skipped = results.filter((r: any) => r.skipped).length;
+    return { total: results.length, sent, failed, skipped, results };
+  }
+
   async sendDueForAllStudents(forDate: Date) {
     const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
     const results = [];
