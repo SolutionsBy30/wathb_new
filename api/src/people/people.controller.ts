@@ -106,6 +106,16 @@ export class PeopleController {
     return this.students.leapHistory(id);
   }
 
+  // ADM-097 — the questions of one leap with the student's answers. Same
+  // permission as the history it drills into. Nothing may be inserted between
+  // these decorators and the method they bind to.
+  @RequireSession('admin')
+  @RequirePermission('students')
+  @Get('admin/students/:id/leaps/:wathbId')
+  adminLeapDetail(@Param('id') id: string, @Param('wathbId') wathbId: string) {
+    return this.students.leapDetail(id, wathbId);
+  }
+
   @RequireSession('supervisor')
   @Get('supervisors/me/students/:id/leaps')
   async supervisorStudentLeaps(@Param('id') id: string, @CurrentSession() session: SessionPayload) {

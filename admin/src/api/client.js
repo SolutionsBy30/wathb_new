@@ -206,6 +206,8 @@ export const api = {
   bulkStatus: (ids, status) => request('/admin/questions/bulk-status', { method: 'POST', body: { ids, status } }),
   mintStudentLoginLink: (studentId) => request(`/admin/students/${studentId}/magic-link`, { method: 'POST' }),
   studentLeaps: (studentId) => request(`/admin/students/${studentId}/leaps`),
+  // ADM-097 — one leap's questions with the student's answers.
+  leapDetail: (studentId, wathbId) => request(`/admin/students/${studentId}/leaps/${wathbId}`),
 
   listDailyTips: () => request('/admin/daily-tips'),
   createDailyTip: (textAr) => request('/admin/daily-tips', { method: 'POST', body: { textAr } }),

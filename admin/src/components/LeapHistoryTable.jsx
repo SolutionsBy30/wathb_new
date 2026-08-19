@@ -12,7 +12,7 @@ const td = { padding: '10px 12px', verticalAlign: 'middle' };
 // Shared leap-history table — the student, supervisor and admin apps each
 // render this against the same API payload so a leap reads identically
 // wherever it's viewed.
-export function LeapHistoryTable({ rows }) {
+export function LeapHistoryTable({ rows, onSelect, selectedId }) {
   if (!rows || rows.length === 0) {
     return <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>لا توجد وثبات بعد.</p>;
   }
@@ -26,11 +26,18 @@ export function LeapHistoryTable({ rows }) {
             <th style={th}>النوع</th>
             <th style={th}>النتيجة</th>
             <th style={th}>الحالة</th>
+            {onSelect && <th style={th} />}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.wathbId} style={{ borderTop: '0.5px solid var(--on-indigo-line)' }}>
+            <tr
+              key={r.wathbId}
+              style={{
+                borderTop: '0.5px solid var(--on-indigo-line)',
+                background: selectedId === r.wathbId ? 'var(--indigo)' : 'transparent',
+              }}
+            >
               <td style={td}>
                 <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>{fmtDate(r.scheduledFor)}</span>
                 {r.sequence > 0 && (
@@ -58,6 +65,18 @@ export function LeapHistoryTable({ rows }) {
                   {STATUS_LABEL[r.status] ?? r.status}
                 </span>
               </td>
+              {/* ADM-097 — admin only: the student and supervisor apps render
+                  this same table without onSelect and are unchanged. */}
+              {onSelect && (
+                <td style={td}>
+                  <button
+                    onClick={() => onSelect(selectedId === r.wathbId ? null : r.wathbId)}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--lime)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '11px', padding: 0 }}
+                  >
+                    {selectedId === r.wathbId ? 'إخفاء' : 'التفاصيل'}
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

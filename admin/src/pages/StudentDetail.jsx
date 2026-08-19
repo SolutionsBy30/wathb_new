@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { LeapHistoryTable } from '../components/LeapHistoryTable';
+import { LeapDetail } from '../components/LeapDetail';
 
 const SUB_STATUS_LABEL = { pending: 'قيد الانتظار', active: 'فعّال', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
 const NOTIF_STATUS_LABEL = { scheduled: 'مجدول', sent: 'أُرسل', delivered: 'تم التسليم', read: 'قُرئ', failed: 'فشل' };
@@ -73,6 +74,8 @@ export default function StudentDetail({ studentId, onBack }) {
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [leaps, setLeaps] = useState(null);
+  // ADM-097 — which leap is expanded, if any.
+  const [openLeapId, setOpenLeapId] = useState(null);
   const [loginLink, setLoginLink] = useState(null);
   const [linkBusy, setLinkBusy] = useState(false);
 
@@ -205,7 +208,14 @@ export default function StudentDetail({ studentId, onBack }) {
       )}
 
       <Section title="سجل الوثبات">
-        {leaps ? <LeapHistoryTable rows={leaps} /> : <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>جاري التحميل…</p>}
+        {leaps ? (
+          <>
+            <LeapHistoryTable rows={leaps} onSelect={setOpenLeapId} selectedId={openLeapId} />
+            {openLeapId && <LeapDetail studentId={studentId} wathbId={openLeapId} />}
+          </>
+        ) : (
+          <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>جاري التحميل…</p>
+        )}
       </Section>
 
       {report && (

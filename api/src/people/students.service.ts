@@ -315,6 +315,73 @@ export class StudentsService {
    * the supervisor's student view, and the admin student detail so all three
    * report the same thing.
    */
+  /**
+   * ADM-097 — one leap, question by question: what was asked, what the
+   * student picked, what was right.
+   *
+   * leapHistory gives a score and nothing else, so "why did this student get
+   * 3/5" was unanswerable from the console — support and content review both
+   * needed the actual answers, and reading them out of the database by hand
+   * is not a workflow.
+   *
+   * studentId is part of the WHERE rather than checked afterwards: the route
+   * takes both ids from the URL, and matching on the pair means a wathbId
+   * belonging to someone else simply does not resolve.
+   */
+  async leapDetail(studentId: string, wathbId: string) {
+    const wathb = await this.prisma.wathb.findFirst({
+      where: { id: wathbId, studentId },
+      include: {
+        test: true,
+        questions: {
+          orderBy: { position: 'asc' },
+          include: { questionVersion: true, question: { include: { label: true } } },
+        },
+      },
+    });
+    if (!wathb) throw new NotFoundException('leap not found for this student');
+
+    const answers = await this.prisma.answer.findMany({ where: { wathbId } });
+    const byQuestion = new Map(answers.map((a) => [a.questionId, a]));
+
+    return {
+      wathbId: wathb.id,
+      scheduledFor: wathb.scheduledFor,
+      sequence: wathb.sequence,
+      status: wathb.status,
+      completedAt: wathb.completedAt,
+      testNameAr: wathb.test?.nameAr ?? null,
+      // ADM-012 — the console renders stems in the test's own direction.
+      contentLanguage: wathb.test?.language ?? 'ar',
+      questions: wathb.questions.map((wq) => {
+        const a = byQuestion.get(wq.questionId);
+        const options = (wq.questionVersion.options as { key: string; text: string }[] | null) ?? [];
+        const textFor = (key: string | null | undefined) =>
+          key == null ? null : (options.find((o) => o.key === key)?.text ?? key);
+        return {
+          position: wq.position,
+          questionId: wq.questionId,
+          labelNameAr: wq.question.label?.nameAr ?? null,
+          stem: wq.questionVersion.stem,
+          stemImageUrl: wq.questionVersion.stemImageUrl,
+          options,
+          correctKey: wq.questionVersion.correctKey,
+          correctText: textFor(wq.questionVersion.correctKey),
+          explanation: wq.questionVersion.explanation,
+          // null rather than false when unanswered: "not answered" and
+          // "answered wrongly" are different facts and the screen shows them
+          // differently.
+          selectedKey: a?.selectedKey ?? null,
+          selectedText: textFor(a?.selectedKey),
+          isCorrect: a ? a.isCorrect : null,
+          timedOut: a?.timedOut ?? false,
+          timeTakenMs: a?.timeTakenMs ?? null,
+          answeredAt: a?.answeredAt ?? null,
+        };
+      }),
+    };
+  }
+
   async leapHistory(studentId: string, limit = 100) {
     const wathbs = await this.prisma.wathb.findMany({
       where: { studentId },
