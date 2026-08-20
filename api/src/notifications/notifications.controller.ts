@@ -103,13 +103,18 @@ export class NotificationsController {
   // distinct so order does not decide matching. Nothing may be inserted
   // between this decorator and its method.
   @Post('send-now')
-  sendNowAll(@Query('forDate') forDate?: string) {
-    return this.notifications.sendNowForAllStudents(resolveDate(forDate));
+  sendNowAll(@Query('forDate') forDate?: string, @Query('force') force?: string) {
+    return this.notifications.sendNowForAllStudents(resolveDate(forDate), { force: force === 'true' });
   }
 
   @Post('send-now/:studentId')
-  sendNow(@Param('studentId') studentId: string, @Query('forDate') forDate?: string) {
-    return this.notifications.sendNowForStudent(studentId, resolveDate(forDate));
+  sendNow(
+    @Param('studentId') studentId: string,
+    @Query('forDate') forDate?: string,
+    // NOT-019 — force=true resends a day whose row is no longer 'scheduled'.
+    @Query('force') force?: string,
+  ) {
+    return this.notifications.sendNowForStudent(studentId, resolveDate(forDate), { force: force === 'true' });
   }
 
   // ADM-087 — the same manual send for the weekly report, one recipient at a

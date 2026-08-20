@@ -141,6 +141,22 @@ export default function StudentDetail({ studentId, onBack }) {
           >
             {sendBusy === 'leap' ? 'جاري الإرسال…' : 'إرسال الوثبة الآن'}
           </button>
+          {/* NOT-019 — the ordinary send only acts on a day still awaiting
+              delivery, so once a row is 'failed' (a provider outage) or
+              'sent' it refuses. This one puts the day back in the queue
+              first. Separate button, confirmed, because it will also send a
+              second copy of a message that genuinely arrived. */}
+          <button
+            onClick={() => {
+              if (!window.confirm('سيُعاد إرسال وثبة اليوم لهذا الطالب حتى لو سبق إرسالها أو فشلت. متابعة؟')) return;
+              runSend('resend', () => api.sendLeapNow(studentId, true));
+            }}
+            disabled={sendBusy !== null}
+            title="يعيد وثبة اليوم إلى الطابور ثم يرسلها — استخدمه بعد فشل الإرسال (انقطاع واتساب مثلاً)"
+            style={sendBtn}
+          >
+            {sendBusy === 'resend' ? 'جاري الإرسال…' : 'إعادة إرسال الوثبة'}
+          </button>
           <button
             onClick={() => runSend('weekly', () => api.sendStudentWeeklyReport(studentId))}
             disabled={sendBusy !== null}

@@ -89,11 +89,14 @@ export default function DeliveryLog() {
   // NOT-018 — recovery for a day that was missed wholesale. Confirmed first
   // because it messages every student at once, outside the hours they chose.
   const runSendNowAll = async () => {
-    if (!window.confirm('سيتم إرسال وثبة اليوم الآن إلى جميع الطلاب النشطين، بغض النظر عن الوقت المفضّل لكل طالب. متابعة؟')) return;
+    if (!window.confirm('سيتم إرسال وثبة اليوم الآن إلى جميع الطلاب النشطين، بغض النظر عن الوقت المفضّل لكل طالب، وسيُعاد الإرسال حتى لمن فشل إرساله أو سبق إرساله اليوم. متابعة؟')) return;
     setBusy(true);
     setMessage(null);
     try {
-      const res = await api.sendLeapNowAll();
+      // NOT-019 — force: this button exists to rescue a day that failed, and
+      // those rows are no longer 'scheduled', so without it the run would
+      // skip exactly the students it is meant to reach.
+      const res = await api.sendLeapNowAll(true);
       setMessage(`أُرسلت ${res.sent} من ${res.total} · فشل ${res.failed} · تم تخطي ${res.skipped}.`);
       await load();
     } finally {

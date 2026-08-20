@@ -88,7 +88,7 @@ export class NotificationsService {
    * nothing. Overriding a student's stated preference from a support screen
    * is not a thing an admin should be able to do by accident.
    */
-  async sendNowForStudent(studentId: string, forDate: Date) {
+  async sendNowForStudent(studentId: string, forDate: Date, opts: { force?: boolean } = {}) {
     const scheduledFor = dayKey(forDate);
     const existing = await this.prisma.notification.findUnique({
       where: { userId_kind_scheduledFor: { userId: studentId, kind: 'daily_wathb', scheduledFor } },
@@ -97,6 +97,38 @@ export class NotificationsService {
       const planned = await this.planDayForStudent(studentId, forDate);
       if ('skipped' in planned) return planned;
     }
+
+    // NOT-019 — a resend.
+    //
+    // sendDailyWathbNotification only acts on a row still in 'scheduled', so
+    // once a day's row is 'failed' — which is where a provider outage leaves
+    // every student — the manual send refuses with "not_scheduled" and there
+    // is no way to try again from the console. The row is put back to
+    // scheduled first, which is the only thing standing between the message
+    // and a retry.
+    //
+    // The previous status is recorded in `error` rather than discarded: the
+    // delivery log is the record of what happened to a student, and a resend
+    // silently overwriting "failed: session not connected" would erase the
+    // evidence of the outage that caused it.
+    //
+    // Guarded behind an explicit flag because it also re-sends a message that
+    // genuinely arrived, which is a nuisance to a student rather than a
+    // recovery.
+    if (opts.force && existing && existing.status !== 'scheduled') {
+      await this.prisma.notification.update({
+        where: { id: existing.id },
+        data: {
+          status: 'scheduled',
+          retryCount: 0,
+          nextRetryAt: null,
+          sentAt: null,
+          waMessageId: null,
+          error: `resend by admin (was ${existing.status}${existing.error ? `: ${existing.error}` : ''})`,
+        },
+      });
+    }
+
     return this.sendDailyWathbNotification(studentId, forDate, { respectWindow: false });
   }
 
@@ -361,11 +393,11 @@ export class NotificationsService {
    * Plans the bundle first where one is missing, exactly as the per-student
    * path does, so a day that was never planned can still be recovered.
    */
-  async sendNowForAllStudents(forDate: Date) {
+  async sendNowForAllStudents(forDate: Date, opts: { force?: boolean } = {}) {
     const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
     const results = [];
     for (const s of students) {
-      results.push({ studentId: s.userId, ...(await this.sendNowForStudent(s.userId, forDate)) });
+      results.push({ studentId: s.userId, ...(await this.sendNowForStudent(s.userId, forDate, opts)) });
     }
     // Counts only — the delivery log is where per-message detail belongs.
     const sent = results.filter((r: any) => r.sent).length;

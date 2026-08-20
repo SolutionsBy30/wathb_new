@@ -119,9 +119,9 @@ export const api = {
   sendCampaign: (dto) => request('/admin/notifications/campaign/send', { method: 'POST', body: dto }),
   processRetries: () => request('/admin/notifications/process-retries', { method: 'POST' }),
   // ADM-087 — per-recipient manual sends from the student detail screen.
-  sendLeapNow: (studentId) => request(`/admin/notifications/send-now/${studentId}`, { method: 'POST' }),
+  sendLeapNow: (studentId, force = false) => request(`/admin/notifications/send-now/${studentId}${force ? '?force=true' : ''}`, { method: 'POST' }),
   // NOT-018 — every active student, ignoring their notification window.
-  sendLeapNowAll: () => request('/admin/notifications/send-now', { method: 'POST' }),
+  sendLeapNowAll: (force = false) => request(`/admin/notifications/send-now${force ? '?force=true' : ''}`, { method: 'POST' }),
   sendStudentWeeklyReport: (studentId) => request(`/admin/notifications/weekly-report/student/${studentId}`, { method: 'POST' }),
   sendSupervisorWeeklyReport: (supervisorId) => request(`/admin/notifications/weekly-report/supervisor/${supervisorId}`, { method: 'POST' }),
   undeliveredNotifications: () => request('/admin/notifications/undelivered'),
