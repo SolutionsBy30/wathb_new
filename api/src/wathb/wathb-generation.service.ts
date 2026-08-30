@@ -46,22 +46,53 @@ export class WathbGenerationService {
       if (!latestByQuestion.has(a.questionId)) latestByQuestion.set(a.questionId, a);
     }
     // SEL-008 — the exclusion above is built from the Answer table alone, so a
-    // question that was PUT IN A BUNDLE but never answered (bundle abandoned,
-    // auto-closed as partial by STU-009, or simply never opened) left no trace
-    // and could be handed to the same student again the next day. That is the
-    // repeat students were seeing. Serving counts as encountering.
+    // question that was SHOWN but never answered (bundle abandoned, or
+    // auto-closed as partial by STU-009) left no trace and could be handed to
+    // the same student again the next day. That was the repeat students saw.
+    // Being shown counts as encountering.
+    //
+    // SEL-009 — but only being SHOWN. The first version of this keyed off
+    // membership of a bundle, so merely planning a leap put its questions on a
+    // 21-day cooldown whether or not the student ever opened it. A student who
+    // skips a few days burned five questions a day out of their own pool
+    // without ever seeing one, and a modest bank ran dry.
+    //
+    // servedAt is the honest signal: null until the question is actually put
+    // in front of the student (WathbService.today for position 0, then each
+    // answer for the rest). A planned-but-never-opened bundle now leaves no
+    // mark at all once it stops being current.
     const servedRows = await this.prisma.wathbQuestion.findMany({
       where: { wathb: { studentId } },
-      select: { questionId: true, wathb: { select: { scheduledFor: true } } },
+      select: {
+        questionId: true,
+        servedAt: true,
+        wathb: { select: { scheduledFor: true, status: true } },
+      },
     });
+
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
     const lastServedByQuestion = new Map<string, Date>();
+    // A bundle the student can still open today holds its questions for as
+    // long as it is live, opened or not — otherwise tomorrow's bundle could
+    // hand back a question sitting unanswered in today's. This is a hold that
+    // lasts hours, not the 21-day cooldown, and it lapses on its own the
+    // moment the bundle stops being current.
+    const heldByLiveBundle = new Set<string>();
+
     for (const r of servedRows) {
+      const live =
+        (r.wathb.status === 'pending' || r.wathb.status === 'opened') && r.wathb.scheduledFor >= todayStart;
+      if (live) heldByLiveBundle.add(r.questionId);
+
+      if (!r.servedAt) continue; // planned, never shown — not an encounter
       const prev = lastServedByQuestion.get(r.questionId);
-      if (!prev || r.wathb.scheduledFor > prev) lastServedByQuestion.set(r.questionId, r.wathb.scheduledFor);
+      if (!prev || r.servedAt > prev) lastServedByQuestion.set(r.questionId, r.servedAt);
     }
 
     const nowMs = Date.now();
-    const seen = new Set<string>();
+    const seen = new Set<string>(heldByLiveBundle);
     if (repeatPractice) {
       // Same-day extra bundles (sequence > 0) are voluntary re-practice, not
       // the daily plan. Applying the strict never-repeat rule there empties
@@ -69,12 +100,10 @@ export class WathbGenerationService {
       // production as 2-3-question bundles and then "no more leaps". So the
       // only exclusion here is anything answered TODAY: no repeats within
       // the day, but older material is fair game to practise again.
-      const todayStart = new Date();
-      todayStart.setUTCHours(0, 0, 0, 0);
       for (const [questionId, a] of latestByQuestion) {
         if (a.answeredAt >= todayStart) seen.add(questionId);
       }
-      // Served earlier today counts too, answered or not — otherwise the
+      // Shown earlier today counts too, answered or not — otherwise the
       // second bundle of the day can hand back a question the student is
       // still looking at in the first.
       for (const [questionId, servedFor] of lastServedByQuestion) {
@@ -90,10 +119,10 @@ export class WathbGenerationService {
         if (daysSince < REVIEW_COOLDOWN_DAYS) seen.add(questionId); // still cooling down
         // else: cooldown elapsed — eligible again as a spaced-review item
       }
-      // Same cooldown for merely-served questions. Not permanent: an
-      // abandoned bundle would otherwise burn five questions out of the
+      // Same cooldown for questions shown but never answered. Not permanent:
+      // an abandoned bundle would otherwise burn five questions out of the
       // student's bank for good, which a thin bank cannot afford. A
-      // review-eligible question (answered wrong ≥21 days ago) was served at
+      // review-eligible question (answered wrong ≥21 days ago) was shown at
       // least that long ago too, so this never cancels a spaced review.
       for (const [questionId, servedFor] of lastServedByQuestion) {
         if (seen.has(questionId)) continue;
