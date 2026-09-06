@@ -141,6 +141,12 @@ model Student {
   skipDays         Int[]     @default([5]) // 0=Sunday..6=Saturday; default skips Friday (spec §6.2, KSA weekend)
   notifSlotStartHour Int     @default(18)
   notifSlotEndHour   Int     @default(20)
+  // NOT-022 — the student has paused their daily nudge until this date
+  // (exclusive: sending resumes ON this date). Distinct from the STOP opt-out
+  // on User, which is permanent and channel-wide; this is temporary, reaches
+  // only the daily leap, and the student sets it themselves from the link in
+  // the message.
+  notificationsPausedUntil DateTime?
   currentStreak    Int       @default(0)
   lastCompletedOn  DateTime?
   placementDoneAt  DateTime?

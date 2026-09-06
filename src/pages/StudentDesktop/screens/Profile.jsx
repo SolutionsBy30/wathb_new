@@ -63,6 +63,13 @@ export default function Profile({ student, subscription, onManageSubscription, o
   const [skipDays, setSkipDays] = useState(new Set(student?.skipDays ?? [5]));
   const [notifBusy, setNotifBusy] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
+  const [notifError, setNotifError] = useState(null);
+  // NOT-022 — a temporary pause on the daily nudge, set from the link in the
+  // WhatsApp message. Held as a yyyy-mm-dd string because that is what
+  // <input type="date"> speaks; '' means not paused.
+  const [pausedUntil, setPausedUntil] = useState(
+    student?.notificationsPausedUntil ? String(student.notificationsPausedUntil).slice(0, 10) : '',
+  );
 
   // NOT-012 — the email channel lives on the user record, which /students/me
   // already returns in full, so it seeds from the same payload as the rest.
@@ -101,10 +108,21 @@ export default function Profile({ student, subscription, onManageSubscription, o
   const saveNotifPrefs = async () => {
     setNotifBusy(true);
     setNotifSaved(false);
+    setNotifError(null);
     try {
       const slot = slotById(slotId);
-      await api.setNotificationPrefs({ notifSlotStartHour: slot.startHour, notifSlotEndHour: slot.endHour, skipDays: [...skipDays] });
+      const saved = await api.setNotificationPrefs({
+        notifSlotStartHour: slot.startHour,
+        notifSlotEndHour: slot.endHour,
+        skipDays: [...skipDays],
+        // Empty box means "resume now" — null, not an omitted field, so
+        // clearing the date actually lifts an existing pause.
+        notificationsPausedUntil: pausedUntil ? new Date(`${pausedUntil}T00:00:00`).toISOString() : null,
+      });
+      setPausedUntil(saved.notificationsPausedUntil ? String(saved.notificationsPausedUntil).slice(0, 10) : '');
       setNotifSaved(true);
+    } catch (e) {
+      setNotifError(e.message);
     } finally {
       setNotifBusy(false);
     }
@@ -437,10 +455,42 @@ export default function Profile({ student, subscription, onManageSubscription, o
             ))}
           </div>
         </div>
+        {/* NOT-022 — pause, not stop. Someone who wants to leave for good has
+            STOP on WhatsApp, which is honest about being permanent; this is
+            for an exam week or a trip, and it lifts itself. */}
+        <div>
+          <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
+            إيقاف الإشعارات مؤقتاً حتى تاريخ (اتركه فارغاً لاستئنافها)
+          </p>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="date"
+              value={pausedUntil}
+              min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+              onChange={(e) => { setPausedUntil(e.target.value); setNotifSaved(false); }}
+              style={{ padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '13px' }}
+            />
+            {pausedUntil && (
+              <button
+                onClick={() => { setPausedUntil(''); setNotifSaved(false); }}
+                style={{ border: 'none', background: 'transparent', color: 'var(--lime)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+              >
+                استئناف الآن
+              </button>
+            )}
+          </div>
+          {pausedUntil && (
+            <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+              لن تصلك الوثبة اليومية حتى {pausedUntil}. يمكنك فتح التطبيق ومواصلة التدريب في أي وقت.
+            </p>
+          )}
+        </div>
+
         <Button variant="primary" style={{ alignSelf: 'flex-start' }} disabled={notifBusy} onClick={saveNotifPrefs}>
           {notifBusy ? 'جاري الحفظ…' : 'حفظ'}
         </Button>
-        {notifSaved && <span style={{ fontSize: '12px', color: 'var(--teal-ink)' }}>تم الحفظ.</span>}
+        {notifSaved && <span style={{ fontSize: '12px', color: 'var(--teal)' }}>تم الحفظ.</span>}
+        {notifError && <span style={{ fontSize: '12px', color: 'var(--coral)' }}>{notifError}</span>}
 
         {/* NOT-012 — email as a second channel alongside WhatsApp, never a
             replacement: the address is optional and the toggle is separate,

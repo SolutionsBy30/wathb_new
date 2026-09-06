@@ -175,7 +175,9 @@ export function renderTemplate(templateName: string, p: string[]): string {
       return `رمز الدخول إلى وثب: ${p[0]}\nصالح لمدة ١٠ دقائق. لا تشاركه مع أحد.`;
 
     case 'daily_wathb_reminder':
-      return `وثبتك اليومية جاهزة، ${p[0]} 🌱\n${p[1]}`;
+      // p[2] (the manage link) is appended only when the caller supplies it,
+      // so older call sites passing two params still render correctly.
+      return `وثبتك اليومية جاهزة، ${p[0]} 🌱\n${p[1]}${p[2] ? `\n\nلإدارة الإشعارات أو إيقافها مؤقتاً: ${p[2]}` : ''}`;
 
     case 'weekly_report_student':
       return `تقريرك الأسبوعي، ${p[0]}:\n${p[1]}\n\n${p[2]}`;

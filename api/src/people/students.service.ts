@@ -439,11 +439,42 @@ export class StudentsService {
     });
   }
 
-  setNotificationPrefs(studentId: string, dto: { notifSlotStartHour?: number; notifSlotEndHour?: number; skipDays?: number[] }) {
+  /**
+   * NOT-022 — the longest a student may pause their daily nudge in one go.
+   *
+   * A pause is meant for exams, travel, a hard week — not for quietly leaving.
+   * Someone who wants to stop for good has the STOP keyword, which is honest
+   * about being permanent; an unbounded "pause" would be the same thing
+   * wearing a friendlier word, and nobody would ever come back to undo it.
+   */
+  private static readonly MAX_PAUSE_DAYS = 60;
+
+  async setNotificationPrefs(
+    studentId: string,
+    dto: { notifSlotStartHour?: number; notifSlotEndHour?: number; skipDays?: number[]; notificationsPausedUntil?: string | null },
+  ) {
+    const { notificationsPausedUntil, ...rest } = dto;
+    const data: Record<string, unknown> = { ...rest };
+
+    if (notificationsPausedUntil !== undefined) {
+      if (notificationsPausedUntil === null) {
+        data.notificationsPausedUntil = null; // resume now
+      } else {
+        const until = new Date(notificationsPausedUntil);
+        if (Number.isNaN(until.getTime())) throw new BadRequestException('تاريخ غير صالح.');
+        const maxAt = new Date(Date.now() + StudentsService.MAX_PAUSE_DAYS * 86400_000);
+        // A date already past is not an error worth refusing — it simply means
+        // "not paused", which is what storing null says.
+        if (until.getTime() <= Date.now()) data.notificationsPausedUntil = null;
+        else if (until > maxAt) throw new BadRequestException(`أقصى مدة إيقاف مؤقت ${StudentsService.MAX_PAUSE_DAYS} يوماً.`);
+        else data.notificationsPausedUntil = until;
+      }
+    }
+
     return this.prisma.student.update({
       where: { userId: studentId },
-      data: dto,
-      select: { notifSlotStartHour: true, notifSlotEndHour: true, skipDays: true },
+      data,
+      select: { notifSlotStartHour: true, notifSlotEndHour: true, skipDays: true, notificationsPausedUntil: true },
     });
   }
 }

@@ -11,13 +11,16 @@
  * miserable way to find out.
  */
 
-export const DAILY_PLACEHOLDERS = ['student_name', 'magic_link', 'test_name'] as const;
+export const DAILY_PLACEHOLDERS = ['student_name', 'magic_link', 'test_name', 'manage_link'] as const;
 export type DailyPlaceholder = (typeof DAILY_PLACEHOLDERS)[number];
 
 export const PLACEHOLDER_LABELS_AR: Record<DailyPlaceholder, string> = {
   student_name: 'اسم الطالب',
   magic_link: 'رابط الوثبة',
   test_name: 'اسم الاختبار',
+  // NOT-022 — opens the settings screen: send time, temporary pause, or
+  // switching a test off.
+  manage_link: 'رابط إدارة الإشعارات',
 };
 
 /** Matches {placeholder}; the body is Arabic, so keep the pattern ASCII-only. */

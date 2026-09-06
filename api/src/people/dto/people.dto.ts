@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateIf } from 'class-validator';
 
 export class CreateStudentDto {
   @IsString() mobile!: string;
@@ -37,6 +37,10 @@ export class StudentNotificationPrefsDto {
   // existed in the schema with a KSA-weekend default but was never actually
   // settable by anyone until now.
   @IsOptional() @IsArray() @ArrayMaxSize(7) @IsInt({ each: true }) @Min(0, { each: true }) @Max(6, { each: true }) skipDays?: number[];
+  // NOT-022 — ISO date to pause the daily leap until, or null to resume now.
+  // Kept a string here and range-checked in the service, where "not in the
+  // past, not absurdly far out" is stated once.
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsString() notificationsPausedUntil?: string | null;
 }
 
 /**

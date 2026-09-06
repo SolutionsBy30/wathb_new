@@ -177,6 +177,13 @@ export class NotificationsService {
     const scheduledFor = dayKey(forDate);
     if (student.skipDays.includes(scheduledFor.getUTCDay())) return { skipped: 'skip_day' as const };
 
+    // NOT-022 — the student paused their nudge from the link in the message.
+    // Compared against the day being planned rather than "now", so planning
+    // tomorrow at 21:00 tonight respects a pause that ends tomorrow.
+    if (student.notificationsPausedUntil && scheduledFor < student.notificationsPausedUntil) {
+      return { skipped: 'paused' as const };
+    }
+
     // Daily planning/notifications only ever concern the planned bundle
     // (sequence 0) — a paid student's extra same-day bundles are pull, not push.
     const existingWathb = await this.prisma.wathb.findFirst({
@@ -316,6 +323,11 @@ export class NotificationsService {
     const { token } = await this.magicLinks.mint({ subjectId: student.userId, subjectType: 'student', purpose: 'wathb', targetId: wathb.id, maxUses: 5 });
     const appUrl = this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');
     const url = `${appUrl}/#magic=${token}`;
+    // NOT-022 — the same token, deep-linked to the settings screen: change the
+    // send time, pause until a date, or switch a test off. A second token
+    // would be a second bearer credential in one message for no gain, and the
+    // student is already authenticated by the first.
+    const manageUrl = `${url}&go=notifications`;
 
     // NOT-012 — email is a parallel second channel, sent before the WhatsApp
     // attempt and never allowed to affect it. It is fire-and-forget on
@@ -347,6 +359,7 @@ export class NotificationsService {
         student_name: student.user.name,
         magic_link: url,
         test_name: wathb.test?.nameAr ?? '',
+        manage_link: manageUrl,
       })
       .catch((e: any) => {
         this.logger.warn(`daily message pool unreadable, using the built-in wording — ${e?.message ?? e}`);
@@ -362,12 +375,12 @@ export class NotificationsService {
               languageCode: 'ar',
               // Kept populated alongside the override: Meta's adapter cannot
               // honour a custom body and falls back to these (channel.interface).
-              bodyParams: [student.user.name, url],
+              bodyParams: [student.user.name, url, manageUrl],
               bodyOverride: customBody ?? undefined,
             })
           : await this.channel.sendFreeform({
               to: student.user.mobileE164!,
-              text: customBody ?? `وثبتك اليومية جاهزة، ${student.user.name}: ${url}`,
+              text: customBody ?? `وثبتك اليومية جاهزة، ${student.user.name}: ${url}\n\nلإدارة الإشعارات أو إيقافها مؤقتاً: ${manageUrl}`,
             });
 
       await this.prisma.notification.update({

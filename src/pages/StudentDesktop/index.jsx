@@ -89,7 +89,14 @@ export default function StudentDesktop() {
     // api/src/notifications/notifications.service.ts) — exchange it for a
     // scoped session exactly like the dev-login flow does, then drop it from
     // the URL so the raw token doesn't sit in browser history (spec §7.1).
-    const hashMatch = window.location.hash.match(/^#magic=(.+)$/);
+    // NOT-022 — the daily message now carries a second link,
+    // #magic=<token>&go=notifications, so "manage my notifications" lands on
+    // the settings screen instead of the home screen. The token stops at the
+    // first '&' — without that the go= suffix would be swallowed into it and
+    // every manage link would look like an invalid token.
+    const hashMatch = window.location.hash.match(/^#magic=([^&]+)/);
+    const goMatch = window.location.hash.match(/[#&]go=([a-zA-Z]+)/);
+    const goTarget = goMatch ? goMatch[1] : null;
     let magicPurpose = null;
     let magicLinkFailed = false;
     if (hashMatch) {
@@ -150,7 +157,12 @@ export default function StudentDesktop() {
       } else {
         await loadReport(me.userId);
         // The weekly WhatsApp link (spec S11) lands here, not on Home.
-        setScreen(magicPurpose === 'weekly_report' ? 'weeklyReport' : 'home');
+        // NOT-022 — and the daily message's "manage notifications" link lands
+        // on the profile, where the send time, the temporary pause and the
+        // per-test switches all already live.
+        setScreen(
+          goTarget === 'notifications' ? 'profile' : magicPurpose === 'weekly_report' ? 'weeklyReport' : 'home',
+        );
       }
     } catch {
       setToken(null);
