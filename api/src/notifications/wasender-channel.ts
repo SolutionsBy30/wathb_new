@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { FreeformSendParams, NotificationChannel, SendResult, TemplateSendParams } from './channel.interface';
+import { ChannelUnavailableError, FreeformSendParams, NotificationChannel, SendResult, TemplateSendParams } from './channel.interface';
 
 /**
  * NOT-013 — WasenderAPI transport, https://wasenderapi.com/api-docs
@@ -112,7 +112,24 @@ export class WasenderChannel implements NotificationChannel {
       // Log the status and body but never the API key or the message text —
       // same discipline as the delivery log, which stores counts not content.
       this.logger.error(`Wasender send failed: ${res.status} ${raw.slice(0, 300)}`);
-      throw new Error(json?.message ?? json?.error ?? `Wasender API error ${res.status}`);
+      const message = json?.message ?? json?.error ?? `Wasender API error ${res.status}`;
+
+      // NOT-021 — "Your Whatsapp Session is not connected please connect your
+      // session first" is the phone link having dropped, which is a property
+      // of the transport rather than of this message: retrying it, or trying
+      // the next student, cannot succeed until someone re-links the phone.
+      // Matched on the distinctive part of the wording, loosely enough to
+      // survive punctuation changes. 401/403 mean the API key itself is
+      // rejected, which is equally fatal to the whole run.
+      const text = String(message).toLowerCase();
+      if (
+        (text.includes('session') && (text.includes('not connected') || text.includes('disconnect'))) ||
+        res.status === 401 ||
+        res.status === 403
+      ) {
+        throw new ChannelUnavailableError(message);
+      }
+      throw new Error(message);
     }
 
     // Documented shape is { success: true, data: { msgId, jid, status } };

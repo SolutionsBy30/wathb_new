@@ -38,3 +38,24 @@ export interface NotificationChannel {
   sendTemplate(params: TemplateSendParams): Promise<SendResult>;
   sendFreeform(params: FreeformSendParams): Promise<SendResult>;
 }
+
+/**
+ * NOT-021 — the transport itself is down, as opposed to one message failing.
+ *
+ * A disconnected Wasender session rejects every send identically, so without
+ * this the daily run walked the whole student list, marked each row failed and
+ * burned all three retry rungs against a wall — leaving real students
+ * permanently undeliverable over an outage that lasted minutes. Callers that
+ * send in a loop stop on this rather than continuing.
+ */
+export class ChannelUnavailableError extends Error {
+  readonly channelUnavailable = true as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChannelUnavailableError';
+  }
+}
+
+export function isChannelUnavailable(e: unknown): e is ChannelUnavailableError {
+  return !!e && typeof e === 'object' && (e as any).channelUnavailable === true;
+}

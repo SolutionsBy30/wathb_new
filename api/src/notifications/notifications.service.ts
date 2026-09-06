@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { WathbGenerationService } from '../wathb/wathb-generation.service';
 import { MagicLinkService } from '../auth/magic-link.service';
-import { NOTIFICATION_CHANNEL, NotificationChannel } from './channel.interface';
+import { NOTIFICATION_CHANNEL, NotificationChannel, isChannelUnavailable } from './channel.interface';
 import { decideSendChannel, resolveSlotForDay } from './reactive-scheduler';
 import { riyadhDayKey } from './riyadh-clock.util';
 import { NotificationMessagesService } from './notification-messages.service';
@@ -137,8 +137,18 @@ export class NotificationsService {
    * notification row. Idempotent per (student, day): safe to call twice.
    */
   async planDayForStudent(studentId: string, forDate: Date) {
-    const student = await this.prisma.student.findUnique({ where: { userId: studentId } });
+    const student = await this.prisma.student.findUnique({
+      where: { userId: studentId },
+      include: { user: { select: { status: true, whatsappOptedOutAt: true } } },
+    });
     if (!student?.targetTestId) return { skipped: 'no_goal' as const };
+
+    // NOT-020 — a suspended or opted-out account is not planned for at all.
+    // The send already refused both, but only after planning had generated a
+    // bundle and written a notification row, which burned questions out of the
+    // bank and filled the delivery log with rows that could never be sent.
+    if (student.user.status === 'suspended') return { skipped: 'suspended' as const };
+    if (student.user.whatsappOptedOutAt) return { skipped: 'opted_out' as const };
 
     // FRE-002 — a free-tier student gets no daily WhatsApp send at all; the
     // Wathb itself is still generated on-demand when they open the app
@@ -149,7 +159,20 @@ export class NotificationsService {
       include: { package: true },
       orderBy: { createdAt: 'desc' },
     });
-    if (activeSub && !activeSub.package.dailyNotificationEnabled) return { skipped: 'free_tier' as const };
+
+    // NOT-020 — no active subscription means no daily send.
+    //
+    // This was `if (activeSub && !...dailyNotificationEnabled)`, so the gate
+    // only ever applied to students who HAD a subscription: an expired or
+    // cancelled one left activeSub null and fell straight through to being
+    // planned and messaged. Every lapsed account kept receiving the daily leap
+    // — the "inactive accounts" that were reported.
+    //
+    // Every new account is enrolled into the default package
+    // (DefaultEnrolmentService), so having no active subscription at all means
+    // it lapsed, not that it is new.
+    if (!activeSub) return { skipped: 'no_active_subscription' as const };
+    if (!activeSub.package.dailyNotificationEnabled) return { skipped: 'free_tier' as const };
 
     const scheduledFor = dayKey(forDate);
     if (student.skipDays.includes(scheduledFor.getUTCDay())) return { skipped: 'skip_day' as const };
@@ -360,6 +383,16 @@ export class NotificationsService {
       });
       return { sent: true as const, channelType: decision.channelType, billable: decision.billable };
     } catch (e: any) {
+      // NOT-021 — the transport is down, not this message. Leave the row
+      // 'scheduled' and burn no retry rung: the next tick after the session is
+      // restored sends it normally. Marking it failed here is what left ten
+      // students permanently undeliverable over an outage that a re-link
+      // fixed in a minute.
+      if (isChannelUnavailable(e)) {
+        this.logger.error(`channel unavailable, leaving notification ${notifId} queued — ${e.message}`);
+        throw e;
+      }
+
       const nextAttempt = retryCount + 1;
       const exhausted = nextAttempt > MAX_RETRY_ATTEMPTS;
       await this.prisma.notification.update({
@@ -396,20 +429,54 @@ export class NotificationsService {
   async sendNowForAllStudents(forDate: Date, opts: { force?: boolean } = {}) {
     const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
     const results = [];
+    let aborted = false;
     for (const s of students) {
-      results.push({ studentId: s.userId, ...(await this.sendNowForStudent(s.userId, forDate, opts)) });
+      try {
+        results.push({ studentId: s.userId, ...(await this.sendNowForStudent(s.userId, forDate, opts)) });
+      } catch (e) {
+        // Same stop as send_due: a manual bulk run must not chew through the
+        // whole roster when the session is down.
+        if (isChannelUnavailable(e)) {
+          this.logger.error(`send_now_all aborted after ${results.length} student(s): channel unavailable`);
+          aborted = true;
+          break;
+        }
+        throw e;
+      }
     }
     // Counts only — the delivery log is where per-message detail belongs.
     const sent = results.filter((r: any) => r.sent).length;
     const failed = results.filter((r: any) => r.failed).length;
     const skipped = results.filter((r: any) => r.skipped).length;
-    return { total: results.length, sent, failed, skipped, results };
+    return {
+      total: students.length,
+      processed: results.length,
+      ...(aborted ? { aborted: 'channel_unavailable' as const } : {}),
+      sent,
+      failed,
+      skipped,
+      results,
+    };
   }
 
   async sendDueForAllStudents(forDate: Date) {
     const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
-    const results = [];
-    for (const s of students) results.push({ studentId: s.userId, ...(await this.sendDailyWathbNotification(s.userId, forDate)) });
+    const results: any[] = [];
+    for (const s of students) {
+      try {
+        results.push({ studentId: s.userId, ...(await this.sendDailyWathbNotification(s.userId, forDate)) });
+      } catch (e) {
+        // NOT-021 — one disconnected session rejects every send identically,
+        // so walking the rest of the list only produces more failures against
+        // the same wall. Stop; everyone still queued goes out on the next tick
+        // once the session is back.
+        if (isChannelUnavailable(e)) {
+          this.logger.error(`send_due aborted after ${results.length} student(s): channel unavailable`);
+          return { aborted: 'channel_unavailable' as const, processed: results.length, results };
+        }
+        throw e;
+      }
+    }
     return results;
   }
 
@@ -438,7 +505,12 @@ export class NotificationsService {
         results.push({ notificationId: notif.id, skipped: 'outside_window' as const });
         continue;
       }
-      const result = await this.attemptSend(
+      // NOT-021 — the retry ladder above all must stop on an outage: this is
+      // the loop that turned a short disconnection into ten permanently
+      // undeliverable students by spending every rung against it.
+      let result;
+      try {
+        result = await this.attemptSend(
         {
           userId: student.userId,
           notifSlotStartHour: student.notifSlotStartHour,
@@ -454,7 +526,14 @@ export class NotificationsService {
         wathb,
         notif.id,
         notif.retryCount,
-      );
+        );
+      } catch (e) {
+        if (isChannelUnavailable(e)) {
+          this.logger.error(`process_retries aborted after ${results.length} attempt(s): channel unavailable`);
+          return { aborted: 'channel_unavailable' as const, attempted: results.length, results };
+        }
+        throw e;
+      }
       results.push({ notificationId: notif.id, ...result });
     }
     return { attempted: results.length, results };

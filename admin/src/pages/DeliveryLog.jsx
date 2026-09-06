@@ -78,8 +78,16 @@ export default function DeliveryLog() {
     setMessage(null);
     try {
       const res = await api.sendDueAll(todayPlusOne());
-      const sent = res.filter((r) => r.sent).length;
-      setMessage(`تم إرسال ${sent} من ${res.length}.`);
+      // NOT-021 — the run returns an array normally, but an object carrying
+      // { aborted } when the WhatsApp session dropped part-way. Handling only
+      // the array shape would crash the screen on exactly the day it matters.
+      const rows = Array.isArray(res) ? res : (res.results ?? []);
+      const sent = rows.filter((r) => r.sent).length;
+      setMessage(
+        res.aborted
+          ? `توقف الإرسال: جلسة واتساب غير متصلة. أُرسلت ${sent} رسالة قبل التوقف، والباقي ما زال في الطابور وسيُرسل تلقائياً بعد إعادة ربط الجلسة.`
+          : `تم إرسال ${sent} من ${rows.length}.`,
+      );
       await load();
     } finally {
       setBusy(false);
@@ -97,7 +105,11 @@ export default function DeliveryLog() {
       // those rows are no longer 'scheduled', so without it the run would
       // skip exactly the students it is meant to reach.
       const res = await api.sendLeapNowAll(true);
-      setMessage(`أُرسلت ${res.sent} من ${res.total} · فشل ${res.failed} · تم تخطي ${res.skipped}.`);
+      setMessage(
+        res.aborted
+          ? `توقف الإرسال: جلسة واتساب غير متصلة. أُرسلت ${res.sent} من ${res.total} قبل التوقف — أعد ربط الجلسة ثم أعد المحاولة.`
+          : `أُرسلت ${res.sent} من ${res.total} · فشل ${res.failed} · تم تخطي ${res.skipped}.`,
+      );
       await load();
     } finally {
       setBusy(false);
