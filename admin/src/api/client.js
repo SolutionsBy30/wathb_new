@@ -108,6 +108,13 @@ export const api = {
   deliveryLog: () => request('/admin/notifications'),
   // NOT-017 — the pool of daily-leap message variants.
   listNotificationMessages: () => request('/admin/notifications/messages'),
+  // NOT-023 — WhatsApp senders (primary + backup) and their health.
+  listSenders: () => request('/admin/notifications/senders'),
+  sendersHealth: () => request('/admin/notifications/senders/health'),
+  checkSender: (role) => request(`/admin/notifications/senders/${role}/check`, { method: 'POST' }),
+  updateSender: (role, dto) => request(`/admin/notifications/senders/${role}`, { method: 'PATCH', body: dto }),
+  // NOT-024 — resend what an outage stranded.
+  recoverMissed: () => request('/admin/notifications/recover-missed', { method: 'POST' }),
   messagePlaceholders: () => request('/admin/notifications/messages/placeholders'),
   previewNotificationMessage: (body) => request('/admin/notifications/messages/preview', { method: 'POST', body: { body } }),
   createNotificationMessage: (dto) => request('/admin/notifications/messages', { method: 'POST', body: dto }),

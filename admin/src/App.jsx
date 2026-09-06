@@ -10,6 +10,7 @@ import ProblemReports from './pages/ProblemReports';
 import DailyTips from './pages/DailyTips';
 import BulkImport from './pages/BulkImport';
 import NotificationsSection from './pages/NotificationsSection';
+import { IntegrationAlert } from './components/IntegrationAlert';
 import Packages from './pages/Packages';
 import Subscriptions from './pages/Subscriptions';
 import SolutionPerformance from './pages/SolutionPerformance';
@@ -165,6 +166,10 @@ export default function App() {
       </header>
 
       <main style={{ padding: '28px 32px', maxWidth: '1200px', margin: '0 auto' }}>
+        {/* NOT-023 — above every screen, not tucked inside the notifications
+            section: a dead WhatsApp session stops the product, and you should
+            not have to be looking at the right page to find out. */}
+        <div style={{ marginBottom: '18px' }}><IntegrationAlert /></div>
         {testsError && (
           <p style={{ margin: '0 0 14px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>
             تعذّر تحميل قائمة الاختبارات ({testsError}) — قوائم التصفية ستظهر فارغة.
