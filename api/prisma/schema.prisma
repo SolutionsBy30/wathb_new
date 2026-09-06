@@ -876,3 +876,48 @@ model NotificationMessage {
   @@index([kind, isActive])
   @@map("notification_messages")
 }
+
+/// NOT-023 — the WhatsApp senders, in DB rather than only in .env.
+///
+/// Two rows at most: 'primary' and 'backup'. The backup exists because a
+/// Wasender session is a real phone that drops; when the primary is
+/// unreachable the sender falls through to the backup rather than the day's
+/// leaps going nowhere.
+///
+/// Credentials live here so an admin can rotate a token without SSH. They are
+/// never returned to the console — the API sends a masked hint only.
+model NotificationProvider {
+  id       String  @id @default(uuid())
+  /// 'primary' | 'backup' — the order they are tried in.
+  role     String  @unique
+  /// 'wasender' | 'meta' | 'console'
+  provider String  @default("wasender")
+  /// Human label for the console, typically the sending phone number. Not a
+  /// credential and safe to display.
+  label    String?
+  isActive Boolean @default(true)
+
+  /// Wasender
+  apiKey     String?
+  baseUrl    String?
+  /// Path appended to baseUrl for the session health probe. Configurable
+  /// because the vendor's docs are not reachable from every environment and a
+  /// wrong guess must be changeable without a deploy.
+  statusPath String?
+
+  /// Meta Cloud API
+  accessToken   String?
+  phoneNumberId String?
+
+  /// Health, written by the probe and by send failures.
+  /// 'unknown' | 'connected' | 'disconnected'
+  status        String    @default("unknown")
+  lastCheckedAt DateTime?
+  lastOkAt      DateTime?
+  lastError     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_providers")
+}

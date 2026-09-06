@@ -156,6 +156,16 @@ export class SchedulerService {
   }
 
   /**
+   * NOT-024 — catch up notifications an outage left stranded, once a sender is
+   * healthy again. Cheap when there is nothing to do (one indexed query), and
+   * frequent because the value is in the student getting today's leap today.
+   */
+  @Cron('*/15 * * * *', { timeZone: TZ })
+  recoverMissed() {
+    return this.run('recover_missed', () => this.notifications.recoverMissed());
+  }
+
+  /**
    * SUP-009 — chase supervisors who have not answered an invite yet. The
    * cadence lives in people/invite-reminder.util; this only decides when to
    * look.

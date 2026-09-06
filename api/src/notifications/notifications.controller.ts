@@ -9,6 +9,7 @@ import { SessionPayload } from '../auth/auth.types';
 import { TriggerDateDto } from './dto/trigger.dto';
 import { CampaignAudienceDto, CampaignSendDto } from './dto/campaign.dto';
 import { NotificationMessagesService } from './notification-messages.service';
+import { ProviderSettingsService, ProviderRole } from './provider-settings.service';
 import { CreateNotificationMessageDto, PreviewMessageDto, UpdateNotificationMessageDto } from './dto/notification-message.dto';
 
 function resolveDate(forDate?: string, defaultOffsetDays = 0): Date {
@@ -38,6 +39,7 @@ export class NotificationsController {
     private campaigns: CampaignService,
     private adminAlerts: AdminAlertService,
     private messages: NotificationMessagesService,
+    private providers: ProviderSettingsService,
   ) {}
 
   @Get()
@@ -195,5 +197,45 @@ export class NotificationsController {
   @Delete('messages/:id')
   deleteMessage(@Param('id') id: string) {
     return this.messages.remove(id);
+  }
+
+  /**
+   * NOT-023 — the WhatsApp senders. Class-level guards cover these; nothing
+   * may be inserted between a decorator and the method it binds to.
+   *
+   * Credentials are write-only: listForAdmin returns masked hints, so a
+   * console session can rotate a token but never read one back out.
+   */
+  @Get('senders')
+  listSenders() {
+    return this.providers.listForAdmin();
+  }
+
+  /** Powers the console's red box; cheap enough to poll. */
+  @Get('senders/health')
+  sendersHealth() {
+    return this.providers.health();
+  }
+
+  @Post('senders/:role/check')
+  checkSender(@Param('role') role: string) {
+    return this.providers.check(role as ProviderRole);
+  }
+
+  @Patch('senders/:role')
+  updateSender(@Param('role') role: string, @Body() dto: Record<string, unknown>) {
+    return this.providers.upsert(role as ProviderRole, dto);
+  }
+
+  @Delete('senders/:role')
+  removeSender(@Param('role') role: string) {
+    return this.providers.remove(role as ProviderRole);
+  }
+
+  // NOT-024 — resend what an outage missed: today's leaps, and weekly reports
+  // from the last seven days.
+  @Post('recover-missed')
+  recoverMissed() {
+    return this.notifications.recoverMissed();
   }
 }

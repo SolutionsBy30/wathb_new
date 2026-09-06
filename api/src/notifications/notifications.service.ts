@@ -7,6 +7,7 @@ import { NOTIFICATION_CHANNEL, NotificationChannel, isChannelUnavailable } from 
 import { decideSendChannel, resolveSlotForDay } from './reactive-scheduler';
 import { riyadhDayKey } from './riyadh-clock.util';
 import { NotificationMessagesService } from './notification-messages.service';
+import { ProviderSettingsService } from './provider-settings.service';
 import { EmailChannel } from './email-channel';
 
 const DEFAULT_BUNDLE_SIZE = 5;
@@ -49,6 +50,7 @@ export class NotificationsService {
     private config: ConfigService,
     private email: EmailChannel,
     private messages: NotificationMessagesService,
+    private providers: ProviderSettingsService,
   ) {}
 
   /**
@@ -473,6 +475,15 @@ export class NotificationsService {
   }
 
   async sendDueForAllStudents(forDate: Date) {
+    // NOT-023 — don't start a run with no sender that could deliver. A sender
+    // whose health is merely 'unknown' still counts as usable: refusing to
+    // send because a probe could not reach a vendor would turn a monitoring
+    // gap into an outage, which is the failure this whole area exists to stop.
+    if (!(await this.providers.anyUsable())) {
+      this.logger.error('send_due skipped: no usable WhatsApp sender');
+      return { aborted: 'channel_unavailable' as const, processed: 0, results: [] };
+    }
+
     const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
     const results: any[] = [];
     for (const s of students) {
@@ -550,6 +561,68 @@ export class NotificationsService {
       results.push({ notificationId: notif.id, ...result });
     }
     return { attempted: results.length, results };
+  }
+
+  /**
+   * NOT-024 — catch up what the outage missed, once a sender is back.
+   *
+   * Rows left 'scheduled' during an outage already resend on the next tick.
+   * These are the ones that do not: rows marked 'failed' by an outage before
+   * NOT-021 existed, or by a failure the classifier did not recognise. They sit
+   * there until a human presses requeue, which means in practice they sit there
+   * until a student complains.
+   *
+   * The windows differ because the messages differ. A daily leap is only worth
+   * sending on its own day — yesterday's link opens a bundle the student can no
+   * longer earn a streak from — so it catches up same-day only. A weekly report
+   * is still worth reading a few days late, so it reaches back seven days.
+   *
+   * Safe to run on a schedule: it only touches rows that failed with a
+   * transport error, and each send re-checks its own guards.
+   */
+  async recoverMissed(now: Date = new Date()) {
+    if (!(await this.providers.anyUsable())) return { skipped: 'no_usable_sender' as const };
+
+    const todayKey = dayKey(now);
+    const weekAgo = new Date(now.getTime() - 7 * 86400_000);
+
+    // Only outage-shaped failures. A wrong number failed for its own reasons
+    // and re-dialling it on a schedule is exactly what the finite retry ladder
+    // exists to prevent.
+    const outageError = {
+      OR: [
+        { error: { contains: 'session', mode: 'insensitive' as const } },
+        { error: { contains: 'not connected', mode: 'insensitive' as const } },
+        { error: { contains: 'unavailable', mode: 'insensitive' as const } },
+        { error: { contains: 'ECONNRESET', mode: 'insensitive' as const } },
+        { error: { contains: 'fetch failed', mode: 'insensitive' as const } },
+      ],
+    };
+
+    const stuck = await this.prisma.notification.findMany({
+      where: {
+        status: 'failed',
+        ...outageError,
+        OR: [
+          { kind: 'daily_wathb', scheduledFor: todayKey },
+          { kind: { in: ['weekly_report_student', 'weekly_report_supervisor'] }, scheduledFor: { gte: dayKey(weekAgo) } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (stuck.length === 0) return { requeued: 0, retried: 0 };
+
+    // Put them back in the queue; the ordinary paths take it from there, so
+    // every window, cap and opt-out check still applies.
+    await this.prisma.notification.updateMany({
+      where: { id: { in: stuck.map((r) => r.id) } },
+      data: { status: 'scheduled', retryCount: 0, nextRetryAt: null, error: 'requeued after the channel recovered' },
+    });
+    this.logger.log(`recover_missed: requeued ${stuck.length} notification(s) after channel recovery`);
+
+    const retried = await this.processRetries(now);
+    return { requeued: stuck.length, retried };
   }
 
   /** NOT-009 — "surfacing repeatedly undelivered numbers to the admin console." */
