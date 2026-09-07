@@ -16,6 +16,7 @@ export const ADMIN_PERMISSIONS = [
   'dailyTips',
   'import',
   'solutionPerf',
+  'simulations',
   // المستخدمون
   'students',
   'supervisors',
@@ -39,6 +40,7 @@ export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
   dailyTips: 'نصيحة اليوم',
   import: 'استيراد جماعي',
   solutionPerf: 'أداء الأسئلة',
+  simulations: 'المحاكي',
   students: 'الطلاب',
   supervisors: 'المشرفون',
   geography: 'الجغرافيا والمدارس',
@@ -49,7 +51,7 @@ export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
 };
 
 export const ADMIN_PERMISSION_GROUPS: { group: string; keys: AdminPermission[] }[] = [
-  { group: 'المحتوى', keys: ['taxonomy', 'bank', 'reviewQueue', 'problemReports', 'dailyTips', 'import', 'solutionPerf'] },
+  { group: 'المحتوى', keys: ['taxonomy', 'bank', 'reviewQueue', 'problemReports', 'dailyTips', 'import', 'solutionPerf', 'simulations'] },
   { group: 'المستخدمون', keys: ['students', 'supervisors', 'geography'] },
   { group: 'الأعمال', keys: ['subscriptions', 'packages'] },
   { group: 'النظام', keys: ['notifications', 'auditLog'] },

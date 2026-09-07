@@ -14,6 +14,7 @@ import { IntegrationAlert } from './components/IntegrationAlert';
 import Packages from './pages/Packages';
 import Subscriptions from './pages/Subscriptions';
 import SolutionPerformance from './pages/SolutionPerformance';
+import Simulations from './pages/Simulations';
 import Geography from './pages/Geography';
 import Students from './pages/Students';
 import StudentDetail from './pages/StudentDetail';
@@ -35,6 +36,7 @@ const NAV_GROUPS = [
       { id: 'dailyTips', label: 'نصيحة اليوم' },
       { id: 'import', label: 'استيراد جماعي' },
       { id: 'solutionPerf', label: 'أداء الأسئلة' },
+      { id: 'simulations', label: 'المحاكي' },
     ],
   },
   {
@@ -198,6 +200,7 @@ export default function App() {
         {tab === 'dailyTips' && <DailyTips />}
         {tab === 'import' && <BulkImport tests={tests} />}
         {tab === 'solutionPerf' && <SolutionPerformance tests={tests} />}
+        {tab === 'simulations' && <Simulations tests={tests} />}
         {tab === 'students' && viewingStudentId === null && <Students onOpenStudent={setViewingStudentId} />}
         {tab === 'students' && viewingStudentId !== null && (
           <StudentDetail studentId={viewingStudentId} onBack={() => setViewingStudentId(null)} />

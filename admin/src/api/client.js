@@ -218,6 +218,24 @@ export const api = {
   // ADM-097 — one leap's questions with the student's answers.
   leapDetail: (studentId, wathbId) => request(`/admin/students/${studentId}/leaps/${wathbId}`),
 
+  // SIM — المحاكي: blueprints, forms, bank readiness (§9).
+  listBlueprints: (testId) => request(`/admin/simulation/blueprints${testId ? `?testId=${testId}` : ''}`),
+  getBlueprint: (id) => request(`/admin/simulation/blueprints/${id}`),
+  createBlueprint: (dto) => request('/admin/simulation/blueprints', { method: 'POST', body: dto }),
+  updateBlueprint: (id, dto) => request(`/admin/simulation/blueprints/${id}`, { method: 'POST', body: dto }),
+  saveBlueprintSections: (id, sections) => request(`/admin/simulation/blueprints/${id}/sections`, { method: 'POST', body: { sections } }),
+  cloneBlueprint: (id) => request(`/admin/simulation/blueprints/${id}/clone`, { method: 'POST' }),
+  validateBlueprint: (id) => request(`/admin/simulation/blueprints/${id}/validate`),
+  blueprintReadiness: (id, avoidReuse = true) => request(`/admin/simulation/blueprints/${id}/readiness?avoidReuse=${avoidReuse}`),
+  setBlueprintStatus: (id, status) => request(`/admin/simulation/blueprints/${id}/status`, { method: 'POST', body: { status } }),
+  deleteBlueprint: (id) => request(`/admin/simulation/blueprints/${id}`, { method: 'DELETE' }),
+  listSimulationForms: (blueprintId) => request(`/admin/simulation/blueprints/${blueprintId}/forms`),
+  generateSimulationForm: (blueprintId, dto = {}) => request(`/admin/simulation/blueprints/${blueprintId}/forms`, { method: 'POST', body: dto }),
+  getSimulationForm: (formId) => request(`/admin/simulation/forms/${formId}`),
+  setSimulationFormStatus: (formId, status) => request(`/admin/simulation/forms/${formId}/status`, { method: 'POST', body: { status } }),
+  deleteSimulationForm: (formId) => request(`/admin/simulation/forms/${formId}`, { method: 'DELETE' }),
+  regenerateFormItem: (itemId) => request(`/admin/simulation/form-items/${itemId}/regenerate`, { method: 'POST' }),
+
   listDailyTips: () => request('/admin/daily-tips'),
   createDailyTip: (textAr) => request('/admin/daily-tips', { method: 'POST', body: { textAr } }),
   updateDailyTip: (id, dto) => request(`/admin/daily-tips/${id}`, { method: 'POST', body: dto }),
