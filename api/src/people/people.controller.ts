@@ -154,6 +154,16 @@ export class PeopleController {
     return this.students.mintLoginLink(id, session.sub);
   }
 
+  // ADM-098 — a login link for a supervisor's own portal. Same permission as
+  // the list it is issued from. Nothing may be inserted between these
+  // decorators and the method they bind to.
+  @RequireSession('admin')
+  @RequirePermission('supervisors')
+  @Post('admin/supervisors/:id/magic-link')
+  mintSupervisorLoginLink(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
+    return this.supervisors.mintLoginLink(id, session.sub);
+  }
+
   @RequireSession('admin')
   @RequirePermission('supervisors')
   @Get('admin/supervisors')

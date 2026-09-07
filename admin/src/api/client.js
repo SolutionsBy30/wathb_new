@@ -209,6 +209,8 @@ export const api = {
   studentDetail: (id) => request(`/admin/students/${id}/detail`),
   setStudentSchool: (studentId, schoolId) => request(`/admin/students/${studentId}/school`, { method: 'PATCH', body: { schoolId } }),
   listSupervisors: () => request('/admin/supervisors'),
+  // ADM-098 — a one-off login link for a supervisor's own portal.
+  mintSupervisorLoginLink: (supervisorId) => request(`/admin/supervisors/${supervisorId}/magic-link`, { method: 'POST' }),
 
   bulkStatus: (ids, status) => request('/admin/questions/bulk-status', { method: 'POST', body: { ids, status } }),
   mintStudentLoginLink: (studentId) => request(`/admin/students/${studentId}/magic-link`, { method: 'POST' }),

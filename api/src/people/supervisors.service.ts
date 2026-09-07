@@ -6,6 +6,7 @@ import { MIN_SAMPLE_FOR_REPORTING, ReportsService } from '../reports/reports.ser
 import { AccountsService } from './accounts.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/channel.interface';
 import { isReminderDue } from './invite-reminder.util';
+import { AuditLogService } from '../admin-ops/audit-log.service';
 
 @Injectable()
 export class SupervisorsService {
@@ -16,7 +17,52 @@ export class SupervisorsService {
     private reports: ReportsService,
     @Inject(NOTIFICATION_CHANNEL) private channel: NotificationChannel,
     private config: ConfigService,
+    private auditLog: AuditLogService,
   ) {}
+
+  /**
+   * ADM-098 — mint a one-off login link for a supervisor's own portal.
+   *
+   * The counterpart of StudentsService.mintLoginLink, and it exists for the
+   * same reason: support needs to see what a parent is seeing, and a parent
+   * who never received their invite needs a way in that does not depend on
+   * WhatsApp working. The invite reminder ladder covers the happy path; this
+   * covers "the session was down all week and they gave up".
+   *
+   * The link IS the credential — whoever holds it is signed in as that
+   * supervisor, with sight of every linked student's performance. So it is
+   * audit-logged with the admin who minted it, it expires, and it is meant to
+   * be handed to that supervisor's own number and nowhere else.
+   */
+  async mintLoginLink(supervisorId: string, adminUserId: string) {
+    const supervisor = await this.prisma.supervisor.findUnique({
+      where: { userId: supervisorId },
+      include: { user: true },
+    });
+    if (!supervisor) throw new NotFoundException('supervisor not found');
+    // A suspended account must not be handed a working way in — suspension
+    // revokes live links, and minting a fresh one would quietly undo it.
+    if (supervisor.user.status === 'suspended') {
+      throw new BadRequestException('this supervisor account is suspended');
+    }
+
+    const link = await this.magicLinks.mint({
+      subjectId: supervisorId,
+      subjectType: 'supervisor',
+      purpose: 'supervisor_report',
+    });
+    const appUrl = this.config.get<string>('SUPERVISOR_APP_URL', 'http://localhost:5175/supervisor');
+    const admin = await this.prisma.user.findUnique({ where: { id: adminUserId }, select: { name: true, email: true } });
+    await this.auditLog.record({
+      actorId: adminUserId,
+      actorLabel: admin?.email ?? admin?.name ?? adminUserId,
+      action: 'supervisor.login_link_minted',
+      entityType: 'Supervisor',
+      entityId: supervisorId,
+      note: `admin-minted login link for ${supervisor.user.name}`,
+    });
+    return { url: `${appUrl}/#magic=${link.token}`, expiresAt: link.expiresAt };
+  }
 
   createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor') {
     return this.accounts.createSupervisor(mobile, name, type);

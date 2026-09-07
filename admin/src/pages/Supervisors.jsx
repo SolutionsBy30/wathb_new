@@ -4,9 +4,27 @@ import AccountControls from '../components/AccountControls';
 
 export default function Supervisors() {
   const [items, setItems] = useState([]);
+  // ADM-098 — the minted link is held only for the supervisor it was minted
+  // for, and only until the next one: it is a working credential, so it should
+  // not linger on screen behind other rows.
+  const [link, setLink] = useState(null); // { supervisorId, url, expiresAt } | { supervisorId, error }
+  const [busyId, setBusyId] = useState(null);
 
   const load = () => api.listSupervisors().then(setItems);
   useEffect(() => { load(); }, []);
+
+  const mintLink = async (supervisorId) => {
+    setBusyId(supervisorId);
+    setLink(null);
+    try {
+      const res = await api.mintSupervisorLoginLink(supervisorId);
+      setLink({ supervisorId, ...res });
+    } catch (e) {
+      setLink({ supervisorId, error: e.message });
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -43,11 +61,54 @@ export default function Supervisors() {
                   </span>
                 </td>
                 <td style={td}>
-                  {/* ADM-086 — same controls as the students table. */}
-                  <AccountControls
-                    user={{ id: s.supervisorId, name: s.name, mobileE164: s.mobile, notificationEmail: s.notificationEmail, status: s.status }}
-                    onChanged={load}
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {/* ADM-086 — same controls as the students table. */}
+                      <AccountControls
+                        user={{ id: s.supervisorId, name: s.name, mobileE164: s.mobile, notificationEmail: s.notificationEmail, status: s.status }}
+                        onChanged={load}
+                      />
+                      {/* ADM-098 — hidden for a suspended account: the API
+                          refuses it anyway, and offering a button that can only
+                          fail reads as a fault rather than as a rule. */}
+                      {s.status !== 'suspended' && (
+                        <button
+                          onClick={() => mintLink(s.supervisorId)}
+                          disabled={busyId === s.supervisorId}
+                          title="ينشئ رابط دخول لبوابة هذا المشرف — أرسله إلى رقمه هو فقط"
+                          style={{ border: 'none', background: 'var(--indigo)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+                        >
+                          {busyId === s.supervisorId ? '…' : 'رابط الدخول'}
+                        </button>
+                      )}
+                    </div>
+
+                    {link?.supervisorId === s.supervisorId && (
+                      link.error ? (
+                        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>{link.error}</span>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '340px' }}>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <input
+                              readOnly
+                              value={link.url}
+                              onFocus={(e) => e.target.select()}
+                              style={{ flex: 1, padding: '5px 8px', borderRadius: '4px', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-latin)', fontSize: '10px' }}
+                            />
+                            <button
+                              onClick={() => navigator.clipboard?.writeText(link.url)}
+                              style={{ border: 'none', background: 'var(--lime)', color: 'var(--lime-ink)', borderRadius: '4px', padding: '5px 10px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+                            >
+                              نسخ
+                            </button>
+                          </div>
+                          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--coral)', lineHeight: 1.7 }}>
+                            هذا الرابط يفتح حساب المشرف مباشرة — أرسله إلى رقمه هو فقط، ولا تضعه في مجموعة. ينتهي خلال ٢٤ ساعة.
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
