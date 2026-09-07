@@ -212,8 +212,24 @@ export class FormService {
    */
   async generate(
     blueprintId: string,
-    opts: { code?: string; seed?: string; avoidReuse?: boolean; isStatic?: boolean; forStudentId?: string },
-    adminUserId: string,
+    opts: {
+      code?: string;
+      seed?: string;
+      avoidReuse?: boolean;
+      isStatic?: boolean;
+      forStudentId?: string;
+      /**
+       * Extra questions to keep out of this form, beyond the blueprint-wide
+       * exposure set. A dynamic form uses this for §4.4's per-student rule:
+       * what matters for a repeat attempt is that the student does not meet an
+       * item they have already sat.
+       */
+      excludeQuestionIds?: string[];
+      /** Dynamic forms are born published — nobody reviews a form of one. */
+      publish?: boolean;
+      note?: string;
+    },
+    actorUserId: string,
   ) {
     const bp = await this.blueprints.get(blueprintId);
 
@@ -225,6 +241,7 @@ export class FormService {
     const avoidReuse = opts.avoidReuse ?? true;
     const areaIds = [...new Set(bp.sections.flatMap((s) => s.quotas.map((q) => q.areaId)))];
     const exclude = avoidReuse ? await this.alreadyExposed(blueprintId) : new Set<string>();
+    for (const id of opts.excludeQuestionIds ?? []) exclude.add(id);
     const pool = await this.candidates(areaIds, exclude);
 
     const seed = opts.seed ?? randomUUID();
@@ -245,7 +262,8 @@ export class FormService {
         code,
         isStatic: opts.isStatic ?? true,
         seed,
-        status: 'draft',
+        status: opts.publish ? 'published' : 'draft',
+        publishedAt: opts.publish ? new Date() : null,
         forStudentId: opts.forStudentId ?? null,
         items: {
           create: result.items.map((i) => ({
@@ -260,12 +278,13 @@ export class FormService {
     });
 
     await this.audit.record({
-      actorId: adminUserId,
-      actorLabel: await this.label(adminUserId),
+      actorId: actorUserId,
+      actorLabel: await this.label(actorUserId),
       action: 'simulation_form_generate',
       entityType: 'simulation_form',
       entityId: form.id,
-      after: { code, seed, items: result.items.length, avoidReuse },
+      after: { code, seed, items: result.items.length, avoidReuse, isStatic: opts.isStatic ?? true },
+      note: opts.note,
     });
     return this.get(form.id);
   }

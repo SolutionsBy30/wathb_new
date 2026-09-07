@@ -62,6 +62,7 @@ function FreeAccountPanel({ packages, tests, onSaved }) {
       testIds: current.testIds ?? [],
       dailyWathbLimit: current.dailyWathbLimit ?? '',
       questionsPerDay: current.questionsPerDay ?? 5,
+      simulationsIncluded: current.simulationsIncluded ?? 0,
       dailyNotificationEnabled: current.dailyNotificationEnabled,
       reportVisibility: current.reportVisibility,
       weeklyReportEnabled: current.weeklyReportEnabled,
@@ -95,6 +96,7 @@ function FreeAccountPanel({ packages, tests, onSaved }) {
         testIds: draft.testIds,
         dailyWathbLimit: draft.dailyWathbLimit === '' ? null : Number(draft.dailyWathbLimit),
         questionsPerDay: Number(draft.questionsPerDay) || 1,
+        simulationsIncluded: Number(draft.simulationsIncluded) || 0,
         dailyNotificationEnabled: draft.dailyNotificationEnabled,
         reportVisibility: draft.reportVisibility,
         weeklyReportEnabled: draft.weeklyReportEnabled,
@@ -187,6 +189,17 @@ function FreeAccountPanel({ packages, tests, onSaved }) {
                 onChange={(e) => set({ questionsPerDay: e.target.value })}
               />
             </label>
+            {/* §5.5 — zero means the package does not include المحاكي at all,
+                which is the default: nobody can sit a simulation until this is
+                set deliberately. */}
+            <label style={{ flex: 1, minWidth: '160px', display: 'flex', flexDirection: 'column', gap: '4px', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+              محاولات المحاكي
+              <input
+                style={fieldStyle} type="number" min={0} placeholder="0 = غير مشمول"
+                value={draft.simulationsIncluded}
+                onChange={(e) => set({ simulationsIncluded: e.target.value })}
+              />
+            </label>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px', borderTop: '0.5px solid var(--on-indigo-line)' }}>
@@ -226,6 +239,7 @@ function NewPackageForm({ tests, onCreated }) {
   const [dailyNotificationEnabled, setDailyNotificationEnabled] = useState(true);
   const [dailyWathbLimit, setDailyWathbLimit] = useState('');
   const [questionsPerDay, setQuestionsPerDay] = useState(5);
+  const [simulationsIncluded, setSimulationsIncluded] = useState(0);
   const [sort, setSort] = useState(0);
   const [reportVisibility, setReportVisibility] = useState('full');
   const [weeklyReportEnabled, setWeeklyReportEnabled] = useState(true);
@@ -247,6 +261,7 @@ function NewPackageForm({ tests, onCreated }) {
         dailyNotificationEnabled, reportVisibility, weeklyReportEnabled, supervisorLinkingAllowed,
         dailyWathbLimit: dailyWathbLimit === '' ? null : Number(dailyWathbLimit),
         questionsPerDay: Number(questionsPerDay) || 5,
+        simulationsIncluded: Number(simulationsIncluded) || 0,
         sort: Number(sort) || 0,
       });
       setNameAr(''); setNameEn(''); setTestIds([]); setDurationMonths(1); setPriceSar(''); setCompareAtSar('');
@@ -307,6 +322,15 @@ function NewPackageForm({ tests, onCreated }) {
         value={questionsPerDay}
         onChange={(e) => setQuestionsPerDay(e.target.value)}
         title="عدد أسئلة الوثبة الواحدة"
+      />
+      <input
+        style={fieldStyle}
+        type="number"
+        min={0}
+        placeholder="محاولات المحاكي (0 = غير مشمول)"
+        value={simulationsIncluded}
+        onChange={(e) => setSimulationsIncluded(e.target.value)}
+        title="كم محاولة محاكٍ تشملها الباقة في الفترة الواحدة؛ صفر يعني أن الباقة لا تشمل المحاكي"
       />
       <input
         style={fieldStyle}
@@ -406,6 +430,9 @@ export default function Packages({ tests }) {
                     </span>
                     <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--mist)', padding: '3px 8px', borderRadius: '999px', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)' }}>
                       أسئلة/وثبة: {p.questionsPerDay}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--mist)', padding: '3px 8px', borderRadius: '999px', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)' }}>
+                      المحاكي: {p.simulationsIncluded ? p.simulationsIncluded : 'غير مشمول'}
                     </span>
                   </div>
                 </td>

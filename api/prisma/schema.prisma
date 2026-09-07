@@ -741,6 +741,11 @@ model Package {
   // so a stale "was" price can't render as a 0% or negative saving.
   compareAtHalalas         Int?
   questionsPerDay          Int               @default(5)
+  // §5.5 — how many المحاكي attempts this package entitles per subscription
+  // period. Zero means the package does not include the simulator at all,
+  // which is the safe default: a package that silently granted unlimited
+  // full-length forms would burn the question bank.
+  simulationsIncluded      Int               @default(0)
   // Display order on the student pricing screen, admin-controlled.
   sort                     Int               @default(0)
   // How many Wathbs a subscriber may take per day. null = unlimited (the

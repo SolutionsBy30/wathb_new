@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class UpsertPackageDto {
   @IsString() nameAr!: string;
@@ -7,6 +7,11 @@ export class UpsertPackageDto {
   @IsInt() @Min(1) durationMonths!: number;
   @IsInt() @Min(0) priceHalalas!: number;
   @IsOptional() @IsInt() @Min(1) questionsPerDay?: number;
+  // §5.5 — المحاكي attempts included per subscription period. 0 means the
+  // package does not include the simulator. Capped because Gate B already
+  // limits consumption to roughly four a month, so a larger number would only
+  // ever be a typo.
+  @IsOptional() @IsInt() @Min(0) @Max(50) simulationsIncluded?: number;
   // PAY-010 — the "was" price. Null clears it.
   @IsOptional() @IsInt() @Min(0) compareAtHalalas?: number | null;
   // Wathbs per day; null = unlimited. @IsOptional also passes null through,
