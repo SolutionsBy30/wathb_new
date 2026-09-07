@@ -189,6 +189,14 @@ export class PeopleController {
     return this.students.setNotificationPrefs(session.sub, dto);
   }
 
+  // STU-035 — the student sets their own school; the city follows from it.
+  // Nothing may be inserted between these decorators and the method.
+  @RequireSession('student')
+  @Patch('students/me/school')
+  setMySchool(@Body('schoolId') schoolId: string | null, @CurrentSession() session: SessionPayload) {
+    return this.students.setOwnSchool(session.sub, schoolId ?? null);
+  }
+
   @RequireSession('student')
   @Get('students/me/supervisors')
   listSupervisors(@CurrentSession() session: SessionPayload) {

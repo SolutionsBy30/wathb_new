@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { LeapHistoryTable } from '../components/LeapHistoryTable';
 import { LeapDetail } from '../components/LeapDetail';
+import { SchoolPicker } from '../components/SchoolPicker';
 
 const SUB_STATUS_LABEL = { pending: 'قيد الانتظار', active: 'فعّال', expired: 'منتهٍ', cancelled: 'ملغى', refunded: 'مُسترد' };
 const NOTIF_STATUS_LABEL = { scheduled: 'مجدول', sent: 'أُرسل', delivered: 'تم التسليم', read: 'قُرئ', failed: 'فشل' };
@@ -76,6 +77,22 @@ export default function StudentDetail({ studentId, onBack }) {
   const [leaps, setLeaps] = useState(null);
   // ADM-097 — which leap is expanded, if any.
   const [openLeapId, setOpenLeapId] = useState(null);
+  // ADM-099 — the school (and with it the city) is editable here; a student
+  // who moves school otherwise sits in the wrong cohort comparison forever.
+  const [schoolSaved, setSchoolSaved] = useState(false);
+  const [schoolError, setSchoolError] = useState(null);
+
+  const saveSchool = async (schoolId) => {
+    setSchoolSaved(false);
+    setSchoolError(null);
+    try {
+      await api.setStudentSchool(studentId, schoolId);
+      setSchoolSaved(true);
+      loadDetail();
+    } catch (e) {
+      setSchoolError(e.message);
+    }
+  };
   const [loginLink, setLoginLink] = useState(null);
   const [linkBusy, setLinkBusy] = useState(false);
 
@@ -112,11 +129,14 @@ export default function StudentDetail({ studentId, onBack }) {
     }
   };
 
-  useEffect(() => {
+  // ADM-099 — named so a save can refresh the page without duplicating the
+  // three calls that make it up.
+  const loadDetail = () => {
     api.studentDetail(studentId).then(setData).catch((e) => setError(e.message));
     api.studentReport(studentId).then(setReport).catch(() => {}); // ADM-051 — non-fatal if not enough data yet
     api.studentLeaps(studentId).then(setLeaps).catch(() => {});
-  }, [studentId]);
+  };
+  useEffect(() => { loadDetail(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId]);
 
   if (error) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--coral)' }}>{error}</p>;
   if (!data) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>جاري التحميل…</p>;
@@ -222,6 +242,21 @@ export default function StudentDetail({ studentId, onBack }) {
           <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>صالح 24 ساعة، يُستخدم مرة واحدة.</span>
         </div>
       )}
+
+      <Section title="المدينة والمدرسة">
+        <SchoolPicker
+          api={api}
+          value={{ schoolId: student.schoolId ?? student.school?.id ?? '', city: student.school?.city }}
+          onPick={saveSchool}
+          fieldStyle={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+          labelStyle={{ fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+        />
+        {schoolSaved && <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--teal)' }}>تم الحفظ.</p>}
+        {schoolError && <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>{schoolError}</p>}
+        <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)', lineHeight: 1.8 }}>
+          المدينة تتبع المدرسة تلقائياً. المدارس غير المدرجة تُضاف من شاشة «الجغرافيا والمدارس».
+        </p>
+      </Section>
 
       <Section title="سجل الوثبات">
         {leaps ? (

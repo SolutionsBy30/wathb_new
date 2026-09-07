@@ -127,6 +127,38 @@ export class StudentsService {
   }
 
   /**
+   * STU-035 — the student changes their own school.
+   *
+   * Separate from the admin path above because the admin may file a student
+   * anywhere in the registry, while a student may only pick a school that is
+   * genuinely selectable to them: an approved one, or one they themselves
+   * suggested and which is still awaiting review. Without that second case,
+   * suggesting a missing school would be a dead end — the student adds it and
+   * then cannot choose it.
+   *
+   * Nothing else in the profile is touched, and null is allowed: §4.8 makes
+   * the school optional and skippable, so a student must be able to take it
+   * back off as easily as they put it on.
+   */
+  async setOwnSchool(studentId: string, schoolId: string | null) {
+    if (schoolId) {
+      const school = await this.prisma.school.findUnique({ where: { id: schoolId } });
+      if (!school) throw new NotFoundException('school not found');
+      if (school.status !== 'approved' && school.suggestedByStudentId !== studentId) {
+        throw new BadRequestException('this school is still under review');
+      }
+    }
+    return this.prisma.student.update({
+      where: { userId: studentId },
+      data: { schoolId },
+      select: {
+        schoolId: true,
+        school: { include: { city: { include: { region: true } } } },
+      },
+    });
+  }
+
+  /**
    * ADM-052 — everything the student list's report link-out doesn't show:
    * subscription/payment history, the notification-delivery log, raw
    * session-by-session answers, and a device/link access log — for support
@@ -194,7 +226,14 @@ export class StudentsService {
   async me(studentId: string) {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentId },
-      include: { user: true, targetTest: true },
+      // STU-035 — the school comes down with the city and region so the
+      // profile's picker opens on where the student already is, rather than
+      // an empty form that reads as "never set".
+      include: {
+        user: true,
+        targetTest: true,
+        school: { include: { city: { include: { region: true } } } },
+      },
     });
     if (!student) throw new NotFoundException('student not found');
     return student;

@@ -78,6 +78,14 @@ export const api = {
   exchangeMagicLink: (token) => request(`/auth/magic/${token}`, { method: 'POST', auth: false }),
 
   listTests: () => request('/tests', { auth: false }),
+
+  // STU-035 — geography reference data for the school picker. Public, so no
+  // token is needed to read it.
+  listRegions: () => request('/geography/regions', { auth: false }),
+  listCities: (regionId) => request(`/geography/cities${regionId ? `?regionId=${regionId}` : ''}`, { auth: false }),
+  listSchools: (cityId) => request(`/geography/schools${cityId ? `?cityId=${cityId}` : ''}`, { auth: false }),
+  suggestSchool: (cityId, nameAr) => request('/geography/schools/suggest', { method: 'POST', body: { cityId, nameAr } }),
+  setMySchool: (schoolId) => request('/students/me/school', { method: 'PATCH', body: { schoolId } }),
   dailyTip: () => request('/daily-tip'),
   me: () => request('/students/me'),
   setGoal: (dto) => request('/students/me/goal', { method: 'PATCH', body: dto }),

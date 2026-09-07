@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../../design-system/components/Button';
 import { api, decodeSession, getToken, setToken } from '../../../api/client';
 import MyTests from './MyTests';
+import { SchoolPicker } from '../../../components/SchoolPicker';
 import { NOTIFICATION_SLOTS, slotById, slotIdFromHours, slotTimeRange } from '../../../lib/notification-slots';
 
 function formatDate(d) {
@@ -78,6 +79,26 @@ export default function Profile({ student, subscription, onManageSubscription, o
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailSaved, setEmailSaved] = useState(false);
   const [emailError, setEmailError] = useState(null);
+
+  // STU-035 — the student's own school. §4.8 keeps it optional, so this is
+  // shown as an ordinary editable field rather than something demanded, and
+  // it saves on pick without a separate button — there is only one value.
+  const [school, setSchool] = useState({
+    schoolId: student?.schoolId ?? student?.school?.id ?? '',
+    city: student?.school?.city,
+  });
+  const [schoolNote, setSchoolNote] = useState(null);
+
+  const saveSchool = async (schoolId) => {
+    setSchoolNote(null);
+    try {
+      const saved = await api.setMySchool(schoolId);
+      setSchool({ schoolId: saved.schoolId ?? '', city: saved.school?.city });
+      setSchoolNote(schoolId ? 'تم الحفظ.' : 'أُزيلت المدرسة.');
+    } catch (e) {
+      setSchoolNote(e.message);
+    }
+  };
 
   const toggleSkipDay = (id) => {
     setSkipDays((prev) => {
@@ -409,6 +430,23 @@ export default function Profile({ student, subscription, onManageSubscription, o
             </>
           )}
         </div>
+      </div>
+
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>مدينتي ومدرستي</h2>
+      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '420px' }}>
+        <SchoolPicker
+          api={api}
+          value={school}
+          onPick={saveSchool}
+          onSuggest={(cityId, nameAr) => api.suggestSchool(cityId, nameAr)}
+          allowSuggest
+          fieldStyle={{ padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}
+          labelStyle={{ fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+        />
+        <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)', lineHeight: 1.9 }}>
+          اختياري — يُستخدم لمقارنة أدائك بأداء طلاب مدرستك فقط، ولا يظهر لأحد باسمك.
+        </p>
+        {schoolNote && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--teal)' }}>{schoolNote}</span>}
       </div>
 
       <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>إعدادات الإشعارات</h2>
