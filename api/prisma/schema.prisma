@@ -81,33 +81,33 @@ enum SpeedBand {
 }
 
 model User {
-  id               String    @id @default(uuid())
-  mobileE164       String?   @unique
-  email            String?   @unique
-  passwordHash     String?
-  name             String
-  role             Role
-  locale           String    @default("ar")
-  timezone         String    @default("Asia/Riyadh")
-  status           String    @default("active")
-  whatsappOptInAt  DateTime?
+  id                        String    @id @default(uuid())
+  mobileE164                String?   @unique
+  email                     String?   @unique
+  passwordHash              String?
+  name                      String
+  role                      Role
+  locale                    String    @default("ar")
+  timezone                  String    @default("Asia/Riyadh")
+  status                    String    @default("active")
+  whatsappOptInAt           DateTime?
   // NOT-012 — email as a second notification channel, opt-in and independent
   // of WhatsApp. Deliberately NOT the `email` field above: that one is unique
   // and backs admin password login, so letting a student set it would both
   // collide across accounts and blur a login credential into a contact
   // detail. This one is contact-only and may repeat (a parent and child
   // sharing an inbox is normal).
-  notificationEmail          String?
-  emailNotificationsEnabled  Boolean   @default(false)
+  notificationEmail         String?
+  emailNotificationsEnabled Boolean   @default(false)
   // NOT-010 — STOP/إيقاف is honored instantly and permanently: set once,
   // never auto-cleared. Every outbound send path must check this first.
-  whatsappOptedOutAt DateTime?
+  whatsappOptedOutAt        DateTime?
   // ADM-085 — suspension is reversible and logged (see AuditLog), unlike
   // the STOP opt-out above. status flips to "suspended"/"active"; every
   // auth entry point (OTP request/verify, magic-link exchange, admin
   // login) checks status, and suspending revokes all live magic links.
-  suspendedAt      DateTime?
-  suspendReason    String?
+  suspendedAt               DateTime?
+  suspendReason             String?
   // ADM-088 — per-admin console permissions. Each entry is a nav-section key
   // (see admin-permissions.ts); an admin sees and can call only what is
   // listed. Empty means an admin who can log in but reach nothing, which is
@@ -117,9 +117,9 @@ model User {
   // is what gates managing other admins. Kept as a flag rather than a
   // permission string so "who can create admins" can never be handed out by
   // ticking a box in the same list as everything else.
-  adminPermissions String[]  @default([])
-  isSuperAdmin     Boolean   @default(false)
-  createdAt        DateTime  @default(now())
+  adminPermissions          String[]  @default([])
+  isSuperAdmin              Boolean   @default(false)
+  createdAt                 DateTime  @default(now())
 
   student    Student?
   supervisor Supervisor?
@@ -131,32 +131,34 @@ model User {
 }
 
 model Student {
-  userId           String    @id
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track            Track?
-  targetTestId     String?
-  targetTest       Test?     @relation(fields: [targetTestId], references: [id])
-  targetScore      Int?
-  testDate         DateTime?
-  skipDays         Int[]     @default([5]) // 0=Sunday..6=Saturday; default skips Friday (spec §6.2, KSA weekend)
-  notifSlotStartHour Int     @default(18)
-  notifSlotEndHour   Int     @default(20)
+  userId                   String    @id
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track                    Track?
+  targetTestId             String?
+  targetTest               Test?     @relation(fields: [targetTestId], references: [id])
+  targetScore              Int?
+  testDate                 DateTime?
+  skipDays                 Int[]     @default([5]) // 0=Sunday..6=Saturday; default skips Friday (spec §6.2, KSA weekend)
+  notifSlotStartHour       Int       @default(18)
+  notifSlotEndHour         Int       @default(20)
   // NOT-022 — the student has paused their daily nudge until this date
   // (exclusive: sending resumes ON this date). Distinct from the STOP opt-out
   // on User, which is permanent and channel-wide; this is temporary, reaches
   // only the daily leap, and the student sets it themselves from the link in
   // the message.
   notificationsPausedUntil DateTime?
-  currentStreak    Int       @default(0)
-  lastCompletedOn  DateTime?
-  placementDoneAt  DateTime?
+  currentStreak            Int       @default(0)
+  lastCompletedOn          DateTime?
+  placementDoneAt          DateTime?
   // Optional and skippable per spec §4.8 (PDPL: not strictly necessary to
   // deliver daily practice, so collection must stay opt-in).
-  schoolId         String?
-  school           School?   @relation(fields: [schoolId], references: [id])
+  schoolId                 String?
+  school                   School?   @relation(fields: [schoolId], references: [id])
 
-  wathbs             Wathb[]
+  wathbs              Wathb[]
   answers             Answer[]
+  simulationAttempts  SimulationAttempt[]
+  simulationOverrides SimulationOverride[]
   labelStats          StudentLabelStat[]
   supervisorLinks     StudentSupervisor[]
   subscriptions       Subscription[]
@@ -189,25 +191,25 @@ model StudentTest {
 }
 
 model Region {
-  id       String   @id @default(uuid())
+  id       String  @id @default(uuid())
   nameAr   String
   nameEn   String
   // ADM-063 — deactivate rather than hard-delete: a region with cities
   // (and those cities' schools/students) beneath it can't be dropped
   // without orphaning them, but it should disappear from active pickers.
-  isActive Boolean  @default(true)
+  isActive Boolean @default(true)
   cities   City[]
 
   @@map("regions")
 }
 
 model City {
-  id       String       @id @default(uuid())
+  id       String      @id @default(uuid())
   regionId String
-  region   Region       @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  region   Region      @relation(fields: [regionId], references: [id], onDelete: Cascade)
   nameAr   String
   nameEn   String
-  isActive Boolean      @default(true)
+  isActive Boolean     @default(true)
   schools  School[]
   aliases  CityAlias[]
 
@@ -232,14 +234,14 @@ enum SchoolStatus {
 }
 
 model School {
-  id                    String       @id @default(uuid())
-  cityId                String
-  city                  City         @relation(fields: [cityId], references: [id], onDelete: Cascade)
-  nameAr                String
-  nameEn                String?
-  status                SchoolStatus @default(approved)
-  suggestedByStudentId  String?
-  createdAt             DateTime     @default(now())
+  id                   String       @id @default(uuid())
+  cityId               String
+  city                 City         @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  nameAr               String
+  nameEn               String?
+  status               SchoolStatus @default(approved)
+  suggestedByStudentId String?
+  createdAt            DateTime     @default(now())
 
   students Student[]
 
@@ -247,13 +249,13 @@ model School {
 }
 
 model Supervisor {
-  userId              String         @id
-  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type                SupervisorType
+  userId            String         @id
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              SupervisorType
   // §5.3 — supervisor can set day/time for the weekly report and mute it.
-  weeklyReportDay     Int            @default(4) // 0=Sunday..6=Saturday; default Thursday
-  weeklyReportHour    Int            @default(20)
-  weeklyReportMuted   Boolean        @default(false)
+  weeklyReportDay   Int            @default(4) // 0=Sunday..6=Saturday; default Thursday
+  weeklyReportHour  Int            @default(20)
+  weeklyReportMuted Boolean        @default(false)
 
   studentLinks StudentSupervisor[]
 
@@ -287,21 +289,23 @@ model StudentSupervisor {
 }
 
 model Test {
-  id       String       @id @default(uuid())
-  nameAr   String
-  nameEn   String
+  id           String          @id @default(uuid())
+  nameAr       String
+  nameEn       String
   // ADM-012 — chosen once at creation; governs the language/direction of
   // every section/area/label name and every question stem/option/
   // explanation authored beneath this test. nameAr/nameEn above are just
   // the admin-facing bilingual labels for the test itself and are
   // unrelated to this — a Qiyas test is still called both things in the
   // admin nav regardless of which language its content is authored in.
-  language ContentLanguage @default(ar)
-  isActive Boolean         @default(true)
-  sections Section[]
-  students Student[]
+  language     ContentLanguage @default(ar)
+  isActive     Boolean         @default(true)
+  sections     Section[]
+  students     Student[]
   studentTests StudentTest[]
-  wathbs   Wathb[]
+  wathbs       Wathb[]
+
+  simulationBlueprints SimulationBlueprint[]
 
   @@map("tests")
 }
@@ -325,40 +329,42 @@ model Section {
 }
 
 model Area {
-  id               String   @id @default(uuid())
-  sectionId        String
-  section          Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  nameAr           String
-  nameEn           String
-  appliesToTracks  Track[]
-  sort             Int      @default(0)
-  labels           Label[]
+  id              String  @id @default(uuid())
+  sectionId       String
+  section         Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  nameAr          String
+  nameEn          String
+  appliesToTracks Track[]
+  sort            Int     @default(0)
+  labels          Label[]
+
+  simulationQuotas SimulationAreaQuota[]
 
   @@map("areas")
 }
 
 model Label {
-  id                String     @id @default(uuid())
+  id                String  @id @default(uuid())
   areaId            String
-  area              Area       @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  area              Area    @relation(fields: [areaId], references: [id], onDelete: Cascade)
   nameAr            String
   nameEn            String
-  defaultTimeLimitS Int        @default(45)
-  sort              Int        @default(0)
-  isRetired         Boolean    @default(false)
+  defaultTimeLimitS Int     @default(45)
+  sort              Int     @default(0)
+  isRetired         Boolean @default(false)
 
-  passages          Passage[]
-  questions         Question[]
-  labelStats        StudentLabelStat[]
-  adviceRules       AdviceRule[]
+  passages    Passage[]
+  questions   Question[]
+  labelStats  StudentLabelStat[]
+  adviceRules AdviceRule[]
 
   @@map("labels")
 }
 
 model Passage {
-  id        String     @id @default(uuid())
+  id        String         @id @default(uuid())
   labelId   String
-  label     Label      @relation(fields: [labelId], references: [id])
+  label     Label          @relation(fields: [labelId], references: [id])
   body      String
   status    QuestionStatus @default(draft)
   questions Question[]
@@ -367,25 +373,26 @@ model Passage {
 }
 
 model Question {
-  id                String         @id @default(uuid())
-  labelId           String
-  label             Label          @relation(fields: [labelId], references: [id])
-  passageId         String?
-  passage           Passage?       @relation(fields: [passageId], references: [id])
-  type              QuestionType   @default(mcq_single)
-  difficulty        Int            @default(3)
-  timeLimitS        Int?
-  status            QuestionStatus @default(draft)
-  source            String?
-  stemHash          String
-  currentVersionId  String?
-  createdBy         String?
-  createdAt         DateTime       @default(now())
+  id               String         @id @default(uuid())
+  labelId          String
+  label            Label          @relation(fields: [labelId], references: [id])
+  passageId        String?
+  passage          Passage?       @relation(fields: [passageId], references: [id])
+  type             QuestionType   @default(mcq_single)
+  difficulty       Int            @default(3)
+  timeLimitS       Int?
+  status           QuestionStatus @default(draft)
+  source           String?
+  stemHash         String
+  currentVersionId String?
+  createdBy        String?
+  createdAt        DateTime       @default(now())
 
-  versions          QuestionVersion[] @relation("QuestionToVersions")
-  wathbQuestions    WathbQuestion[]
-  answers           Answer[]
-  problemReports    ProblemReport[]
+  versions            QuestionVersion[]    @relation("QuestionToVersions")
+  wathbQuestions      WathbQuestion[]
+  answers             Answer[]
+  simulationFormItems SimulationFormItem[]
+  problemReports      ProblemReport[]
 
   @@index([labelId, status])
   @@index([stemHash])
@@ -393,21 +400,22 @@ model Question {
 }
 
 model QuestionVersion {
-  id            String   @id @default(uuid())
-  questionId    String
-  question      Question @relation("QuestionToVersions", fields: [questionId], references: [id], onDelete: Cascade)
-  version       Int
-  stem          String
-  stemImageUrl  String?
-  options       Json
-  correctKey    String
-  explanation   String
-  createdAt     DateTime @default(now())
-  createdBy     String?
+  id           String   @id @default(uuid())
+  questionId   String
+  question     Question @relation("QuestionToVersions", fields: [questionId], references: [id], onDelete: Cascade)
+  version      Int
+  stem         String
+  stemImageUrl String?
+  options      Json
+  correctKey   String
+  explanation  String
+  createdAt    DateTime @default(now())
+  createdBy    String?
 
-  wathbQuestions WathbQuestion[]
-  answers        Answer[]
-  stats          QuestionStats?
+  wathbQuestions      WathbQuestion[]
+  answers             Answer[]
+  stats               QuestionStats?
+  simulationFormItems SimulationFormItem[]
 
   @@unique([questionId, version])
   @@map("question_versions")
@@ -420,43 +428,43 @@ model QuestionVersion {
 // exists (MIN_SAMPLE_FOR_REPORTING), same statistical-honesty discipline as
 // student-facing reports.
 model QuestionStats {
-  questionVersionId String          @id
-  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
-  nServed           Int             @default(0)
-  nCorrect          Int             @default(0)
-  pValue            Float?
-  discrimination    Float?
-  meanTimeMs        Int             @default(0)
-  timeoutRate       Float           @default(0)
-  distractorDist    Json?
+  questionVersionId    String          @id
+  questionVersion      QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  nServed              Int             @default(0)
+  nCorrect             Int             @default(0)
+  pValue               Float?
+  discrimination       Float?
+  meanTimeMs           Int             @default(0)
+  timeoutRate          Float           @default(0)
+  distractorDist       Json?
   // STU-012 — explanation 👍/👎 counts, surfaced on the admin solution-
   // performance screen alongside p-value/discrimination.
-  explanationUpvotes   Int          @default(0)
-  explanationDownvotes Int          @default(0)
-  updatedAt         DateTime        @updatedAt
+  explanationUpvotes   Int             @default(0)
+  explanationDownvotes Int             @default(0)
+  updatedAt            DateTime        @updatedAt
 
   @@map("question_stats")
 }
 
 model Wathb {
-  id            String      @id @default(uuid())
-  studentId     String
-  student       Student     @relation(fields: [studentId], references: [userId], onDelete: Cascade)
-  scheduledFor  DateTime    @db.Date
+  id           String      @id @default(uuid())
+  studentId    String
+  student      Student     @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  scheduledFor DateTime    @db.Date
   // Which test this bundle drew from. Nullable only for rows predating
   // multi-test support; every new bundle records it so leap history can
   // show the test without inferring it from the student's current focus.
-  testId        String?
-  test          Test?       @relation(fields: [testId], references: [id])
+  testId       String?
+  test         Test?       @relation(fields: [testId], references: [id])
   // Paid students may take any number of Wathbs per day; sequence numbers
   // them within the day (0 = the planned/first bundle — the one the daily
   // WhatsApp notification links to). Free tier stays capped at sequence 0.
-  sequence      Int         @default(0)
-  bundleType    BundleType  @default(standard)
-  status        WathbStatus @default(pending)
-  openedAt      DateTime?
-  completedAt   DateTime?
-  magicLinkId   String?
+  sequence     Int         @default(0)
+  bundleType   BundleType  @default(standard)
+  status       WathbStatus @default(pending)
+  openedAt     DateTime?
+  completedAt  DateTime?
+  magicLinkId  String?
 
   questions WathbQuestion[]
   answers   Answer[]
@@ -481,26 +489,26 @@ model WathbQuestion {
 }
 
 model Answer {
-  id                String          @id @default(uuid())
+  id                String             @id @default(uuid())
   wathbId           String
-  wathb             Wathb           @relation(fields: [wathbId], references: [id], onDelete: Cascade)
+  wathb             Wathb              @relation(fields: [wathbId], references: [id], onDelete: Cascade)
   studentId         String
-  student           Student         @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  student           Student            @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   questionId        String
-  question          Question        @relation(fields: [questionId], references: [id])
+  question          Question           @relation(fields: [questionId], references: [id])
   questionVersionId String
-  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id])
+  questionVersion   QuestionVersion    @relation(fields: [questionVersionId], references: [id])
   labelId           String
   selectedKey       String?
   isCorrect         Boolean
   timeTakenMs       Int
-  timedOut          Boolean         @default(false)
-  isReview          Boolean         @default(false)
-  answeredAt        DateTime        @default(now())
+  timedOut          Boolean            @default(false)
+  isReview          Boolean            @default(false)
+  answeredAt        DateTime           @default(now())
   // STU-012 — one-tap 👍/👎 on the explanation shown for this served answer.
   explanationRating ExplanationRating?
 
-  problemReports    ProblemReport[]
+  problemReports ProblemReport[]
 
   @@unique([wathbId, questionId])
   @@map("answers")
@@ -539,19 +547,19 @@ enum ProblemReportStatus {
 }
 
 model MagicLink {
-  id            String            @id @default(uuid())
-  tokenHash     String            @unique
-  subjectId     String
-  subjectType   SubjectType
-  purpose       MagicLinkPurpose
-  targetId      String?
-  expiresAt     DateTime
-  maxUses       Int               @default(1)
-  uses          Int               @default(0)
-  firstUsedAt   DateTime?
-  lastUsedAt    DateTime?
-  revokedAt     DateTime?
-  createdAt     DateTime          @default(now())
+  id          String           @id @default(uuid())
+  tokenHash   String           @unique
+  subjectId   String
+  subjectType SubjectType
+  purpose     MagicLinkPurpose
+  targetId    String?
+  expiresAt   DateTime
+  maxUses     Int              @default(1)
+  uses        Int              @default(0)
+  firstUsedAt DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime         @default(now())
 
   accessLog MagicLinkAccess[]
 
@@ -572,13 +580,13 @@ model MagicLinkAccess {
 // Materialised on every answer write — the selection engine reads this, never `answers` directly.
 model StudentLabelStat {
   studentId       String
-  student         Student  @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  student         Student   @relation(fields: [studentId], references: [userId], onDelete: Cascade)
   labelId         String
-  label           Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
-  nAnswered       Int      @default(0)
-  nCorrect        Int      @default(0)
-  meanTimeMs      Int      @default(0)
-  difficultyLevel Int      @default(3)
+  label           Label     @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  nAnswered       Int       @default(0)
+  nCorrect        Int       @default(0)
+  meanTimeMs      Int       @default(0)
+  difficultyLevel Int       @default(3)
   lastServedAt    DateTime?
 
   @@id([studentId, labelId])
@@ -719,36 +727,36 @@ enum ReportVisibility {
 // package" special case. A paid package simply carries the unrestricted
 // defaults below.
 model Package {
-  id              String            @id @default(uuid())
-  nameAr          String
-  nameEn          String
-  testIds         String[]
-  durationMonths  Int
-  priceHalalas    Int // VAT-inclusive, 15% KSA — spec §4.5
+  id                       String            @id @default(uuid())
+  nameAr                   String
+  nameEn                   String
+  testIds                  String[]
+  durationMonths           Int
+  priceHalalas             Int // VAT-inclusive, 15% KSA — spec §4.5
   // PAY-010 — the "was" price, for a strikethrough next to priceHalalas.
   // Deliberately NOT a percentage: the amount charged stays the single source
   // of truth in priceHalalas, and this is presentation only, so a discount can
   // never drift from what the gateway is actually asked for. Null = no
   // discount shown. Ignored when it is not strictly greater than priceHalalas,
   // so a stale "was" price can't render as a 0% or negative saving.
-  compareAtHalalas Int?
-  questionsPerDay Int               @default(5)
+  compareAtHalalas         Int?
+  questionsPerDay          Int               @default(5)
   // Display order on the student pricing screen, admin-controlled.
-  sort            Int               @default(0)
+  sort                     Int               @default(0)
   // How many Wathbs a subscriber may take per day. null = unlimited (the
   // paid default); the free tier is backfilled to 1 by the migration.
-  dailyWathbLimit Int?
-  isActive        Boolean           @default(true)
+  dailyWathbLimit          Int?
+  isActive                 Boolean           @default(true)
   // FRE-009 — the package every new account is enrolled into automatically.
   // At most one may be true; PackagesService enforces that by clearing the
   // previous holder in the same transaction.
-  isDefault       Boolean           @default(false)
-  visibility      PackageVisibility @default(public)
-  dailyNotificationEnabled  Boolean           @default(true) // FRE-002
-  reportVisibility          ReportVisibility  @default(full) // FRE-004
-  weeklyReportEnabled       Boolean           @default(true) // FRE-005
-  supervisorLinkingAllowed  Boolean           @default(true) // FRE-006
-  createdAt       DateTime          @default(now())
+  isDefault                Boolean           @default(false)
+  visibility               PackageVisibility @default(public)
+  dailyNotificationEnabled Boolean           @default(true) // FRE-002
+  reportVisibility         ReportVisibility  @default(full) // FRE-004
+  weeklyReportEnabled      Boolean           @default(true) // FRE-005
+  supervisorLinkingAllowed Boolean           @default(true) // FRE-006
+  createdAt                DateTime          @default(now())
 
   subscriptions Subscription[]
 
@@ -763,22 +771,22 @@ enum DiscountKind {
 }
 
 model DiscountCode {
-  id              String       @id @default(uuid())
+  id             String       @id @default(uuid())
   // Stored uppercase and matched case-insensitively — students type these by
   // hand off a poster or a WhatsApp message.
-  code            String       @unique
-  kind            DiscountKind
+  code           String       @unique
+  kind           DiscountKind
   // percent: 1..100. fixed: halalas off, clamped so a total never goes below
   // zero (a code worth more than the package makes it free, not negative).
-  value           Int
+  value          Int
   // Empty = every package. Otherwise only these.
-  packageIds      String[]     @default([])
-  maxRedemptions  Int?
-  timesRedeemed   Int          @default(0)
-  startsAt        DateTime?
-  expiresAt       DateTime?
-  isActive        Boolean      @default(true)
-  createdAt       DateTime     @default(now())
+  packageIds     String[]     @default([])
+  maxRedemptions Int?
+  timesRedeemed  Int          @default(0)
+  startsAt       DateTime?
+  expiresAt      DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
 
   subscriptions Subscription[]
 
@@ -794,15 +802,15 @@ enum SubscriptionStatus {
 }
 
 model Subscription {
-  id                  String             @id @default(uuid())
-  studentId           String
-  student             Student            @relation(fields: [studentId], references: [userId], onDelete: Cascade)
-  packageId           String
-  package             Package            @relation(fields: [packageId], references: [id])
+  id                   String             @id @default(uuid())
+  studentId            String
+  student              Student            @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  packageId            String
+  package              Package            @relation(fields: [packageId], references: [id])
   // Snapshot at purchase time — spec §4.5: "changes [to package price] never
   // touch active subs."
   priceSnapshotHalalas Int
-  startsAt            DateTime?
+  startsAt             DateTime?
   endsAt               DateTime?
   status               SubscriptionStatus @default(pending)
   paymentRef           String?
@@ -816,8 +824,8 @@ model Subscription {
   // snapshotted: the code's value may be edited later, and an invoice must
   // still explain the amount that was charged.
   discountCodeId       String?
-  discountCode         DiscountCode? @relation(fields: [discountCodeId], references: [id])
-  discountHalalas      Int           @default(0)
+  discountCode         DiscountCode?      @relation(fields: [discountCodeId], references: [id])
+  discountHalalas      Int                @default(0)
 
   @@map("subscriptions")
 }
@@ -920,4 +928,299 @@ model NotificationProvider {
   updatedAt DateTime @updatedAt
 
   @@map("notification_providers")
+}
+
+// ─── SIM-001 — المحاكي: full-length, exam-condition simulation ───────────────
+//
+// Deliberately blueprint-driven rather than Qudurat-specific: every test has a
+// different structure (قدرات محوسب/ورقي، تحصيلي، later STEP), and the
+// acceptance criteria require a second blueprint to run on the same engine
+// with configuration only. Qudurat محوسب is blueprint #1, not the model.
+
+enum SimulationMode {
+  computerized
+  paper
+}
+
+enum SimulationStatus {
+  draft
+  published
+  archived
+}
+
+enum SimulationAttemptStatus {
+  not_started
+  in_progress
+  completed
+  expired
+  abandoned
+}
+
+enum SectionLockReason {
+  manual
+  timeout
+  abandon
+}
+
+enum NavigationPolicy {
+  free_within_section
+  linear_only
+}
+
+model SimulationBlueprint {
+  id     String         @id @default(uuid())
+  testId String
+  test   Test           @relation(fields: [testId], references: [id])
+  mode   SimulationMode @default(computerized)
+  nameAr String
+  nameEn String
+
+  totalQuestions       Int
+  sectionCount         Int
+  sectionDurationS     Int              @default(1500) // 25 minutes
+  breakBetweenSections Boolean          @default(false)
+  breakDurationS       Int              @default(0)
+  navigationPolicy     NavigationPolicy @default(free_within_section)
+  allowFlagReview      Boolean          @default(true)
+  calculatorAllowed    Boolean          @default(false)
+  scratchpad           String           @default("digital") // digital | none
+  difficultyOrdering   String           @default("ascending") // ascending | none
+  experimentalCount    Int              @default(4)
+
+  // §5.6 Gate A/B. Per-blueprint because a تحصيلي simulation may reasonably
+  // demand a different history from a قدرات one.
+  minCompletedLeaps       Int     @default(20)
+  minAnsweredQuestions    Int     @default(100)
+  minCoverageAreas        Boolean @default(false)
+  minDaysBetweenAttempts  Int     @default(7)
+  minLeapsBetweenAttempts Int     @default(7)
+  requirePlacement        Boolean @default(true)
+
+  status    SimulationStatus @default(draft)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  sections        SimulationSectionTemplate[]
+  forms           SimulationForm[]
+  attempts        SimulationAttempt[]
+  scoringProfiles ScoringProfile[]
+  overrides       SimulationOverride[]
+
+  @@index([testId, status])
+  @@map("simulation_blueprints")
+}
+
+model SimulationSectionTemplate {
+  id                String              @id @default(uuid())
+  blueprintId       String
+  blueprint         SimulationBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  orderIndex        Int
+  /// verbal (لفظي) | quantitative (كمي) | mixed
+  part              String
+  questionCount     Int
+  durationS         Int
+  /// Positions (0-based, within the section) that hold unscored pilot items.
+  experimentalSlots Int[]               @default([])
+
+  quotas SimulationAreaQuota[]
+
+  @@unique([blueprintId, orderIndex])
+  @@map("simulation_section_templates")
+}
+
+/// area_quotas[] from §2.2, as rows rather than JSON so the readiness check
+/// (§9) can join against the bank and report shortfalls per area.
+model SimulationAreaQuota {
+  id              String                    @id @default(uuid())
+  sectionId       String
+  section         SimulationSectionTemplate @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  areaId          String
+  area            Area                      @relation(fields: [areaId], references: [id])
+  count           Int
+  /// ascending | none — overrides the blueprint default for this area.
+  difficultyCurve String                    @default("ascending")
+
+  @@unique([sectionId, areaId])
+  @@map("simulation_area_quotas")
+}
+
+/// A materialised, immutable instance of a blueprint: a specific question set
+/// in a fixed order. Immutability is what lets two students taking نموذج ٣ be
+/// compared at all (acceptance criterion 3).
+model SimulationForm {
+  id           String              @id @default(uuid())
+  blueprintId  String
+  blueprint    SimulationBlueprint @relation(fields: [blueprintId], references: [id])
+  /// نموذج ٣ — what a student and a report call it.
+  code         String
+  isStatic     Boolean             @default(true)
+  /// The RNG seed the assembly ran with, so a form is reproducible and
+  /// auditable rather than a one-off accident.
+  seed         String
+  status       SimulationStatus    @default(draft)
+  publishedAt  DateTime?
+  /// Set for a dynamic form so it is never mixed into cohort comparison.
+  forStudentId String?
+  createdAt    DateTime            @default(now())
+
+  items    SimulationFormItem[]
+  attempts SimulationAttempt[]
+
+  @@unique([blueprintId, code])
+  @@index([blueprintId, status])
+  @@map("simulation_forms")
+}
+
+model SimulationFormItem {
+  id                String          @id @default(uuid())
+  formId            String
+  form              SimulationForm  @relation(fields: [formId], references: [id], onDelete: Cascade)
+  sectionIndex      Int
+  position          Int
+  questionId        String
+  question          Question        @relation(fields: [questionId], references: [id])
+  /// Pinned at publish: an edit or retirement of the question must never
+  /// change a form somebody has already sat (§10).
+  questionVersionId String
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id])
+  /// Experimental (تجريبية) items are excluded from every score surface but
+  /// still gather statistics.
+  isScored          Boolean         @default(true)
+
+  answers SimulationAnswer[]
+
+  @@unique([formId, sectionIndex, position])
+  @@index([questionId])
+  @@map("simulation_form_items")
+}
+
+model SimulationAttempt {
+  id            String                  @id @default(uuid())
+  studentId     String
+  student       Student                 @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  formId        String
+  form          SimulationForm          @relation(fields: [formId], references: [id])
+  blueprintId   String
+  blueprint     SimulationBlueprint     @relation(fields: [blueprintId], references: [id])
+  status        SimulationAttemptStatus @default(not_started)
+  startedAt     DateTime?
+  finalizedAt   DateTime?
+  /// The subscription the entitlement was drawn from, so a void can refund it.
+  entitlementId String?
+
+  /// §7.2 — cohort analytics never join live to enrolment, because a student
+  /// who changes school must not retroactively move their old results.
+  schoolSnapshot String?
+  citySnapshot   String?
+  regionSnapshot String?
+
+  createdAt DateTime @default(now())
+
+  sections SimulationAttemptSection[]
+  answers  SimulationAnswer[]
+  result   SimulationResult?
+  events   SimulationEventLog[]
+
+  @@index([studentId, status])
+  @@index([formId])
+  @@map("simulation_attempts")
+}
+
+model SimulationAttemptSection {
+  id           String             @id @default(uuid())
+  attemptId    String
+  attempt      SimulationAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  sectionIndex Int
+  startedAt    DateTime
+  /// Authoritative deadline, written server-side at section start. The client
+  /// clock is display only (§5.1).
+  expiresAt    DateTime
+  submittedAt  DateTime?
+  lockReason   SectionLockReason?
+
+  @@unique([attemptId, sectionIndex])
+  @@map("simulation_attempt_sections")
+}
+
+model SimulationAnswer {
+  id                 String             @id @default(uuid())
+  attemptId          String
+  attempt            SimulationAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  formItemId         String
+  formItem           SimulationFormItem @relation(fields: [formItemId], references: [id])
+  selectedKey        String?
+  isCorrect          Boolean?
+  timeSpentMs        Int                @default(0)
+  flagged            Boolean            @default(false)
+  /// §7.4 — first answer vs final answer is a strong signal for both guessing
+  /// and second-guessing.
+  answerChangesCount Int                @default(0)
+  answeredAt         DateTime?
+
+  @@unique([attemptId, formItemId])
+  @@map("simulation_answers")
+}
+
+model SimulationResult {
+  attemptId        String            @id
+  attempt          SimulationAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  rawScore         Int
+  scoredCount      Int
+  /// Null until a scoring profile exists — §12.1 is unresolved, and a made-up
+  /// scaled score is worse than none.
+  scaledEstimate   Int?
+  verbalEstimate   Int?
+  quantEstimate    Int?
+  areaBreakdown    Json
+  sectionBreakdown Json
+  pacing           Json
+  percentile       Float?
+  computedAt       DateTime          @default(now())
+
+  @@map("simulation_results")
+}
+
+model SimulationEventLog {
+  id        String            @id @default(uuid())
+  attemptId String
+  attempt   SimulationAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  /// focus_lost | resume | scratchpad_open | section_start | section_lock | ...
+  type      String
+  detail    String?
+  at        DateTime          @default(now())
+
+  @@index([attemptId, at])
+  @@map("simulation_event_logs")
+}
+
+/// §5.6 — an admin-granted, logged, one-off exemption from the gates. No
+/// self-service bypass and no bypass by purchasing.
+model SimulationOverride {
+  id          String              @id @default(uuid())
+  studentId   String
+  student     Student             @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  blueprintId String
+  blueprint   SimulationBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  grantedBy   String
+  reason      String
+  grantedAt   DateTime            @default(now())
+  usedAt      DateTime?
+
+  @@index([studentId, blueprintId])
+  @@map("simulation_overrides")
+}
+
+/// §7.1 — versioned raw→scaled equating table. Versioned because republishing
+/// one must never silently restate scores already reported to a student.
+model ScoringProfile {
+  id          String              @id @default(uuid())
+  blueprintId String
+  blueprint   SimulationBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  version     Int                 @default(1)
+  rawToScaled Json
+  isActive    Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+
+  @@unique([blueprintId, version])
+  @@map("scoring_profiles")
 }
