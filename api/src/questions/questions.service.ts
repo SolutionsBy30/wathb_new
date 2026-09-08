@@ -219,9 +219,31 @@ export class QuestionsService {
         createdBy,
       },
     });
+    // ADM-100 — the question row carries the taxonomy, the type and the
+    // source; only the wording lives on the version. Those fields were
+    // missing here, so the editor's own dropdowns silently did nothing on an
+    // existing question: re-classifying one to a different section, area or
+    // label appeared to save and changed nothing. `create` has always written
+    // them, which is why a NEW question filed correctly and an EDITED one
+    // could not be moved.
+    //
+    // Moving a question does not rewrite history: an Answer row snapshots the
+    // labelId it was served under, so past analytics stay bound to where the
+    // question was at the time.
     return this.prisma.question.update({
       where: { id: questionId },
-      data: { currentVersionId: version.id, stemHash: stemHash(dto.stem), difficulty: dto.difficulty, timeLimitS: dto.timeLimitS },
+      data: {
+        currentVersionId: version.id,
+        stemHash: stemHash(dto.stem),
+        labelId: dto.labelId,
+        // Both optional in the DTO. Prisma skips an undefined field, so a
+        // caller that omits either leaves it as it was.
+        passageId: dto.passageId,
+        type: dto.type,
+        difficulty: dto.difficulty,
+        timeLimitS: dto.timeLimitS,
+        source: dto.source,
+      },
     });
   }
 
