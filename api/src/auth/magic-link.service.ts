@@ -15,6 +15,12 @@ const TTL_SECONDS_BY_PURPOSE: Record<MagicLinkPurpose, number> = {
   supervisor_report: MAGIC_LINK_TTL_SECONDS,
   renewal: MAGIC_LINK_TTL_SECONDS,
   link_invite: MAGIC_LINK_TTL_SECONDS,
+  // §7.6 — the simulation report is the artefact that justifies the
+  // subscription and a supervisor may well open it days later, over a weekend
+  // or after a school week. A 24h link would expire before most of them read
+  // it, and re-minting means another WhatsApp message. Scoped to one attempt
+  // by targetId, so the longer life buys a wider window, not wider access.
+  simulation_report: 7 * MAGIC_LINK_TTL_SECONDS,
 };
 
 function hashToken(raw: string): string {

@@ -3,6 +3,7 @@ import { Prisma, SimulationAttempt } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EligibilityService } from './eligibility.service';
 import { FormService } from './form.service';
+import { SimulationNotifyService } from './simulation-notify.service';
 import {
   acceptsAnswer,
   closeReasonFor,
@@ -23,6 +24,7 @@ export class AttemptService {
     private prisma: PrismaService,
     private eligibility: EligibilityService,
     private forms: FormService,
+    private notify: SimulationNotifyService,
   ) {}
 
   // ---------------------------------------------------------------- reading
@@ -603,7 +605,7 @@ export class AttemptService {
       trigger,
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const finalized = await this.prisma.$transaction(async (tx) => {
       for (const s of sections.filter((x) => !x.submittedAt)) {
         await tx.simulationAttemptSection.update({
           where: { id: s.id },
@@ -638,5 +640,12 @@ export class AttemptService {
         data: { status, finalizedAt: now },
       });
     });
+
+    // §7.6 — outside the transaction and deliberately not awaited for its
+    // result: the exam is over and the result exists whether or not WhatsApp
+    // is reachable. A send failure must never roll back a finalized attempt.
+    await this.notify.notifyResult(attempt.id);
+
+    return finalized;
   }
 }

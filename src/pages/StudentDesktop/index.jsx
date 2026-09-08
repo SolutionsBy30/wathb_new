@@ -18,6 +18,7 @@ import Pricing from './screens/Pricing';
 import WeeklyReport from './screens/WeeklyReport';
 import SimulationEntry from './simulation/SimulationEntry';
 import SimulationRunner from './simulation/SimulationRunner';
+import SimulationReport from './simulation/SimulationReport';
 import './simulation/simulation.css';
 
 export default function StudentDesktop() {
@@ -66,6 +67,8 @@ export default function StudentDesktop() {
   // runner so a page load can drop the student straight back into a section
   // that is still running (§5.4).
   const [simulation, setSimulation] = useState(null);
+  // The finalized attempt whose report is open, or null.
+  const [simulationReportId, setSimulationReportId] = useState(null);
 
   const timerRef = useRef(null);
   const submittingRef = useRef(false);
@@ -105,12 +108,17 @@ export default function StudentDesktop() {
     const goMatch = window.location.hash.match(/[#&]go=([a-zA-Z]+)/);
     const goTarget = goMatch ? goMatch[1] : null;
     let magicPurpose = null;
+    let magicTargetId = null;
     let magicLinkFailed = false;
     if (hashMatch) {
       try {
         const { token: sessionToken } = await api.exchangeMagicLink(hashMatch[1]);
         setToken(sessionToken);
-        magicPurpose = decodeSession(sessionToken)?.purpose ?? null;
+        const decoded = decodeSession(sessionToken);
+        magicPurpose = decoded?.purpose ?? null;
+        // §7.6 — the result link is scoped to one attempt, so it can open that
+        // report directly instead of the simulator's index.
+        magicTargetId = decoded?.targetId ?? null;
         window.history.replaceState(null, '', window.location.pathname);
       } catch {
         // An already-used/expired link is only a dead end when there's no
@@ -182,8 +190,19 @@ export default function StudentDesktop() {
         // NOT-022 — and the daily message's "manage notifications" link lands
         // on the profile, where the send time, the temporary pause and the
         // per-test switches all already live.
+        if (magicPurpose === 'simulation_report' && magicTargetId) {
+          setSimulationReportId(magicTargetId);
+          setScreen('simulationReport');
+          return;
+        }
         setScreen(
-          goTarget === 'notifications' ? 'profile' : magicPurpose === 'weekly_report' ? 'weeklyReport' : 'home',
+          goTarget === 'simulation'
+            ? 'simulationEntry'
+            : goTarget === 'notifications'
+              ? 'profile'
+              : magicPurpose === 'weekly_report'
+                ? 'weeklyReport'
+                : 'home',
         );
       }
     } catch {
@@ -439,6 +458,7 @@ export default function StudentDesktop() {
 
   const goSimulation = () => {
     setSimulation(null);
+    setSimulationReportId(null);
     setScreen('simulationEntry');
   };
 
@@ -672,7 +692,7 @@ export default function StudentDesktop() {
   // Home / Dashboard / Profile keep the bottom tab bar — the focused/immersive
   // screens (Question, Explanations, Complete, Pricing, WeeklyReport) don't,
   // matching Student.dc.html's bottomNavStyle only appearing on those three.
-  const tabScreens = ['home', 'simulationEntry', 'performance', 'profile'];
+  const tabScreens = ['home', 'simulationEntry', 'simulationReport', 'performance', 'profile'];
   const showBottomNav = tabScreens.includes(screen);
 
   return (
@@ -723,9 +743,14 @@ export default function StudentDesktop() {
           )}
           {screen === 'simulationEntry' && (
             <SimulationEntry
+              studentId={student?.userId}
               onEnter={(state) => { setSimulation(state); setScreen('simulation'); }}
+              onOpenReport={(id) => { setSimulationReportId(id); setScreen('simulationReport'); }}
               onExit={goHome}
             />
+          )}
+          {screen === 'simulationReport' && simulationReportId && (
+            <SimulationReport attemptId={simulationReportId} onBack={goSimulation} />
           )}
           {screen === 'performance' && <Performance report={report} onUpgrade={() => goPricing()} />}
           {screen === 'weeklyReport' && <WeeklyReport report={report} onOpenPerformance={goPerformance} />}

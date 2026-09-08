@@ -61,6 +61,9 @@ enum MagicLinkPurpose {
   supervisor_report
   renewal
   link_invite
+  // §7.6 — the المحاكي result link. targetId is the attempt, so a leaked link
+  // opens one report and not the student's whole account history.
+  simulation_report
 }
 
 enum SubjectType {
@@ -619,6 +622,8 @@ enum NotificationKind {
   payment_failed
   supervisor_invite
   suspension
+  simulation_result_student
+  simulation_result_supervisor
 }
 
 // "console" stands in for whatsapp_template/whatsapp_freeform when no WABA

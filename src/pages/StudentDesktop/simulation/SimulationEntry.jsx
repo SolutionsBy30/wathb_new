@@ -36,9 +36,10 @@ function GateBar({ done, need, text }) {
  * closes the gap. So every unmet condition is shown with its own counter, and
  * the cooldown shows its unlock date.
  */
-export default function SimulationEntry({ onEnter, onExit }) {
+export default function SimulationEntry({ onEnter, onExit, onOpenReport, studentId }) {
   const [items, setItems] = useState(null);
   const [live, setLive] = useState(null);
+  const [past, setPast] = useState([]);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [confirming, setConfirming] = useState(null);
@@ -55,7 +56,8 @@ export default function SimulationEntry({ onEnter, onExit }) {
     api.simulationsAvailable()
       .then(setItems)
       .catch((e) => { setError(e.message); setItems([]); });
-  }, []);
+    if (studentId) api.simulationReports(studentId).then(setPast).catch(() => {});
+  }, [studentId]);
 
   const start = async (blueprintId) => {
     setBusyId(blueprintId);
@@ -206,6 +208,30 @@ export default function SimulationEntry({ onEnter, onExit }) {
           </div>
         );
       })}
+
+      {past.length > 0 && (
+        <div style={card}>
+          <span style={{ ...body, fontWeight: 600 }}>محاولاتك السابقة</span>
+          {past.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => onOpenReport(a.id)}
+              style={{
+                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'start', padding: '8px 0',
+                borderTop: '0.5px solid var(--on-indigo-line)', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'baseline',
+              }}
+            >
+              <span style={{ ...label, color: 'var(--sand)' }}>{a.formCode}</span>
+              <span style={label}>{a.blueprintNameAr}</span>
+              {a.accuracy !== null && (
+                <span style={{ ...label, color: 'var(--sand)' }}>{toArabicDigits(Math.round(a.accuracy))}٪</span>
+              )}
+              {a.status !== 'completed' && <span style={{ ...label, color: 'var(--coral)' }}>غير مكتملة</span>}
+              <span style={{ ...label, marginInlineStart: 'auto' }}>عرض التقرير ←</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

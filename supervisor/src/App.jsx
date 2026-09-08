@@ -5,6 +5,7 @@ import LinkExpired from './pages/LinkExpired';
 import AcceptInvite from './pages/AcceptInvite';
 import Dashboard from './pages/Dashboard';
 import StudentReport from './pages/StudentReport';
+import SimulationReport from './pages/SimulationReport';
 import Preferences from './pages/Preferences';
 import PendingInvites from './pages/PendingInvites';
 import PayForStudent from './pages/PayForStudent';
@@ -19,6 +20,8 @@ export default function App() {
   const [report, setReport] = useState(null);
   const [pendingInvites, setPendingInvites] = useState([]);
   const [payTarget, setPayTarget] = useState(null); // { studentId, studentName }
+  // { attemptId, studentName } — the simulation report being read.
+  const [simTarget, setSimTarget] = useState(null);
 
   const loadDashboard = async () => {
     setDashboard(await api.dashboard());
@@ -44,7 +47,11 @@ export default function App() {
     if (/^#subscription=(success|failed)$/.test(window.location.hash)) {
       window.history.replaceState(null, '', window.location.pathname);
     }
-    const hashMatch = window.location.hash.match(/^#magic=(.+)$/);
+    // The token stops at the first '&': a link may carry a suffix (e.g.
+    // &go=…), and '(.+)' would swallow it into the token so every such link
+    // read as invalid. The student app hit exactly this and was fixed; this
+    // copy still had it.
+    const hashMatch = window.location.hash.match(/^#magic=([^&]+)/);
     let magicLinkFailed = false;
     if (hashMatch) {
       try {
@@ -64,6 +71,18 @@ export default function App() {
     const session = decodeSession(token);
     if (session?.purpose === 'link_invite' && session.targetId) {
       setScreen('accept');
+      return;
+    }
+    // §7.6 — the result message links to one attempt, so land on that report
+    // rather than making the supervisor find it from the dashboard.
+    if (session?.purpose === 'simulation_report' && session.targetId) {
+      try {
+        await loadDashboard();
+      } catch {
+        /* the report stands on its own; the dashboard is only the way back */
+      }
+      setSimTarget({ attemptId: session.targetId, studentName: null });
+      setScreen('simulationReport');
       return;
     }
     try {
@@ -136,6 +155,11 @@ export default function App() {
     setScreen('report');
   };
 
+  const openSimulationReport = (attemptId, studentName) => {
+    setSimTarget({ attemptId, studentName });
+    setScreen('simulationReport');
+  };
+
   const openPayForStudent = (studentId, studentName) => {
     setPayTarget({ studentId, studentName });
     setScreen('pay');
@@ -189,7 +213,21 @@ export default function App() {
       </header>
       <main style={{ padding: '24px', maxWidth: '760px', margin: '0 auto' }}>
         {screen === 'dashboard' && <Dashboard data={dashboard} onOpenStudent={openStudent} onPayForStudent={openPayForStudent} />}
-        {screen === 'report' && <StudentReport report={report} studentId={report?.student?.id} onBack={() => setScreen('dashboard')} />}
+        {screen === 'report' && (
+          <StudentReport
+            report={report}
+            studentId={report?.student?.id}
+            onBack={() => setScreen('dashboard')}
+            onOpenSimulation={openSimulationReport}
+          />
+        )}
+        {screen === 'simulationReport' && simTarget && (
+          <SimulationReport
+            attemptId={simTarget.attemptId}
+            studentName={simTarget.studentName}
+            onBack={() => setScreen('report')}
+          />
+        )}
         {screen === 'pay' && payTarget && (
           <PayForStudent studentId={payTarget.studentId} studentName={payTarget.studentName} onBack={() => setScreen('dashboard')} />
         )}

@@ -62,6 +62,10 @@ export const api = {
   rejectInvite: (id) => request(`/supervisors/me/invites/${id}/reject`, { method: 'POST' }),
   listPendingInvites: () => request('/supervisors/me/invites'),
   report: (studentId) => request(`/report/student/${studentId}`),
+  // §7.3 — the المحاكي report. Scoped server-side to students linked to this
+  // supervisor, same rule as the weekly report.
+  simulationReports: (studentId) => request(`/simulation/report/student/${studentId}`),
+  simulationReport: (attemptId) => request(`/simulation/report/${attemptId}`),
 
   getPreferences: () => request('/supervisors/me/preferences'),
   setPreferences: (dto) => request('/supervisors/me/preferences', { method: 'PATCH', body: dto }),

@@ -21,11 +21,15 @@ function heatmapWeeks(heatmap, weeks = 8) {
   return cells;
 }
 
-export default function StudentReport({ report, studentId, onBack }) {
+export default function StudentReport({ report, studentId, onBack, onOpenSimulation }) {
   // Leap history, same table the student and admin see.
   const [leaps, setLeaps] = useState(null);
+  // §7.3 — finalized المحاكي attempts, listed here because this is where a
+  // supervisor already comes to look at one student.
+  const [sims, setSims] = useState([]);
   useEffect(() => {
     if (studentId) api.studentLeaps(studentId).then(setLeaps).catch(() => {});
+    if (studentId) api.simulationReports(studentId).then(setSims).catch(() => {});
   }, [studentId]);
 
   if (!report) return <p style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>جاري التحميل…</p>;
@@ -46,6 +50,29 @@ export default function StudentReport({ report, studentId, onBack }) {
         <Stat label="هذا الأسبوع" value={report.totals.weekAnswered} />
         <Stat label="سلسلة الوثبات" value={report.streak.current} color="var(--lime)" />
       </div>
+
+      {sims.length > 0 && (
+        <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>تقارير المحاكي</h2>
+          {sims.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => onOpenSimulation?.(a.id, report.student.name)}
+              style={{
+                border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'start', padding: '8px 0',
+                borderTop: '0.5px solid var(--on-indigo-line)', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'baseline',
+                fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)',
+              }}
+            >
+              <span style={{ color: 'var(--sand)' }}>{a.formCode}</span>
+              <span>{a.blueprintNameAr}</span>
+              {a.accuracy !== null && <span style={{ color: 'var(--sand)' }}>{Math.round(a.accuracy)}%</span>}
+              {a.status !== 'completed' && <span style={{ color: 'var(--coral)' }}>غير مكتملة</span>}
+              <span style={{ marginInlineStart: 'auto' }}>عرض التقرير ←</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
         <h2 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>الدقة حسب المجال</h2>

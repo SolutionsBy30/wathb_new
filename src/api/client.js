@@ -118,6 +118,9 @@ export const api = {
   submitSimulationSection: (attemptId) => request(`/simulation/attempt/${attemptId}/submit-section`, { method: 'POST' }),
   simulationEvent: (attemptId, type) => request(`/simulation/attempt/${attemptId}/event`, { method: 'POST', body: { type } }),
   abandonSimulation: (attemptId) => request(`/simulation/attempt/${attemptId}/abandon`, { method: 'POST' }),
+  // §7.2 — finalized attempts only; the API refuses a report for a live one.
+  simulationReports: (studentId) => request(`/simulation/report/student/${studentId}`),
+  simulationReport: (attemptId) => request(`/simulation/report/${attemptId}`),
 
   report: (studentId) => request(`/report/student/${studentId}`),
 
