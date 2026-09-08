@@ -103,6 +103,22 @@ export const api = {
   rateExplanation: (answerId, rating) => request(`/wathb/answers/${answerId}/rate-explanation`, { method: 'POST', body: { rating } }),
   reportProblem: (answerId, note) => request(`/wathb/answers/${answerId}/report-problem`, { method: 'POST', body: { note } }),
 
+  // SIM — المحاكي. The clock lives on the server: every one of these returns
+  // the attempt state, and the screen renders whatever came back rather than
+  // tracking the exam itself.
+  simulationsAvailable: (testId) => request(`/simulation/available${testId ? `?testId=${encodeURIComponent(testId)}` : ''}`),
+  simulationAccess: (blueprintId) => request(`/simulation/access/${blueprintId}`),
+  simulationAttempt: () => request('/simulation/attempt'),
+  startSimulation: (blueprintId) => request('/simulation/attempt/start', { method: 'POST', body: { blueprintId } }),
+  beginSimulationSection: (attemptId) => request(`/simulation/attempt/${attemptId}/begin-section`, { method: 'POST' }),
+  answerSimulation: (attemptId, formItemId, selectedKey, timeSpentMs) =>
+    request(`/simulation/attempt/${attemptId}/answer`, { method: 'POST', body: { formItemId, selectedKey, timeSpentMs } }),
+  flagSimulationItem: (attemptId, formItemId, flagged) =>
+    request(`/simulation/attempt/${attemptId}/flag`, { method: 'POST', body: { formItemId, flagged } }),
+  submitSimulationSection: (attemptId) => request(`/simulation/attempt/${attemptId}/submit-section`, { method: 'POST' }),
+  simulationEvent: (attemptId, type) => request(`/simulation/attempt/${attemptId}/event`, { method: 'POST', body: { type } }),
+  abandonSimulation: (attemptId) => request(`/simulation/attempt/${attemptId}/abandon`, { method: 'POST' }),
+
   report: (studentId) => request(`/report/student/${studentId}`),
 
   listMySupervisors: () => request('/students/me/supervisors'),

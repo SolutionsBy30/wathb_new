@@ -16,6 +16,9 @@ import Performance from './screens/Performance';
 import Profile from './screens/Profile';
 import Pricing from './screens/Pricing';
 import WeeklyReport from './screens/WeeklyReport';
+import SimulationEntry from './simulation/SimulationEntry';
+import SimulationRunner from './simulation/SimulationRunner';
+import './simulation/simulation.css';
 
 export default function StudentDesktop() {
   const [screen, setScreen] = useState('loading');
@@ -59,6 +62,10 @@ export default function StudentDesktop() {
   // package's daily limit is reached. Shown on the summary screen so the
   // button explains itself instead of appearing to do nothing.
   const [dailyLimitReached, setDailyLimitReached] = useState(false);
+  // SIM — the live المحاكي attempt, or null. Held here rather than inside the
+  // runner so a page load can drop the student straight back into a section
+  // that is still running (§5.4).
+  const [simulation, setSimulation] = useState(null);
 
   const timerRef = useRef(null);
   const submittingRef = useRef(false);
@@ -156,6 +163,21 @@ export default function StudentDesktop() {
         setScreen('pricing');
       } else {
         await loadReport(me.userId);
+
+        // §5.4 — an attempt in progress outruns every other landing rule.
+        // The clock has been running whether or not the tab was open, so
+        // dropping the student on Home would quietly spend their section.
+        try {
+          const live = await api.simulationAttempt();
+          if (live?.attempt && live.attempt.status === 'in_progress') {
+            setSimulation(live);
+            setScreen('simulation');
+            return;
+          }
+        } catch {
+          /* non-fatal: the simulator is not required to reach the app */
+        }
+
         // The weekly WhatsApp link (spec S11) lands here, not on Home.
         // NOT-022 — and the daily message's "manage notifications" link lands
         // on the profile, where the send time, the temporary pause and the
@@ -415,6 +437,11 @@ export default function StudentDesktop() {
     setScreen('performance');
   };
 
+  const goSimulation = () => {
+    setSimulation(null);
+    setScreen('simulationEntry');
+  };
+
   const goProfile = async () => {
     try {
       setSupervisors(await api.listMySupervisors());
@@ -627,10 +654,25 @@ export default function StudentDesktop() {
     );
   }
 
+  // §6 — the exam is a takeover, not a screen inside the app. Returning
+  // before the shell is what keeps the bottom nav, the upgrade banner and the
+  // streak off a live section.
+  if (screen === 'simulation' && simulation) {
+    return (
+      <div dir="rtl" className="sd-page">
+        <SimulationRunner
+          state={simulation}
+          onState={setSimulation}
+          onExit={() => { setSimulation(null); goHome(); }}
+        />
+      </div>
+    );
+  }
+
   // Home / Dashboard / Profile keep the bottom tab bar — the focused/immersive
   // screens (Question, Explanations, Complete, Pricing, WeeklyReport) don't,
   // matching Student.dc.html's bottomNavStyle only appearing on those three.
-  const tabScreens = ['home', 'performance', 'profile'];
+  const tabScreens = ['home', 'simulationEntry', 'performance', 'profile'];
   const showBottomNav = tabScreens.includes(screen);
 
   return (
@@ -679,6 +721,12 @@ export default function StudentDesktop() {
               dailyLimitReached={dailyLimitReached}
             />
           )}
+          {screen === 'simulationEntry' && (
+            <SimulationEntry
+              onEnter={(state) => { setSimulation(state); setScreen('simulation'); }}
+              onExit={goHome}
+            />
+          )}
           {screen === 'performance' && <Performance report={report} onUpgrade={() => goPricing()} />}
           {screen === 'weeklyReport' && <WeeklyReport report={report} onOpenPerformance={goPerformance} />}
           {screen === 'pricing' && (
@@ -707,6 +755,7 @@ export default function StudentDesktop() {
           {showBottomNav && (
             <div className="sd-bottom-nav">
               <button onClick={goHome} className={`sd-nav-btn${screen === 'home' ? ' active' : ''}`}>الرئيسية</button>
+              <button onClick={goSimulation} className={`sd-nav-btn${screen === 'simulationEntry' ? ' active' : ''}`}>المحاكي</button>
               <button onClick={goPerformance} className={`sd-nav-btn${screen === 'performance' ? ' active' : ''}`}>لوحة الأداء</button>
               <button onClick={goProfile} className={`sd-nav-btn${screen === 'profile' ? ' active' : ''}`}>ملفي</button>
             </div>

@@ -1,0 +1,313 @@
+/*
+ * SIM-012 — §6, the exam surface.
+ *
+ * Austere on purpose: no gradients, no cards floating over cards, one accent
+ * colour used only for the current question and the primary action. §6 asks
+ * for a screen that feels like an exam rather than like the daily app, and
+ * the fastest way to get that wrong is to decorate it.
+ *
+ * Rendered as a fixed full-viewport layer so the app shell — bottom nav,
+ * upgrade banner, streak — cannot appear beside a live section.
+ */
+
+.sim-root {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--indigo);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px clamp(16px, 5vw, 48px);
+  overflow-y: auto;
+}
+
+.sim-center {
+  align-items: center;
+  justify-content: center;
+}
+
+.sim-panel {
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+  align-items: center;
+}
+
+.sim-h1 {
+  margin: 0;
+  font-family: var(--font-arabic);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--sand);
+}
+
+.sim-h2 {
+  margin: 0;
+  font-family: var(--font-arabic);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sand);
+}
+
+.sim-lede { margin: 0; font-family: var(--font-arabic); font-size: 15px; color: var(--sand); }
+.sim-body { margin: 0; font-family: var(--font-arabic); font-size: 13px; color: var(--sand); line-height: 1.7; }
+.sim-label { font-family: var(--font-arabic); font-size: 12px; color: var(--mist); }
+.sim-warn { margin: 0; font-family: var(--font-arabic); font-size: 13px; color: var(--coral); }
+.sim-error { margin: 0; font-family: var(--font-arabic); font-size: 12px; color: var(--coral); }
+
+/* ------------------------------------------------------------------ bar */
+
+.sim-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 0.5px solid var(--on-indigo-line);
+}
+
+.sim-clock {
+  margin-inline-start: auto;
+  font-family: var(--font-latin);
+  font-size: 28px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* §5.1 — warning states at 05:00 and 01:00: a colour shift, never a modal.
+   A modal at one minute would steal the exam time it is warning about. */
+.sim-clock-normal { color: var(--sand); }
+.sim-clock-warning { color: #E8C547; }
+.sim-clock-critical { color: var(--coral); }
+
+/* ------------------------------------------------------------- question */
+
+.sim-question {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+
+/* §6.3 — reading comprehension is a split view with the passage pinned, so
+   the student is never scrolling a text away to read the question about it. */
+.sim-question-split {
+  flex-direction: row;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.sim-passage {
+  flex: 1 1 46%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 52vh;
+  padding-inline-end: 16px;
+  border-inline-end: 0.5px solid var(--on-indigo-line);
+}
+
+.sim-passage-body {
+  font-family: var(--font-arabic);
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--sand);
+  white-space: pre-wrap;
+}
+
+.sim-stem-col {
+  flex: 1 1 54%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sim-stem {
+  margin: 0;
+  font-family: var(--font-arabic);
+  font-size: 17px;
+  line-height: 1.85;
+  color: var(--sand);
+}
+
+.sim-stem-img {
+  max-width: 100%;
+  align-self: center;
+  border-radius: var(--radius-md);
+  background: var(--sand);
+}
+
+.sim-options { display: flex; flex-direction: column; gap: 10px; }
+
+.sim-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--on-indigo-subtle);
+  color: var(--sand);
+  font-family: var(--font-arabic);
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: start;
+  cursor: pointer;
+}
+
+.sim-option.selected {
+  background: var(--lime);
+  color: var(--lime-ink);
+}
+
+.sim-option-img { max-height: 64px; border-radius: var(--radius-sm); background: var(--sand); }
+
+/* ---------------------------------------------------------------- strip */
+
+.sim-strip {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--on-indigo-line);
+}
+
+.sim-pip {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: inset 0 0 0 0.5px var(--on-indigo-line);
+  color: var(--mist);
+  font-family: var(--font-latin);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sim-pip.answered { background: var(--on-indigo-subtle); color: var(--sand); }
+.sim-pip.flagged { box-shadow: inset 0 0 0 1.5px #E8C547; }
+.sim-pip.current { background: var(--lime); color: var(--lime-ink); }
+.sim-pip:disabled { opacity: 0.4; cursor: default; }
+
+/* ----------------------------------------------------------------- foot */
+
+.sim-foot { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.sim-btn {
+  min-height: 44px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  box-shadow: inset 0 0 0 0.5px var(--on-indigo-line);
+  color: var(--sand);
+  font-family: var(--font-arabic);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sim-btn:disabled { opacity: 0.4; cursor: default; }
+.sim-btn-primary { background: var(--lime); color: var(--lime-ink); box-shadow: none; }
+.sim-btn-danger { background: var(--coral); color: var(--indigo); box-shadow: none; }
+.sim-btn-flagged { box-shadow: inset 0 0 0 1.5px #E8C547; }
+
+/* --------------------------------------------------------------- review */
+
+.sim-review { display: flex; flex-direction: column; gap: 16px; max-width: 640px; }
+
+.sim-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  gap: 8px;
+}
+
+.sim-cell {
+  min-height: 46px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-latin);
+  font-size: 13px;
+  cursor: pointer;
+  background: transparent;
+  box-shadow: inset 0 0 0 0.5px var(--on-indigo-line);
+  color: var(--mist);
+}
+
+.sim-cell.answered { background: var(--on-indigo-subtle); color: var(--sand); }
+.sim-cell.flagged { box-shadow: inset 0 0 0 1.5px #E8C547; }
+
+.sim-legend { display: flex; gap: 16px; flex-wrap: wrap; font-family: var(--font-arabic); font-size: 11px; color: var(--mist); }
+.sim-legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.sim-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; box-shadow: inset 0 0 0 0.5px var(--on-indigo-line); }
+.sim-dot.answered { background: var(--on-indigo-subtle); }
+.sim-dot.unanswered { background: transparent; }
+.sim-dot.flagged { box-shadow: inset 0 0 0 1.5px #E8C547; }
+
+.sim-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sim-confirm { display: flex; flex-direction: column; gap: 10px; }
+
+/* ----------------------------------------------------------- scratchpad */
+
+.sim-scratchpad {
+  position: fixed;
+  inset-inline-end: 24px;
+  inset-block-end: 24px;
+  width: min(420px, calc(100vw - 48px));
+  height: min(320px, 50vh);
+  background: var(--indigo);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 0 0 0.5px var(--on-indigo-line);
+  display: flex;
+  flex-direction: column;
+  z-index: 95;
+}
+
+.sim-scratchpad-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 0.5px solid var(--on-indigo-line);
+}
+
+.sim-chip {
+  border: none;
+  background: var(--on-indigo-subtle);
+  color: var(--sand);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-family: var(--font-arabic);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sim-scratchpad-bar .sim-chip:last-child { margin-inline-start: auto; }
+.sim-scratchpad-canvas { flex: 1; touch-action: none; cursor: crosshair; }
+
+/* --------------------------------------------------------------- mobile */
+
+@media (max-width: 720px) {
+  .sim-question-split { flex-direction: column; }
+  .sim-passage {
+    flex: none;
+    max-height: 34vh;
+    padding-inline-end: 0;
+    border-inline-end: none;
+    padding-bottom: 12px;
+    border-bottom: 0.5px solid var(--on-indigo-line);
+  }
+  .sim-clock { font-size: 22px; }
+  .sim-foot .sim-btn { flex: 1 1 auto; }
+}
