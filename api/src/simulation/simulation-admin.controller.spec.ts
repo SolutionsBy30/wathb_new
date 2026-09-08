@@ -18,7 +18,18 @@ import { ADMIN_PERMISSIONS } from '../admin-ops/admin-permissions';
  */
 
 const proto = SimulationAdminController.prototype as unknown as Record<string, () => unknown>;
-const handlers = Object.getOwnPropertyNames(proto).filter((n) => n !== 'constructor');
+
+/**
+ * Methods on the class that are deliberately not routes. TypeScript's
+ * `private` is compile-time only, so they show up here like any other method
+ * and have to be named rather than inferred — inferring them by "has no route
+ * metadata" is exactly the bug this file exists to catch.
+ */
+const NON_ROUTE_METHODS = ['filter'];
+
+const handlers = Object.getOwnPropertyNames(proto).filter(
+  (n) => n !== 'constructor' && !NON_ROUTE_METHODS.includes(n),
+);
 
 const routeOf = (name: string) => ({
   path: Reflect.getMetadata(PATH_METADATA, proto[name]) as string,
@@ -58,6 +69,14 @@ describe('SimulationAdminController wiring', () => {
     // Spelled out rather than derived, so a decorator sliding one method down
     // changes this table and fails, instead of moving silently with the code.
     const expected: Record<string, { path: string; method: RequestMethod }> = {
+      overview: { path: 'analytics/overview', method: RequestMethod.GET },
+      attemptsList: { path: 'analytics/attempts', method: RequestMethod.GET },
+      itemStats: { path: 'analytics/items', method: RequestMethod.GET },
+      gateDiagnostics: { path: 'analytics/gates/:blueprintId', method: RequestMethod.GET },
+      listOverrides: { path: 'overrides/:blueprintId', method: RequestMethod.GET },
+      grantOverride: { path: 'overrides', method: RequestMethod.POST },
+      forceFinalize: { path: 'attempts/:attemptId/force-finalize', method: RequestMethod.POST },
+      voidAttempt: { path: 'attempts/:attemptId/void', method: RequestMethod.POST },
       listBlueprints: { path: 'blueprints', method: RequestMethod.GET },
       createBlueprint: { path: 'blueprints', method: RequestMethod.POST },
       getBlueprint: { path: 'blueprints/:id', method: RequestMethod.GET },

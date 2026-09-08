@@ -236,6 +236,18 @@ export const api = {
   deleteSimulationForm: (formId) => request(`/admin/simulation/forms/${formId}`, { method: 'DELETE' }),
   regenerateFormItem: (itemId) => request(`/admin/simulation/form-items/${itemId}/regenerate`, { method: 'POST' }),
 
+  // §7.4 — analytics, the attempt inspector and the logged actions.
+  simFilterQs: (f = {}) => new URLSearchParams(Object.entries(f).filter(([, v]) => v !== undefined && v !== '')).toString(),
+  simOverview: (f) => request(`/admin/simulation/analytics/overview?${api.simFilterQs(f)}`),
+  simAttempts: (f) => request(`/admin/simulation/analytics/attempts?${api.simFilterQs(f)}`),
+  simItemStats: (f) => request(`/admin/simulation/analytics/items?${api.simFilterQs(f)}`),
+  simGateDiagnostics: (blueprintId) => request(`/admin/simulation/analytics/gates/${blueprintId}`),
+  simAttemptReport: (attemptId) => request(`/simulation/report/${attemptId}`),
+  simForceFinalize: (attemptId, reason) => request(`/admin/simulation/attempts/${attemptId}/force-finalize`, { method: 'POST', body: { reason } }),
+  simVoidAttempt: (attemptId, reason) => request(`/admin/simulation/attempts/${attemptId}/void`, { method: 'POST', body: { reason } }),
+  simListOverrides: (blueprintId) => request(`/admin/simulation/overrides/${blueprintId}`),
+  simGrantOverride: (dto) => request('/admin/simulation/overrides', { method: 'POST', body: dto }),
+
   listDailyTips: () => request('/admin/daily-tips'),
   createDailyTip: (textAr) => request('/admin/daily-tips', { method: 'POST', body: { textAr } }),
   updateDailyTip: (id, dto) => request(`/admin/daily-tips/${id}`, { method: 'POST', body: dto }),

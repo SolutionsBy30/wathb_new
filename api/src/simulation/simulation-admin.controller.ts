@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { BlueprintService } from './blueprint.service';
 import { FormService } from './form.service';
-import { BlueprintDto, GenerateFormDto, SaveSectionsDto, SetStatusDto } from './dto/simulation.dto';
+import { AttemptActionDto, BlueprintDto, GenerateFormDto, GrantOverrideDto, SaveSectionsDto, SetStatusDto } from './dto/simulation.dto';
+import { SimulationAnalyticsService } from './simulation-analytics.service';
 import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
@@ -26,7 +27,63 @@ export class SimulationAdminController {
   constructor(
     private blueprints: BlueprintService,
     private forms: FormService,
+    private analytics: SimulationAnalyticsService,
   ) {}
+
+  // §7.4 — analytics. Declared before the ':id' routes so 'analytics' is
+  // never parsed as a blueprint id.
+  @Get('analytics/overview')
+  overview(@Query() q: Record<string, string>) {
+    return this.analytics.overview(this.filter(q));
+  }
+
+  @Get('analytics/attempts')
+  attemptsList(@Query() q: Record<string, string>) {
+    return this.analytics.attemptsList(this.filter(q), Number(q.limit) || 100);
+  }
+
+  @Get('analytics/items')
+  itemStats(@Query() q: Record<string, string>) {
+    return this.analytics.itemStats(this.filter(q), Number(q.minServed) || 5);
+  }
+
+  @Get('analytics/gates/:blueprintId')
+  gateDiagnostics(@Param('blueprintId') blueprintId: string) {
+    return this.analytics.gateDiagnostics(blueprintId);
+  }
+
+  @Get('overrides/:blueprintId')
+  listOverrides(@Param('blueprintId') blueprintId: string) {
+    return this.analytics.listOverrides(blueprintId);
+  }
+
+  @Post('overrides')
+  grantOverride(@Body() dto: GrantOverrideDto, @CurrentSession() session: SessionPayload) {
+    return this.analytics.grantOverride(dto.studentId, dto.blueprintId, session.sub, dto.reason);
+  }
+
+  @Post('attempts/:attemptId/force-finalize')
+  forceFinalize(@Param('attemptId') attemptId: string, @Body() dto: AttemptActionDto, @CurrentSession() session: SessionPayload) {
+    return this.analytics.forceFinalize(attemptId, session.sub, dto.reason);
+  }
+
+  @Post('attempts/:attemptId/void')
+  voidAttempt(@Param('attemptId') attemptId: string, @Body() dto: AttemptActionDto, @CurrentSession() session: SessionPayload) {
+    return this.analytics.voidAttempt(attemptId, session.sub, dto.reason);
+  }
+
+  /** Query-string filters shared by every analytics route. */
+  private filter(q: Record<string, string>) {
+    return {
+      blueprintId: q.blueprintId || undefined,
+      formId: q.formId || undefined,
+      from: q.from ? new Date(q.from) : undefined,
+      to: q.to ? new Date(q.to) : undefined,
+      schoolSnapshot: q.school || undefined,
+      citySnapshot: q.city || undefined,
+      regionSnapshot: q.region || undefined,
+    };
+  }
 
   @Get('blueprints')
   listBlueprints(@Query('testId') testId?: string) {

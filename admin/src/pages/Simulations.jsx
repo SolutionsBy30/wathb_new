@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
+import SimulationAnalytics from '../components/SimulationAnalytics';
 
 const field = { padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' };
 const card = { background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' };
@@ -471,6 +472,7 @@ function FormPreview({ form, onBack, onRegenerate, onStatus, busy }) {
  * every generation), and the forms themselves (repeatedly).
  */
 export default function Simulations({ tests }) {
+  const [view, setView] = useState('blueprints');
   const [blueprints, setBlueprints] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [blueprint, setBlueprint] = useState(null);
@@ -575,11 +577,27 @@ export default function Simulations({ tests }) {
     );
   }
 
+  if (view === 'analytics') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <h2 style={h2}>المحاكي — التحليلات</h2>
+          <span style={label}>{blueprint ? blueprint.nameAr : 'كل المخططات'}</span>
+          <div style={{ marginInlineStart: 'auto' }}>
+            <Button variant="secondary" onClick={() => setView('blueprints')}>المخططات</Button>
+          </div>
+        </div>
+        <SimulationAnalytics blueprint={blueprint} />
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <h2 style={h2}>المحاكي — المخططات</h2>
-        <div style={{ marginInlineStart: 'auto' }}>
+        <div style={{ marginInlineStart: 'auto', display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" onClick={() => setView('analytics')}>التحليلات</Button>
           <Button onClick={() => setCreating(true)}>مخطط جديد</Button>
         </div>
       </div>

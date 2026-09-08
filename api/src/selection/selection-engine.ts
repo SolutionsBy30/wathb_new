@@ -38,7 +38,7 @@ export function labelScore(label: LabelState, minSample: number): number {
 
 export function sectionScore(section: SectionState, minSample: number): number {
   const base = weaknessCoverageScore(section.accuracy, section.nAnswered, minSample);
-  return base * recencyPenalty(section.lastServedDaysAgo);
+  return base * recencyPenalty(section.lastServedDaysAgo) * (section.weight ?? 1);
 }
 
 /**

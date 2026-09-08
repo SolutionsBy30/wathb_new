@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LabelState, SectionState } from '../selection/selection-engine.types';
 import { selectLabelsForBundle, selectSectionForDay } from '../selection/selection-engine';
 import { AuditLogService } from '../admin-ops/audit-log.service';
+import { AreaResult, multiplierFor, PlanBias, planBiasFor } from '../simulation/plan-bias.util';
 
 const PLACEMENT_SIZE = 12;
 // SEL-004 — a question answered wrong re-enters the pool after ~21 days,
@@ -152,6 +153,37 @@ export class WathbGenerationService {
     return null;
   }
 
+  /**
+   * §7.5 — "خطة ما بعد المحاكي": the week after a simulation leans toward the
+   * two weakest areas it found.
+   *
+   * Read straight from the simulation tables rather than through
+   * SimulationModule: this needs one query and a pure function, and injecting
+   * a service across modules to get it would couple the daily engine to the
+   * simulator for no benefit. The rule itself lives in plan-bias.util.
+   *
+   * Returns null when there is no recent simulation, when its window has
+   * passed, or when nothing in it was measured well enough to act on — all of
+   * which mean "generate exactly as before".
+   */
+  private async activePlanBias(studentId: string, testId: string, now: Date): Promise<PlanBias | null> {
+    const last = await this.prisma.simulationAttempt.findFirst({
+      where: { studentId, finalizedAt: { not: null }, blueprint: { testId } },
+      orderBy: { finalizedAt: 'desc' },
+      select: { finalizedAt: true, result: { select: { areaBreakdown: true } } },
+    });
+    if (!last?.finalizedAt || !last.result) return null;
+
+    const rows = last.result.areaBreakdown as unknown;
+    if (!Array.isArray(rows)) return null;
+    const areas: AreaResult[] = rows
+      .filter((r): r is { areaId: string; accuracy: number; total: number } =>
+        !!r && typeof r.areaId === 'string' && typeof r.accuracy === 'number' && typeof r.total === 'number')
+      .map((r) => ({ areaId: r.areaId, accuracy: r.accuracy, total: r.total }));
+
+    return planBiasFor(areas, last.finalizedAt, now);
+  }
+
   async generatePlacement(studentId: string, testId: string, track: 'scientific' | 'humanities' | null, forDate?: Date) {
     const labels = await this.eligibleLabels(testId, track);
     const picks: string[] = [];
@@ -169,6 +201,7 @@ export class WathbGenerationService {
     const stats = await this.prisma.studentLabelStat.findMany({ where: { studentId, labelId: { in: labels.map((l) => l.id) } } });
     const statByLabel = new Map(stats.map((s) => [s.labelId, s]));
     const now = Date.now();
+    const planBias = await this.activePlanBias(studentId, testId, new Date(now));
 
     const labelStates: LabelState[] = labels.map((l) => {
       const s = statByLabel.get(l.id);
@@ -179,7 +212,10 @@ export class WathbGenerationService {
         accuracy: nAnswered > 0 ? s!.nCorrect / nAnswered : 0.5,
         nAnswered,
         lastServedDaysAgo: s?.lastServedAt ? Math.floor((now - s.lastServedAt.getTime()) / 86400000) : null,
-        curriculumWeight: l.area.section.weight,
+        // §7.5 — the post-simulation bias rides on curriculumWeight, which is
+        // exactly what that field is for. The weakness signal, the recency
+        // penalty and the weakness floor all still apply on top.
+        curriculumWeight: l.area.section.weight * multiplierFor(l.areaId, planBias),
         difficultyLevel: s?.difficultyLevel ?? 3,
       };
     });
@@ -198,11 +234,20 @@ export class WathbGenerationService {
       if (daysAgo !== null && (cur.lastServedDaysAgo === null || daysAgo < cur.lastServedDaysAgo)) cur.lastServedDaysAgo = daysAgo;
       sectionAgg.set(l.area.sectionId, cur);
     }
+    // Which sections hold a biased area, so the section pick leans that way
+    // too. Without this the bias would only apply on the days the rotation
+    // happened to land on the right section — a weak bias dressed up as a plan.
+    const biasedSectionIds = new Set(
+      labels.filter((l) => multiplierFor(l.areaId, planBias) > 1).map((l) => l.area.sectionId),
+    );
     const sectionStates: SectionState[] = [...sectionAgg.entries()].map(([sectionId, a]) => ({
       sectionId,
       accuracy: a.nAnswered > 0 ? a.nCorrect / a.nAnswered : 0.5,
       nAnswered: a.nAnswered,
       lastServedDaysAgo: a.lastServedDaysAgo,
+      // A weight, not a filter: the other sections stay reachable, so nothing
+      // goes unmeasured for the whole week (SEL-001).
+      weight: biasedSectionIds.has(sectionId) ? (planBias?.multiplier ?? 1) : 1,
     }));
 
     const chosenSectionId = selectSectionForDay(sectionStates);

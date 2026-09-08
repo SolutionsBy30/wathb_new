@@ -74,3 +74,16 @@ export class GenerateFormDto {
 export class SetStatusDto {
   @IsIn(['draft', 'published', 'archived']) status!: 'draft' | 'published' | 'archived';
 }
+
+export class AttemptActionDto {
+  // Required, not optional: §7.4 says every one of these actions is logged
+  // with actor, timestamp and reason, and an empty reason makes the log
+  // unreadable six months later.
+  @IsString() reason!: string;
+}
+
+export class GrantOverrideDto {
+  @IsString() studentId!: string;
+  @IsString() blueprintId!: string;
+  @IsString() reason!: string;
+}

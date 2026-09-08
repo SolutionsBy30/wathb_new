@@ -8,6 +8,7 @@ import { SimulationStudentController } from './simulation-student.controller';
 import { SimulationReportService } from './simulation-report.service';
 import { SimulationReportController } from './simulation-report.controller';
 import { SimulationNotifyService } from './simulation-notify.service';
+import { SimulationAnalyticsService } from './simulation-analytics.service';
 import { AuthModule } from '../auth/auth.module';
 import { AuditLogModule } from '../admin-ops/audit-log.module';
 import { NotificationChannelModule } from '../notifications/notification-channel.module';
@@ -21,7 +22,7 @@ import { NotificationChannelModule } from '../notifications/notification-channel
   // exactly this — depending on the whole notifications module would drag in
   // WathbModule and ReportsModule for nothing.
   imports: [AuthModule, AuditLogModule, NotificationChannelModule],
-  providers: [BlueprintService, FormService, EligibilityService, AttemptService, SimulationReportService, SimulationNotifyService],
+  providers: [BlueprintService, FormService, EligibilityService, AttemptService, SimulationReportService, SimulationNotifyService, SimulationAnalyticsService],
   controllers: [SimulationAdminController, SimulationStudentController, SimulationReportController],
   exports: [BlueprintService, FormService, EligibilityService, AttemptService, SimulationReportService],
 })

@@ -24,6 +24,16 @@ export interface SectionState {
   accuracy: number;
   nAnswered: number;
   lastServedDaysAgo: number | null;
+  /**
+   * SIM-020 — a multiplier on this section's score, mirroring
+   * curriculumWeight on LabelState. Defaults to 1.
+   *
+   * Exists so §7.5's post-simulation plan can lift the section holding a
+   * student's weakest simulation areas without a branch in the engine: the
+   * bias is a weight, so rotation and the weakness signal still apply on top
+   * of it and the section is favoured rather than forced.
+   */
+  weight?: number;
 }
 
 export interface SelectionConfig {
