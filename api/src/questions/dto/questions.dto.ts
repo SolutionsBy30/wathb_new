@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { QuestionType } from '@prisma/client';
 
 export class OptionDto {
@@ -38,4 +38,11 @@ export class ListQuestionsQuery {
   // interpolates the column into raw SQL for the stats columns.
   @IsOptional() @IsString() sortBy?: string;
   @IsOptional() @IsIn(['asc', 'desc']) sortDir?: 'asc' | 'desc';
+}
+
+export class BulkMoveDto {
+  // Capped: this is one updateMany, but an unbounded id list from a client is
+  // an easy way to lock the table for everyone else.
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(1000) @IsString({ each: true }) ids!: string[];
+  @IsString() labelId!: string;
 }

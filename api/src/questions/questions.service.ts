@@ -255,6 +255,64 @@ export class QuestionsService {
     return this.prisma.question.updateMany({ where: { id: { in: ids } }, data: { status } });
   }
 
+  /**
+   * ADM-101 — re-file several questions at once.
+   *
+   * A question's section and area are not its own columns: they come from its
+   * label. So "change the section of these questions" is one write of labelId
+   * per question, and the destination has to be a label rather than a section.
+   *
+   * The previous labelId of every moved question goes into the audit entry, so
+   * a bulk move made against the wrong selection can be read back and undone.
+   * Nothing else records where a question came from — after the write, the old
+   * classification is gone.
+   *
+   * Answers are unaffected: each one snapshots the labelId it was served
+   * under, so past analytics stay where they were.
+   */
+  async bulkSetLabel(ids: string[], labelId: string, adminUserId?: string) {
+    const label = await this.prisma.label.findUnique({
+      where: { id: labelId },
+      include: { area: { include: { section: { include: { test: true } } } } },
+    });
+    if (!label) throw new BadRequestException('التصنيف غير موجود');
+    // A retired label is excluded from daily generation, so moving questions
+    // into one silently removes them from circulation.
+    if (label.isRetired) throw new BadRequestException('لا يمكن النقل إلى تصنيف متقاعد.');
+
+    const before = await this.prisma.question.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, labelId: true },
+    });
+    if (before.length === 0) throw new BadRequestException('لم يُعثر على أي سؤال من المحدد.');
+
+    const result = await this.prisma.question.updateMany({ where: { id: { in: ids } }, data: { labelId } });
+
+    const admin = adminUserId
+      ? await this.prisma.user.findUnique({ where: { id: adminUserId }, select: { name: true, email: true } })
+      : null;
+    await this.auditLog.record({
+      actorId: adminUserId ?? null,
+      actorLabel: admin?.email ?? admin?.name ?? adminUserId ?? 'system',
+      action: 'question.bulk_move',
+      entityType: 'Question',
+      entityId: labelId,
+      before,
+      after: { labelId, moved: result.count },
+      note: `نُقل ${result.count} سؤالًا إلى ${label.area.section.test.nameAr} · ${label.area.section.nameAr} · ${label.area.nameAr} · ${label.nameAr}`,
+    });
+
+    return {
+      moved: result.count,
+      destination: {
+        testNameAr: label.area.section.test.nameAr,
+        sectionNameAr: label.area.section.nameAr,
+        areaNameAr: label.area.nameAr,
+        labelNameAr: label.nameAr,
+      },
+    };
+  }
+
   async bulkRetire(ids: string[]) {
     return this.prisma.question.updateMany({ where: { id: { in: ids } }, data: { status: 'retired' } });
   }

@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
 import { Pager } from '../components/Pager';
 import TaxonomyFilter from '../components/TaxonomyFilter';
+import BulkMoveQuestions from '../components/BulkMoveQuestions';
 
 const STATUS_LABEL = { draft: 'مسودة', in_review: 'قيد المراجعة', published: 'منشور', retired: 'متقاعد' };
 const STATUS_COLOR = { draft: 'var(--mist)', in_review: 'var(--lime)', published: 'var(--teal-ink)', retired: 'var(--coral)' };
@@ -20,6 +21,8 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
   // that simply hid the rest.
   const [page, setPage] = useState({ offset: 0, limit: 50 });
   const [busy, setBusy] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   const load = async () => {
     setBusy(true);
@@ -63,6 +66,17 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
     await load();
   };
 
+  // ADM-101 — the selection is captured before the request, because load()
+  // clears it and the confirmation message names the count.
+  const bulkMove = async (labelId) => {
+    const ids = [...selected];
+    const res = await api.bulkMoveQuestions(ids, labelId);
+    const d = res.destination;
+    setMoving(false);
+    setNotice(`نُقل ${res.moved} سؤالًا إلى ${d.sectionNameAr} · ${d.areaNameAr} · ${d.labelNameAr}.`);
+    await load();
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -90,6 +104,9 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
               <option value="" disabled>تغيير الحالة ({selected.size})…</option>
               {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
+            <button onClick={() => { setMoving(true); setNotice(null); }} style={{ border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
+              نقل إلى قسم ({selected.size})
+            </button>
             <button onClick={bulkRetire} style={{ border: 'none', background: 'var(--coral)', color: 'var(--indigo)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
               تقاعد ({selected.size})
             </button>
@@ -97,6 +114,19 @@ export default function QuestionBank({ tests, onEdit, onNew }) {
         )}
         <span style={{ marginInlineStart: 'auto', fontFamily: 'var(--font-latin)', fontSize: '12px', color: 'var(--mist)' }}>{data.total} سؤال</span>
       </div>
+
+      {moving && selected.size > 0 && (
+        <BulkMoveQuestions
+          tests={tests}
+          count={selected.size}
+          onMove={bulkMove}
+          onCancel={() => setMoving(false)}
+        />
+      )}
+
+      {notice && (
+        <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--teal-ink)' }}>{notice}</p>
+      )}
 
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>

@@ -213,6 +213,8 @@ export const api = {
   mintSupervisorLoginLink: (supervisorId) => request(`/admin/supervisors/${supervisorId}/magic-link`, { method: 'POST' }),
 
   bulkStatus: (ids, status) => request('/admin/questions/bulk-status', { method: 'POST', body: { ids, status } }),
+  // ADM-101 — re-file a selection into a different section/area/label.
+  bulkMoveQuestions: (ids, labelId) => request('/admin/questions/bulk-move', { method: 'POST', body: { ids, labelId } }),
   mintStudentLoginLink: (studentId) => request(`/admin/students/${studentId}/magic-link`, { method: 'POST' }),
   studentLeaps: (studentId) => request(`/admin/students/${studentId}/leaps`),
   // ADM-097 — one leap's questions with the student's answers.

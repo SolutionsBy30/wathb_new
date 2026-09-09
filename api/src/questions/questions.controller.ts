@@ -18,7 +18,7 @@ import { BulkImportService } from './bulk-import.service';
 import { QuestionStatsService } from './question-stats.service';
 import { ProblemReportsService } from './problem-reports.service';
 import { MAX_IMAGE_BYTES, QuestionMediaService } from './question-media.service';
-import { CreateQuestionDto, ListQuestionsQuery, UpdateQuestionContentDto } from './dto/questions.dto';
+import { BulkMoveDto, CreateQuestionDto, ListQuestionsQuery, UpdateQuestionContentDto } from './dto/questions.dto';
 import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
@@ -127,6 +127,14 @@ export class QuestionsController {
   @Post('bulk-retire')
   bulkRetire(@Body('ids') ids: string[]) {
     return this.questions.bulkRetire(ids);
+  }
+
+  // ADM-101 — re-file a selection into a different section/area/label. A
+  // literal path like the other bulk routes, declared alongside them and well
+  // before any ':id' route.
+  @Post('bulk-move')
+  bulkMove(@Body() dto: BulkMoveDto, @CurrentSession() session: SessionPayload) {
+    return this.questions.bulkSetLabel(dto.ids, dto.labelId, session.sub);
   }
 
   @Post('bulk-status')
