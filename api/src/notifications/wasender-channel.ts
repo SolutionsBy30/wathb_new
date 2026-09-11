@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChannelUnavailableError, FreeformSendParams, NotificationChannel, SendResult, TemplateSendParams } from './channel.interface';
+import { DEFAULT_MAX_INTERVAL_MS, DEFAULT_MIN_INTERVAL_MS, nextIntervalMs } from './compliance.util';
 
 /**
  * NOT-013 — WasenderAPI transport, https://wasenderapi.com/api-docs
@@ -28,7 +29,8 @@ const DEFAULT_BASE_URL = 'https://wasenderapi.com/api';
 // Wasender's "account protection" setting caps a session at one message every
 // five seconds and rejects the rest outright. 5.5s leaves headroom for clock
 // skew and their own measurement window.
-const DEFAULT_MIN_INTERVAL_MS = 5500;
+// COM-002 — pacing is now a jittered range, not a fixed gap. The constants
+// live in compliance.util so the rule and its tests sit together.
 
 @Injectable()
 export class WasenderChannel implements NotificationChannel {
@@ -36,6 +38,7 @@ export class WasenderChannel implements NotificationChannel {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly minIntervalMs: number;
+  private readonly maxIntervalMs: number;
 
   /**
    * NOT-014 — outbound pacing, shared by every caller.
@@ -61,18 +64,24 @@ export class WasenderChannel implements NotificationChannel {
   constructor(private config: ConfigService) {
     this.apiKey = this.config.getOrThrow<string>('WASENDER_API_KEY');
     this.baseUrl = (this.config.get<string>('WASENDER_BASE_URL') ?? DEFAULT_BASE_URL).replace(/\/$/, '');
-    const configured = Number(this.config.get<string>('WASENDER_MIN_INTERVAL_MS'));
-    this.minIntervalMs = Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_MIN_INTERVAL_MS;
+    const configuredMin = Number(this.config.get<string>('WASENDER_MIN_INTERVAL_MS'));
+    this.minIntervalMs = Number.isFinite(configuredMin) && configuredMin >= 0 ? configuredMin : DEFAULT_MIN_INTERVAL_MS;
+    const configuredMax = Number(this.config.get<string>('WASENDER_MAX_INTERVAL_MS'));
+    this.maxIntervalMs = Number.isFinite(configuredMax) && configuredMax >= 0 ? configuredMax : DEFAULT_MAX_INTERVAL_MS;
   }
 
   /**
    * Serialises callers and spaces their *start* times by at least
-   * minIntervalMs. Deliberately not a token bucket: bursting is the exact
+   * a jittered gap. Deliberately not a token bucket: bursting is the exact
    * behaviour the provider punishes.
    */
   private schedule<T>(fn: () => Promise<T>): Promise<T> {
     const slot = WasenderChannel.gate.then(async () => {
-      const wait = WasenderChannel.lastStartedAt + this.minIntervalMs - Date.now();
+      // COM-002 — a fresh random gap per message. A perfectly regular 5.5s
+      // cadence is a machine signature; the floor is still respected, so this
+      // only ever sends slower than before, never faster.
+      const gap = nextIntervalMs(this.minIntervalMs, this.maxIntervalMs);
+      const wait = WasenderChannel.lastStartedAt + gap - Date.now();
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       WasenderChannel.lastStartedAt = Date.now();
     });

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import DeliveryLog from './DeliveryLog';
 import NotificationMessages from './NotificationMessages';
 import NotificationSenders from './NotificationSenders';
+import SendingHygiene from '../components/SendingHygiene';
 
 /**
  * ADM-088 — the nav id *is* the permission key (admin-permissions.ts), so a
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'log', label: 'سجل الإشعارات' },
   { id: 'messages', label: 'رسائل الوثبة اليومية' },
   { id: 'senders', label: 'مزوّدو واتساب' },
+  { id: 'hygiene', label: 'سلامة الإرسال' },
 ];
 
 export default function NotificationsSection() {
@@ -42,6 +44,7 @@ export default function NotificationsSection() {
       {sub === 'log' && <DeliveryLog />}
       {sub === 'messages' && <NotificationMessages />}
       {sub === 'senders' && <NotificationSenders />}
+      {sub === 'hygiene' && <SendingHygiene />}
     </div>
   );
 }

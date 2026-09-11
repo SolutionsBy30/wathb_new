@@ -6,6 +6,7 @@ import { ReportsService, MIN_SAMPLE_FOR_REPORTING } from '../reports/reports.ser
 import { NOTIFICATION_CHANNEL, NotificationChannel } from './channel.interface';
 import { accuracyBand, compositeDelta, pickTopStrengthWeakness, speedBand, WeeklyLabelStat } from '../reports/weekly-report.util';
 import { riyadhNow, STUDENT_WEEKLY_REPORT_DAY, STUDENT_WEEKLY_REPORT_HOUR } from './riyadh-clock.util';
+import { NotificationMessagesService, WEEKLY_REPORT_KIND } from './notification-messages.service';
 
 function startOfWeek(d: Date): Date {
   const out = new Date(d);
@@ -31,6 +32,7 @@ export class WeeklyReportService {
     private magicLinks: MagicLinkService,
     @Inject(NOTIFICATION_CHANNEL) private channel: NotificationChannel,
     private config: ConfigService,
+    private messages: NotificationMessagesService,
   ) {}
 
   private async flattenReportableLabels(studentId: string): Promise<{ labels: WeeklyLabelStat[]; trend: { weekStart: string; accuracy: number | null }[] }> {
@@ -95,6 +97,16 @@ export class WeeklyReportService {
       weakness ? `الأضعف: ${weakness.nameAr}${advice ? ` — ${advice}` : ''}` : null,
     ].filter(Boolean).join(' · ');
 
+    // COM-005 — vary the wording the same way the daily leap does. Advisory:
+    // an unreadable or empty pool falls back to the built-in template rather
+    // than failing the send.
+    const customBody = await this.messages
+      .renderRandom(
+        { student_name: student.user.name, magic_link: url, test_name: summary },
+        WEEKLY_REPORT_KIND,
+      )
+      .catch(() => null);
+
     const notification = await this.prisma.notification.create({
       data: { userId: studentId, kind: 'weekly_report_student', channel: 'whatsapp_template', category: 'utility', scheduledFor, status: 'scheduled' },
     });
@@ -104,6 +116,7 @@ export class WeeklyReportService {
         templateName: this.config.get('WHATSAPP_TEMPLATE_WEEKLY_STUDENT', 'weekly_report_student'),
         languageCode: 'ar',
         bodyParams: [student.user.name, summary, url],
+        ...(customBody ? { bodyOverride: customBody } : {}),
       });
       await this.prisma.notification.update({ where: { id: notification.id }, data: { status: 'sent', sentAt: new Date(), waMessageId: result.providerMessageId } });
       return { sent: true as const };

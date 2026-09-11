@@ -36,6 +36,10 @@ function SenderCard({ row, onSaved }) {
     apiKey: '',
     accessToken: '',
     isActive: row.isActive,
+    // COM-004 — empty means uncapped / not warming, which is how every
+    // existing sender behaves today.
+    dailyCap: row.dailyCap ?? '',
+    warmupStartedAt: row.warmupStartedAt ? String(row.warmupStartedAt).slice(0, 10) : '',
   });
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -49,7 +53,11 @@ function SenderCard({ row, onSaved }) {
     setError(null);
     setNote(null);
     try {
-      await api.updateSender(row.role, draft);
+      await api.updateSender(row.role, {
+        ...draft,
+        dailyCap: draft.dailyCap === '' ? null : Number(draft.dailyCap),
+        warmupStartedAt: draft.warmupStartedAt === '' ? null : draft.warmupStartedAt,
+      });
       setDraft((d) => ({ ...d, apiKey: '', accessToken: '' })); // never keep a secret in component state
       setNote('تم الحفظ.');
       await onSaved();
@@ -131,6 +139,29 @@ function SenderCard({ row, onSaved }) {
           <input value={draft.phoneNumberId} onChange={(e) => set('phoneNumberId', e.target.value)} placeholder="Phone number ID" style={field} />
         </>
       )}
+
+      {/* COM-004 — the two knobs that keep a number from looking like a
+          broadcaster: a ceiling, and a ramp for a freshly linked number. */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+          الحد اليومي للرسائل (فارغ = بلا حد)
+          <input
+            type="number" min={1}
+            value={draft.dailyCap}
+            onChange={(e) => set('dailyCap', e.target.value)}
+            style={{ ...field, width: '160px' }}
+          />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+          بداية التسخين (رقم جديد يتدرّج خلال ١٤ يوماً)
+          <input
+            type="date"
+            value={draft.warmupStartedAt}
+            onChange={(e) => set('warmupStartedAt', e.target.value)}
+            style={{ ...field, width: '180px' }}
+          />
+        </label>
+      </div>
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         <Button variant="primary" disabled={busy} onClick={save}>{busy ? 'جاري الحفظ…' : 'حفظ'}</Button>

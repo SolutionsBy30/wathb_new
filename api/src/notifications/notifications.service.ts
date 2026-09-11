@@ -8,7 +8,15 @@ import { decideSendChannel, resolveSlotForDay } from './reactive-scheduler';
 import { riyadhDayKey } from './riyadh-clock.util';
 import { NotificationMessagesService } from './notification-messages.service';
 import { ProviderSettingsService } from './provider-settings.service';
+import { AuditLogService } from '../admin-ops/audit-log.service';
 import { EmailChannel } from './email-channel';
+import {
+  DEFAULT_SUPPRESS_AFTER_RUNS,
+  effectiveDailyCap,
+  scheduledSendAt,
+  shouldSuppress,
+  withinDailyCap,
+} from './compliance.util';
 
 const DEFAULT_BUNDLE_SIZE = 5;
 // Never more than 2 messages/day to a student — spec §7.4 frequency cap.
@@ -51,6 +59,7 @@ export class NotificationsService {
     private email: EmailChannel,
     private messages: NotificationMessagesService,
     private providers: ProviderSettingsService,
+    private auditLog: AuditLogService,
   ) {}
 
   /**
@@ -141,7 +150,7 @@ export class NotificationsService {
   async planDayForStudent(studentId: string, forDate: Date) {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentId },
-      include: { user: { select: { status: true, whatsappOptedOutAt: true } } },
+      include: { user: { select: { status: true, whatsappOptedOutAt: true, whatsappSuppressedAt: true } } },
     });
     if (!student?.targetTestId) return { skipped: 'no_goal' as const };
 
@@ -151,6 +160,10 @@ export class NotificationsService {
     // bank and filled the delivery log with rows that could never be sent.
     if (student.user.status === 'suspended') return { skipped: 'suspended' as const };
     if (student.user.whatsappOptedOutAt) return { skipped: 'opted_out' as const };
+    // COM-001 — a number we have given up on is not planned for either, for
+    // the same reason: planning it burns a bundle out of the question bank
+    // for a message that will not be sent.
+    if (student.user.whatsappSuppressedAt) return { skipped: 'suppressed' as const };
 
     // FRE-002 — a free-tier student gets no daily WhatsApp send at all; the
     // Wathb itself is still generated on-demand when they open the app
@@ -242,6 +255,13 @@ export class NotificationsService {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'failed', error: 'opted_out' } });
       return { skipped: 'opted_out' as const };
     }
+    // COM-001 — stop messaging a number that has failed every attempt for
+    // days. Repeatedly sending to a number that cannot receive is one of the
+    // clearest signals that gets a WhatsApp sender flagged.
+    if (student.user.whatsappSuppressedAt) {
+      await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'skipped', error: 'suppressed' } });
+      return { skipped: 'suppressed' as const };
+    }
     // NOT-009 — "the scheduler shall handle... suspended... states."
     if (student.user.status === 'suspended') {
       await this.prisma.notification.update({ where: { id: notif.id }, data: { status: 'skipped', error: 'suspended' } });
@@ -281,7 +301,14 @@ export class NotificationsService {
     if (opts.respectWindow !== false) {
       const slot = resolveSlotForDay(scheduledFor, student.notifSlotStartHour, student.notifSlotEndHour);
       const now = opts.now ?? new Date();
-      if (now < slot.slotStart) return { skipped: 'before_window' as const };
+      // COM-003 — each student gets a stable offset inside their own window,
+      // derived from their id. Without it every student with the default slot
+      // becomes due on the same tick and the whole roster goes out as one
+      // unbroken stream, which is the shape that looks like a broadcaster.
+      // Deterministic rather than random so a student's reminder lands at
+      // roughly the same time each evening.
+      const dueAt = scheduledSendAt(student.userId, slot.slotStart, slot.slotEnd);
+      if (now < dueAt) return { skipped: 'before_window' as const };
       if (now.getTime() > slot.slotEnd.getTime() + WINDOW_GRACE_MINUTES * 60_000) {
         return { skipped: 'window_missed' as const };
       }
@@ -396,6 +423,12 @@ export class NotificationsService {
           nextRetryAt: null,
         },
       });
+      // COM-001 — a delivery clears the strike count. Suppression is about
+      // numbers that never work, not ones that had a bad week.
+      await this.prisma.user.updateMany({
+        where: { id: student.userId, whatsappFailedRuns: { gt: 0 } },
+        data: { whatsappFailedRuns: 0 },
+      });
       return { sent: true as const, channelType: decision.channelType, billable: decision.billable };
     } catch (e: any) {
       // NOT-021 — the transport is down, not this message. Leave the row
@@ -419,8 +452,109 @@ export class NotificationsService {
           nextRetryAt: exhausted ? null : new Date(Date.now() + RETRY_LADDER_MINUTES[retryCount] * 60_000),
         },
       });
+      // COM-001 — an exhausted ladder is one failed run against this number.
+      // A disconnected session never reaches here (it throws above), so this
+      // counts only failures that are specific to the recipient.
+      if (exhausted) await this.recordFailedRun(student.userId);
+
       return { failed: true as const, error: e.message, retriesExhausted: exhausted };
     }
+  }
+
+  /**
+   * COM-004 — how many messages the active sender may still send today.
+   *
+   * Warm-up is part of the answer, not a separate check: a newly linked number
+   * that opens at full volume is the classic way to get a fresh WhatsApp
+   * account blocked in its first week.
+   *
+   * Uncapped is the default and reproduces the old behaviour exactly, so this
+   * does nothing at all until an admin sets a cap or a warm-up date.
+   */
+  async dailyBudget(forDate: Date, now: Date = new Date()) {
+    const sender = await this.prisma.notificationProvider.findFirst({
+      where: { role: 'primary' },
+      select: { dailyCap: true, warmupStartedAt: true, label: true },
+    });
+    const cap = effectiveDailyCap(sender?.dailyCap ?? null, sender?.warmupStartedAt ?? null, now);
+
+    const sentToday = await this.prisma.notification.count({
+      where: { scheduledFor: dayKey(forDate), status: { in: ['sent', 'delivered', 'read'] } },
+    });
+
+    return {
+      cap,
+      sentToday,
+      remaining: cap === null ? Number.POSITIVE_INFINITY : Math.max(0, cap - sentToday),
+      senderLabel: sender?.label ?? null,
+      withinCap: withinDailyCap(sentToday, cap),
+    };
+  }
+
+  /**
+   * COM-001 — one more day where this number could not be reached.
+   *
+   * Suppression is separate from the STOP opt-out on purpose: that is the
+   * student's own permanent choice and only they can set it, while this is our
+   * judgement that the number cannot receive at all. Only an admin clears it.
+   *
+   * The threshold is env-tunable because the right number depends on how
+   * flaky the transport is in practice, and getting it wrong in either
+   * direction is bad: too low silences real students, too high keeps us
+   * messaging dead numbers, which is what gets a sender flagged.
+   */
+  private async recordFailedRun(userId: string) {
+    const threshold = Number(process.env.WHATSAPP_SUPPRESS_AFTER_RUNS);
+    const limit = Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SUPPRESS_AFTER_RUNS;
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { whatsappFailedRuns: { increment: 1 } },
+      select: { id: true, whatsappFailedRuns: true, whatsappSuppressedAt: true, mobileE164: true },
+    });
+
+    if (user.whatsappSuppressedAt || !shouldSuppress(user.whatsappFailedRuns, limit)) return;
+
+    await this.prisma.user.update({ where: { id: userId }, data: { whatsappSuppressedAt: new Date() } });
+    this.logger.warn(
+      `suppressed WhatsApp for user ${userId} after ${user.whatsappFailedRuns} failed run(s)`,
+    );
+    await this.auditLog.record({
+      actorId: null,
+      actorLabel: 'system',
+      action: 'whatsapp.suppressed',
+      entityType: 'User',
+      entityId: userId,
+      after: { failedRuns: user.whatsappFailedRuns },
+      note: `أُوقف الإرسال إلى هذا الرقم بعد ${user.whatsappFailedRuns} أيام دون توصيل.`,
+    });
+  }
+
+  /** COM-001 — an admin has fixed or verified the number; start again. */
+  async clearSuppression(userId: string, adminUserId: string) {
+    const admin = await this.prisma.user.findUnique({ where: { id: adminUserId }, select: { name: true, email: true } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { whatsappSuppressedAt: null, whatsappFailedRuns: 0 },
+    });
+    await this.auditLog.record({
+      actorId: adminUserId,
+      actorLabel: admin?.email ?? admin?.name ?? adminUserId,
+      action: 'whatsapp.suppression_cleared',
+      entityType: 'User',
+      entityId: userId,
+    });
+    return { ok: true };
+  }
+
+  /** COM-001 — the console's list of numbers we have stopped messaging. */
+  suppressedNumbers() {
+    return this.prisma.user.findMany({
+      where: { whatsappSuppressedAt: { not: null } },
+      select: { id: true, name: true, mobileE164: true, whatsappSuppressedAt: true, whatsappFailedRuns: true },
+      orderBy: { whatsappSuppressedAt: 'desc' },
+      take: 200,
+    });
   }
 
   /**
@@ -484,11 +618,30 @@ export class NotificationsService {
       return { aborted: 'channel_unavailable' as const, processed: 0, results: [] };
     }
 
+    // COM-004 — today's ceiling for the sender that will actually carry these.
+    // Checked once per run and then counted down locally: re-querying per
+    // student would add a round trip to every send for a number that barely
+    // moves.
+    const budget = await this.dailyBudget(forDate);
+    if (budget.cap !== null && budget.remaining <= 0) {
+      this.logger.warn(`send_due skipped: daily cap reached (${budget.sentToday}/${budget.cap})`);
+      return { aborted: 'daily_cap_reached' as const, processed: 0, cap: budget.cap, sentToday: budget.sentToday, results: [] };
+    }
+
     const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
     const results: any[] = [];
+    let remaining = budget.remaining;
     for (const s of students) {
+      if (budget.cap !== null && remaining <= 0) {
+        // Stop rather than fail the rest: the untouched rows stay 'scheduled'
+        // and go out tomorrow, or later today if the cap is raised.
+        this.logger.warn(`send_due stopped at the daily cap after ${results.length} student(s)`);
+        return { aborted: 'daily_cap_reached' as const, processed: results.length, cap: budget.cap, results };
+      }
       try {
-        results.push({ studentId: s.userId, ...(await this.sendDailyWathbNotification(s.userId, forDate)) });
+        const outcome: any = await this.sendDailyWathbNotification(s.userId, forDate);
+        if (outcome?.sent) remaining--;
+        results.push({ studentId: s.userId, ...outcome });
       } catch (e) {
         // NOT-021 — one disconnected session rejects every send identically,
         // so walking the rest of the list only produces more failures against

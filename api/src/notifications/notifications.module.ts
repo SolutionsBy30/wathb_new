@@ -6,6 +6,7 @@ import { WeeklyReportService } from './weekly-report.service';
 import { CampaignService } from './campaign.service';
 import { AdminAlertService } from './admin-alert.service';
 import { NotificationMessagesService } from './notification-messages.service';
+import { ReachabilityService } from './reachability.service';
 import { NotificationChannelModule } from './notification-channel.module';
 import { AuthModule } from '../auth/auth.module';
 import { WathbModule } from '../wathb/wathb.module';
@@ -14,8 +15,8 @@ import { AuditLogModule } from '../admin-ops/audit-log.module';
 
 @Module({
   imports: [AuthModule, WathbModule, NotificationChannelModule, ReportsModule, AuditLogModule],
-  providers: [NotificationsService, WeeklyReportService, CampaignService, AdminAlertService, NotificationMessagesService],
+  providers: [NotificationsService, WeeklyReportService, CampaignService, AdminAlertService, NotificationMessagesService, ReachabilityService],
   controllers: [NotificationsController, WebhooksController],
-  exports: [NotificationsService, WeeklyReportService, CampaignService, AdminAlertService, NotificationMessagesService],
+  exports: [NotificationsService, WeeklyReportService, CampaignService, AdminAlertService, NotificationMessagesService, ReachabilityService],
 })
 export class NotificationsModule {}

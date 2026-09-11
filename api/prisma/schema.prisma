@@ -105,6 +105,18 @@ model User {
   // NOT-010 — STOP/إيقاف is honored instantly and permanently: set once,
   // never auto-cleared. Every outbound send path must check this first.
   whatsappOptedOutAt        DateTime?
+  // COM-001 — system-set suppression, deliberately separate from
+  // whatsappOptedOutAt: that is the user's own permanent choice, this is our
+  // judgement that the number cannot receive. An admin can clear it; a
+  // student cannot set it.
+  whatsappSuppressedAt      DateTime?
+  // Consecutive days whose retry ladder was exhausted without delivery.
+  // Reset to zero by any successful send.
+  whatsappFailedRuns        Int       @default(0)
+  // COM-006 — last pre-flight reachability result, when one could be run.
+  // Null means never checked or the vendor did not answer conclusively.
+  whatsappReachable         Boolean?
+  whatsappCheckedAt         DateTime?
   // ADM-085 — suspension is reversible and logged (see AuditLog), unlike
   // the STOP opt-out above. status flips to "suspended"/"active"; every
   // auth entry point (OTP request/verify, magic-link exchange, admin
@@ -926,6 +938,13 @@ model NotificationProvider {
   /// Meta Cloud API
   accessToken   String?
   phoneNumberId String?
+
+  /// COM-004 — most messages this sender may send in one Riyadh day. Null
+  /// means uncapped, which is every install's behaviour until someone sets it.
+  dailyCap        Int?
+  /// COM-004 — when this number started sending. While set and recent, the
+  /// daily allowance ramps instead of opening at full volume.
+  warmupStartedAt DateTime?
 
   /// Health, written by the probe and by send failures.
   /// 'unknown' | 'connected' | 'disconnected'

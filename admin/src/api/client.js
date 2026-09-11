@@ -107,7 +107,7 @@ export const api = {
 
   deliveryLog: () => request('/admin/notifications'),
   // NOT-017 — the pool of daily-leap message variants.
-  listNotificationMessages: () => request('/admin/notifications/messages'),
+  listNotificationMessages: (kind) => request(`/admin/notifications/messages${kind ? `?kind=${kind}` : ''}`),
   // NOT-023 — WhatsApp senders (primary + backup) and their health.
   listSenders: () => request('/admin/notifications/senders'),
   sendersHealth: () => request('/admin/notifications/senders/health'),
@@ -115,6 +115,11 @@ export const api = {
   updateSender: (role, dto) => request(`/admin/notifications/senders/${role}`, { method: 'PATCH', body: dto }),
   // NOT-024 — resend what an outage stranded.
   recoverMissed: () => request('/admin/notifications/recover-missed', { method: 'POST' }),
+  // COM — WhatsApp sending hygiene.
+  listSuppressed: () => request('/admin/notifications/suppressed'),
+  clearSuppression: (userId) => request(`/admin/notifications/suppressed/${userId}/clear`, { method: 'POST' }),
+  sendingBudget: () => request('/admin/notifications/budget'),
+  listUnreachable: () => request('/admin/notifications/unreachable'),
   messagePlaceholders: () => request('/admin/notifications/messages/placeholders'),
   previewNotificationMessage: (body) => request('/admin/notifications/messages/preview', { method: 'POST', body: { body } }),
   createNotificationMessage: (dto) => request('/admin/notifications/messages', { method: 'POST', body: dto }),

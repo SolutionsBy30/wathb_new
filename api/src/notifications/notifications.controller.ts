@@ -8,6 +8,7 @@ import { CurrentSession } from '../auth/current-session.decorator';
 import { SessionPayload } from '../auth/auth.types';
 import { TriggerDateDto } from './dto/trigger.dto';
 import { CampaignAudienceDto, CampaignSendDto } from './dto/campaign.dto';
+import { ReachabilityService } from './reachability.service';
 import { NotificationMessagesService } from './notification-messages.service';
 import { ProviderSettingsService, ProviderRole } from './provider-settings.service';
 import { CreateNotificationMessageDto, PreviewMessageDto, UpdateNotificationMessageDto } from './dto/notification-message.dto';
@@ -40,6 +41,7 @@ export class NotificationsController {
     private adminAlerts: AdminAlertService,
     private messages: NotificationMessagesService,
     private providers: ProviderSettingsService,
+    private reachability: ReachabilityService,
   ) {}
 
   @Get()
@@ -90,6 +92,30 @@ export class NotificationsController {
   @Get('undelivered')
   undelivered() {
     return this.notifications.repeatedlyUndelivered();
+  }
+
+  // COM-001 — numbers the system has stopped messaging, and the way back.
+  @Get('suppressed')
+  suppressed() {
+    return this.notifications.suppressedNumbers();
+  }
+
+  @Post('suppressed/:userId/clear')
+  clearSuppression(@Param('userId') userId: string, @CurrentSession() session: SessionPayload) {
+    return this.notifications.clearSuppression(userId, session.sub);
+  }
+
+  // COM-004 — today's ceiling and how much of it is spent.
+  @Get('budget')
+  budget(@Query('forDate') forDate?: string) {
+    return this.notifications.dailyBudget(forDate ? new Date(forDate) : new Date());
+  }
+
+  // COM-006 — numbers the vendor reported as not on WhatsApp. Empty whenever
+  // the check is unconfigured, which is the default.
+  @Get('unreachable')
+  unreachable() {
+    return this.reachability.unreachableNumbers();
   }
 
   @Post('send/:studentId')
@@ -168,9 +194,11 @@ export class NotificationsController {
    * paths and there is no 'messages/:id' GET, so no static path can be
    * swallowed by a parameter route.
    */
+  // COM-005 — the pool is per message kind now: the daily leap and the
+  // weekly report each vary within their own set.
   @Get('messages')
-  listMessages() {
-    return this.messages.list();
+  listMessages(@Query('kind') kind?: string) {
+    return this.messages.list(kind || undefined);
   }
 
   /** The placeholder vocabulary, so the console never hardcodes it. */
@@ -186,7 +214,7 @@ export class NotificationsController {
 
   @Post('messages')
   createMessage(@Body() dto: CreateNotificationMessageDto) {
-    return this.messages.create(dto.body, dto.isActive ?? true);
+    return this.messages.create(dto.body, dto.isActive ?? true, dto.kind);
   }
 
   @Patch('messages/:id')

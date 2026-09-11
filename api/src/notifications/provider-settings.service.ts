@@ -80,6 +80,9 @@ export class ProviderSettingsService {
       baseUrl: r.baseUrl,
       statusPath: r.statusPath,
       phoneNumberId: r.phoneNumberId,
+      // COM-004 — the console edits both, and both are safe to display.
+      dailyCap: r.dailyCap,
+      warmupStartedAt: r.warmupStartedAt,
       // Enough to tell "a key is set" and "it is not the one I just replaced"
       // apart, without being enough to use.
       apiKeyHint: mask(r.apiKey),
@@ -114,6 +117,19 @@ export class ProviderSettingsService {
       if (dto[key] !== undefined) data[key] = dto[key] === '' ? null : dto[key];
     }
     if (typeof dto.isActive === 'boolean') data.isActive = dto.isActive;
+
+    // COM-004 — unlike the credentials above, null here is a real value:
+    // clearing the cap means "uncapped" and clearing the warm-up date means
+    // "done warming", so both must be settable back to null.
+    if (dto.dailyCap !== undefined) {
+      const n = Number(dto.dailyCap);
+      data.dailyCap = dto.dailyCap === null || dto.dailyCap === '' || !Number.isFinite(n) || n <= 0 ? null : Math.floor(n);
+    }
+    if (dto.warmupStartedAt !== undefined) {
+      const raw = dto.warmupStartedAt;
+      const d = raw === null || raw === '' ? null : new Date(String(raw));
+      data.warmupStartedAt = d && !Number.isNaN(d.getTime()) ? d : null;
+    }
     for (const key of ['apiKey', 'accessToken'] as const) {
       const v = dto[key];
       if (typeof v === 'string' && v.trim() !== '') data[key] = v.trim();

@@ -10,6 +10,14 @@ import {
 } from './message-template.util';
 
 export const DAILY_WATHB_KIND = 'daily_wathb';
+/**
+ * COM-005 — the weekly report goes to the whole roster in one pass, so
+ * identical wording for every recipient is the same broadcast signal the daily
+ * leap already varies away from. Same pool, different kind.
+ */
+export const WEEKLY_REPORT_KIND = 'weekly_report_student';
+
+export const MESSAGE_KINDS = [DAILY_WATHB_KIND, WEEKLY_REPORT_KIND] as const;
 
 /**
  * NOT-017 — the admin-managed pool of daily-leap message bodies.
