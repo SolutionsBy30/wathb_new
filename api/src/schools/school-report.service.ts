@@ -13,6 +13,14 @@ import {
   StudentRow,
   summarise,
 } from './school-insights.util';
+import {
+  AttemptScore,
+  describeForecastAr,
+  forecast,
+  FORECAST_DISCLAIMER_AR,
+  ScoreForecast,
+  summariseForecasts,
+} from '../simulation/score-forecast.util';
 
 /**
  * SCH-003 — the school dashboard's data.
@@ -27,9 +35,15 @@ import {
  *  - breakdowns are suppressed below a cohort floor, because a mean over four
  *    students beside a list of four aliases identifies all four.
  *
- * Nothing here predicts a Qiyas score. We have no equating table — the same
- * reason SimulationResult.scaledEstimate stays null — and a predicted number
- * on this screen is one a school would place students into classes on.
+ * The forecast (SIM-023) is built from simulation attempts only — never from
+ * daily practice. A simulation is sat under exam conditions, which is what
+ * makes it worth forecasting from; daily accuracy measures a different thing
+ * at a different difficulty and would flatter everyone.
+ *
+ * It is still not a Qiyas score, and every response says so: we have no
+ * equating table, the same reason SimulationResult.scaledEstimate stays null.
+ * What a school gets is the range this student has actually produced under
+ * exam conditions, which is a defensible thing to plan around.
  */
 @Injectable()
 export class SchoolReportService {
@@ -97,33 +111,41 @@ export class SchoolReportService {
       : [];
     const leapsByStudent = new Map(completed.map((c) => [c.studentId, c._count._all]));
 
-    // Latest simulation percentage, where one exists. Closest thing we have to
-    // an exam-condition signal, and far more informative than daily practice.
+    // SIM-023 — every finalized simulation, not just the newest: the forecast
+    // is built from the lowest, the highest and the most recent, so the whole
+    // history is needed.
     const sims = ids.length
       ? await this.prisma.simulationAttempt.findMany({
           where: { studentId: { in: ids }, finalizedAt: { not: null } },
-          orderBy: { finalizedAt: 'desc' },
-          select: { studentId: true, result: { select: { rawScore: true, scoredCount: true } } },
+          orderBy: { finalizedAt: 'asc' },
+          select: { studentId: true, finalizedAt: true, result: { select: { rawScore: true, scoredCount: true } } },
         })
       : [];
-    const simByStudent = new Map<string, number>();
+    const attemptsByStudent = new Map<string, AttemptScore[]>();
     for (const a of sims) {
-      if (simByStudent.has(a.studentId) || !a.result || a.result.scoredCount === 0) continue;
-      simByStudent.set(a.studentId, Math.round((a.result.rawScore / a.result.scoredCount) * 1000) / 10);
+      if (!a.result || a.result.scoredCount === 0 || !a.finalizedAt) continue;
+      const list = attemptsByStudent.get(a.studentId) ?? [];
+      list.push({
+        accuracy: Math.round((a.result.rawScore / a.result.scoredCount) * 1000) / 10,
+        finalizedAt: a.finalizedAt,
+      });
+      attemptsByStudent.set(a.studentId, list);
     }
 
     return students.map((s) => {
       const answered = s.labelStats.reduce((n, l) => n + l.nAnswered, 0);
       const correct = s.labelStats.reduce((n, l) => n + l.nCorrect, 0);
+      const f = forecast(attemptsByStudent.get(s.userId) ?? []);
       return {
         student: s,
+        forecast: f,
         row: {
           studentId: s.userId,
           accuracy: answered > 0 ? Math.round((correct / answered) * 1000) / 10 : null,
           answered,
           completedLeaps: leapsByStudent.get(s.userId) ?? 0,
           lastActiveAt: s.lastCompletedOn,
-          simulationAccuracy: simByStudent.get(s.userId) ?? null,
+          simulationAccuracy: f?.likely ?? null,
         } satisfies StudentRow,
       };
     });
@@ -147,13 +169,17 @@ export class SchoolReportService {
           reason: 'cohort_too_small' as const,
           messageAr: `تظهر النتائج التفصيلية عند تسجيل ${MIN_COHORT_STUDENTS} طالبًا على الأقل من المدرسة. المسجّلون حاليًا: ${summary.students}.`,
         },
+        forecast: summariseForecasts([]),
         students: [],
         disclaimerAr: READINESS_DISCLAIMER_AR,
+        forecastDisclaimerAr: FORECAST_DISCLAIMER_AR,
       };
     }
 
+    const cohortForecast = summariseForecasts(rows.map((r) => r.forecast));
+
     const students = rows
-      .map(({ student, row }) => {
+      .map(({ student, row, forecast: f }) => {
         const named = canRevealIdentity(disclosure, {
           studentId: student.userId,
           optedOutAt: student.schoolShareOptOutAt,
@@ -173,17 +199,26 @@ export class SchoolReportService {
           simulationAccuracy: row.simulationAccuracy,
           lastActiveAt: row.lastActiveAt,
           band: readinessBand(row.accuracy, row.answered),
+          // SIM-023 — null when they have never sat a simulation. The client
+          // shows "لم يجرِ المحاكي" rather than a zero, which would read as a
+          // prediction of failure.
+          forecast: f,
+          forecastNoteAr: f ? describeForecastAr(f) : null,
         };
       })
-      // Weakest measured first: this screen exists to find who needs a class.
-      .sort((a, b) => (a.accuracy ?? 999) - (b.accuracy ?? 999));
+      // Sorted by the forecast floor where there is one, then by daily
+      // accuracy: this screen exists to find who needs a class, and the floor
+      // is the number that decides that.
+      .sort((a, b) => (a.forecast?.low ?? a.accuracy ?? 999) - (b.forecast?.low ?? b.accuracy ?? 999));
 
     return {
       school: { id: school.id, nameAr: school.nameAr, disclosure },
       summary,
+      forecast: cohortForecast,
       suppressed: null,
       students,
       disclaimerAr: READINESS_DISCLAIMER_AR,
+      forecastDisclaimerAr: FORECAST_DISCLAIMER_AR,
     };
   }
 
@@ -263,10 +298,19 @@ export class SchoolReportService {
     const disclosure = school.identityDisclosure as Disclosure;
 
     if (!isReportable(rows.length)) {
-      return { struggling: [], inactive: [], suppressed: { reason: 'cohort_too_small' as const }, disclaimerAr: READINESS_DISCLAIMER_AR };
+      return {
+        struggling: [],
+        inactive: [],
+        volatile: [],
+        byForecastFloor: [],
+        cohortForecast: summariseForecasts([]),
+        suppressed: { reason: 'cohort_too_small' as const },
+        disclaimerAr: READINESS_DISCLAIMER_AR,
+        forecastDisclaimerAr: FORECAST_DISCLAIMER_AR,
+      };
     }
 
-    const present = ({ student, row }: { student: any; row: StudentRow }) => ({
+    const present = ({ student, row, forecast: f }: { student: any; row: StudentRow; forecast: ScoreForecast | null }) => ({
       ref: aliasFor(student.userId, schoolId),
       name: canRevealIdentity(disclosure, {
         studentId: student.userId,
@@ -280,6 +324,8 @@ export class SchoolReportService {
       completedLeaps: row.completedLeaps,
       lastActiveAt: row.lastActiveAt,
       band: readinessBand(row.accuracy, row.answered),
+      forecast: f,
+      forecastNoteAr: f ? describeForecastAr(f) : null,
     });
 
     const struggling = rows
@@ -292,6 +338,32 @@ export class SchoolReportService {
       .map(present)
       .sort((a, b) => a.answered - b.answered);
 
-    return { struggling, inactive, suppressed: null, disclaimerAr: READINESS_DISCLAIMER_AR };
+    // SIM-023 — a third list, because it needs a third response. A student
+    // swinging 20 points between simulations does not need more content; they
+    // need exam technique — pacing, nerves, not running out of time. Reading
+    // them as "struggling" would send them to the wrong class.
+    const volatile = rows
+      .filter(({ forecast: f }) => f?.volatile)
+      .map(present)
+      .sort((a, b) => (b.forecast?.spread ?? 0) - (a.forecast?.spread ?? 0));
+
+    // Below the forecast floor: a school planning for its students' good days
+    // is planning for the wrong day.
+    const atRiskOnFloor = rows
+      .filter(({ forecast: f }) => f !== null)
+      .map(present)
+      .sort((a, b) => (a.forecast!.low ?? 0) - (b.forecast!.low ?? 0))
+      .slice(0, 20);
+
+    return {
+      struggling,
+      inactive,
+      volatile,
+      byForecastFloor: atRiskOnFloor,
+      cohortForecast: summariseForecasts(rows.map((r) => r.forecast)),
+      suppressed: null,
+      disclaimerAr: READINESS_DISCLAIMER_AR,
+      forecastDisclaimerAr: FORECAST_DISCLAIMER_AR,
+    };
   }
 }

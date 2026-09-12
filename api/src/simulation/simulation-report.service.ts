@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionPayload } from '../auth/auth.types';
 import { bandFor, BAND_AR, cohortPercentile } from './percentile.util';
 import { difficultyBand } from './scoring.util';
+import { AttemptScore, describeForecastAr, forecast, FORECAST_DISCLAIMER_AR } from './score-forecast.util';
 
 /**
  * SIM-016 — §7.2/§7.3 the report, built once and framed per reader.
@@ -135,6 +136,23 @@ export class SimulationReportService {
 
     const percentiles = await this.percentiles(attempt.formId, attempt.form.isStatic, attempt.result.rawScore, attempt.schoolSnapshot);
 
+    // SIM-023 — the forecast over this student's whole simulation history, on
+    // the report they and their supervisor actually read. The school sees the
+    // same figures; it would be strange for them to have a projection the
+    // student does not.
+    const history = await this.prisma.simulationAttempt.findMany({
+      where: { studentId: attempt.studentId, blueprintId: attempt.blueprintId, finalizedAt: { not: null } },
+      orderBy: { finalizedAt: 'asc' },
+      select: { finalizedAt: true, result: { select: { rawScore: true, scoredCount: true } } },
+    });
+    const scores: AttemptScore[] = history
+      .filter((h) => h.result && h.result.scoredCount > 0 && h.finalizedAt)
+      .map((h) => ({
+        accuracy: Math.round((h.result!.rawScore / h.result!.scoredCount) * 1000) / 10,
+        finalizedAt: h.finalizedAt!,
+      }));
+    const scoreForecast = forecast(scores);
+
     const questions = items.map((i) => {
       const a = byItem.get(i.id);
       return {
@@ -203,6 +221,9 @@ export class SimulationReportService {
       // breakdown is already sorted weakest first by the scorer.
       focusAreas: areaBreakdown.slice(0, 3),
       nextEligibleAt: new Date(attempt.finalizedAt.getTime() + attempt.blueprint.minDaysBetweenAttempts * 86_400_000),
+      forecast: scoreForecast,
+      forecastNoteAr: scoreForecast ? describeForecastAr(scoreForecast) : null,
+      forecastDisclaimerAr: FORECAST_DISCLAIMER_AR,
       questions,
     };
 
