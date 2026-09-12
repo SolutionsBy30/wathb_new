@@ -19,6 +19,7 @@ import { OverviewModule } from './overview/overview.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JobsModule } from './jobs/jobs.module';
 import { SimulationModule } from './simulation/simulation.module';
+import { SchoolsModule } from './schools/schools.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { SimulationModule } from './simulation/simulation.module';
     OverviewModule,
     JobsModule,
     SimulationModule,
+    SchoolsModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

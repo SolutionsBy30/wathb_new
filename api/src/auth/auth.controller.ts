@@ -90,7 +90,13 @@ export class AuthController {
   @UseGuards(SessionGuard)
   @Post('step-up/verify')
   async stepUpVerify(@Body() dto: StepUpVerifyDto, @CurrentSession() session: SessionPayload) {
-    if (session.kind === 'admin') throw new BadRequestException('step-up does not apply to admin sessions');
+    // Step-up guards sensitive actions on one's own account — changing a
+    // mobile number, cancelling a subscription, reading payment history. An
+    // admin has none of those, and neither does a school administrator: their
+    // session owns no personal record to protect.
+    if (session.kind === 'admin' || session.kind === 'school') {
+      throw new BadRequestException('step-up does not apply to this session kind');
+    }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: session.sub } });
     if (!user.mobileE164) throw new BadRequestException('no mobile number on file');
     await this.otp.verifyOtp(user.mobileE164, session.kind, dto.code);

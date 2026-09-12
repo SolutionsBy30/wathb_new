@@ -15,6 +15,11 @@ enum Role {
   admin
   supervisor
   student
+  // SCH-002 — a school administrator. Separate from 'supervisor' because a
+  // supervisor's access follows invitations from individual students, while
+  // this one follows employment at a school and never reaches a student's
+  // own account.
+  school
 }
 
 enum SupervisorType {
@@ -69,6 +74,10 @@ enum MagicLinkPurpose {
 enum SubjectType {
   student
   supervisor
+  // SCH-004 — school administrators authenticate with the same OTP machinery,
+  // so their codes need a subject type of their own. They are never a magic
+  // link subject: a school session reaches a dashboard, never an account.
+  school
 }
 
 enum AccuracyBand {
@@ -138,6 +147,8 @@ model User {
 
   student    Student?
   supervisor Supervisor?
+  // SCH-002 — one person may administer more than one school.
+  schoolAdmins SchoolAdmin[]
 
   notifications Notification[]
   waSession     WaSession?
@@ -169,6 +180,11 @@ model Student {
   // deliver daily practice, so collection must stay opt-in).
   schoolId                 String?
   school                   School?   @relation(fields: [schoolId], references: [id])
+  // SCH-001 — the student's own say over being named to their school. The
+  // opt-out wins over every school-level setting; the consent only matters
+  // when the school is on 'consented'.
+  schoolShareConsentAt     DateTime?
+  schoolShareOptOutAt      DateTime?
 
   wathbs              Wathb[]
   answers             Answer[]
@@ -248,6 +264,16 @@ enum SchoolStatus {
   pending_review
 }
 
+/// SCH-001 — how much a school may see about its own students.
+/// Default 'none': the school gets aggregates and stable pseudonyms and no
+/// names at all. Anything more is a deliberate decision by a وثب admin, and
+/// a student can still refuse individually.
+enum SchoolIdentityDisclosure {
+  none
+  consented
+  full
+}
+
 model School {
   id                   String       @id @default(uuid())
   cityId               String
@@ -258,9 +284,32 @@ model School {
   suggestedByStudentId String?
   createdAt            DateTime     @default(now())
 
+  identityDisclosure SchoolIdentityDisclosure @default(none)
+
   students Student[]
+  admins   SchoolAdmin[]
 
   @@map("schools")
+}
+
+/// SCH-002 — a person who may read one school's dashboard.
+///
+/// Scoped to a school, not to a list of students: that is the whole
+/// difference from a supervisor, who sees only students who invited them.
+model SchoolAdmin {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  title     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime?
+
+  @@unique([userId, schoolId])
+  @@index([schoolId, isActive])
+  @@map("school_admins")
 }
 
 model Supervisor {

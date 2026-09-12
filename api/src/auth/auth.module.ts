@@ -25,6 +25,8 @@ import { AuditLogModule } from '../admin-ops/audit-log.module';
   ],
   controllers: [AuthController],
   providers: [AuthService, MagicLinkService, OtpService, SessionGuard],
-  exports: [AuthService, MagicLinkService, SessionGuard],
+  // OtpService is exported for SchoolsModule: school administrators use the
+  // same OTP machinery with a different account lookup.
+  exports: [AuthService, MagicLinkService, OtpService, SessionGuard],
 })
 export class AuthModule {}

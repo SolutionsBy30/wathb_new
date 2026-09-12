@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { SubjectType } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_PROVIDER, PaymentProvider } from './payment-provider.interface';
@@ -105,7 +106,15 @@ export class CheckoutService {
   }
 
   /** Which app to land the payer back on — supervisors started from theirs. */
-  private appReturnUrl(payerType?: 'supervisor' | 'student' | null): string {
+  /**
+   * Where to bounce the payer back to.
+   *
+   * Total over SubjectType rather than a two-value union: the enum grew a
+   * 'school' member and a narrower signature would have needed a cast, which
+   * is how a new payer type ends up silently landing on the wrong app. Only a
+   * supervisor pays from the supervisor app; everything else is the student's.
+   */
+  private appReturnUrl(payerType?: SubjectType | null): string {
     return payerType === 'supervisor'
       ? this.config.get<string>('SUPERVISOR_APP_URL', 'http://localhost:5175/supervisor')
       : this.config.get<string>('STUDENT_APP_URL', 'http://localhost:5173/wathb');

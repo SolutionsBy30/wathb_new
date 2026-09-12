@@ -1,4 +1,8 @@
-export type SessionKind = 'admin' | 'student' | 'supervisor';
+// SCH-002 — 'school' is a school administrator: scoped to one school's
+// dashboard, never to an individual student's account. Kept out of the
+// SubjectType enum on purpose — magic links and OTP subject types address
+// people who own data, and a school administrator owns none of it.
+export type SessionKind = 'admin' | 'student' | 'supervisor' | 'school';
 
 export interface SessionPayload {
   sub: string; // user id
