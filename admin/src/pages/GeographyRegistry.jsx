@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import SchoolSearchPicker from '../components/SchoolSearchPicker';
 
 const fieldStyle = { padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' };
 const rowStyle = { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '8px 0', borderTop: '0.5px solid var(--on-indigo-line)' };
@@ -33,6 +34,8 @@ export default function GeographyRegistry() {
   const [newAlias, setNewAlias] = useState({});
   const [mergeSource, setMergeSource] = useState('');
   const [mergeTarget, setMergeTarget] = useState('');
+  const [sourceSchool, setSourceSchool] = useState(null);
+  const [targetSchool, setTargetSchool] = useState(null);
   const [mergeResult, setMergeResult] = useState(null);
   const [mergeError, setMergeError] = useState(null);
   const [newRegionAr, setNewRegionAr] = useState('');
@@ -56,11 +59,23 @@ export default function GeographyRegistry() {
   const doMerge = async () => {
     setMergeError(null);
     setMergeResult(null);
-    if (!mergeSource.trim() || !mergeTarget.trim()) return;
+    if (!mergeSource || !mergeTarget) return;
+    // Naming both schools and the headcount, because the direction is the part
+    // that goes wrong: the source is deleted, and a reversed merge cannot be
+    // undone by merging back — the source record no longer exists.
+    const ok = window.confirm(
+      `سيُنقل ${sourceSchool?.students ?? 0} طالبًا من:\n\n`
+      + `«${sourceSchool?.nameAr}» (${sourceSchool?.cityNameAr}) — وتُحذف هذه المدرسة\n\n`
+      + `إلى:\n\n«${targetSchool?.nameAr}» (${targetSchool?.cityNameAr}) — وتبقى هذه\n\n`
+      + 'لا يمكن التراجع عن هذا. تأكيد؟',
+    );
+    if (!ok) return;
     try {
-      setMergeResult(await api.mergeSchools(mergeSource.trim(), mergeTarget.trim()));
+      setMergeResult(await api.mergeSchools(mergeSource, mergeTarget));
       setMergeSource('');
       setMergeTarget('');
+      setSourceSchool(null);
+      setTargetSchool(null);
     } catch (e) {
       setMergeError(e.message);
     }
@@ -175,14 +190,51 @@ export default function GeographyRegistry() {
 
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '480px' }}>
         <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>دمج مدرستين مكررتين</h3>
-        <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
-          يُعاد توجيه جميع طلاب المدرسة المصدر إلى المدرسة الهدف، ثم تُحذف المدرسة المصدر. الصق معرّف كل مدرسة (id).
+        <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)', lineHeight: 1.8 }}>
+          يُعاد توجيه جميع طلاب المدرسة المصدر إلى المدرسة الهدف، ثم تُحذف المدرسة المصدر. ابحث بالاسم واختر من القائمة.
         </p>
-        <input value={mergeSource} onChange={(e) => setMergeSource(e.target.value)} placeholder="معرّف المدرسة المصدر (تُحذف)" style={fieldStyle} />
-        <input value={mergeTarget} onChange={(e) => setMergeTarget(e.target.value)} placeholder="معرّف المدرسة الهدف (تبقى)" style={fieldStyle} />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--coral)' }}>المصدر — تُحذف</span>
+          <SchoolSearchPicker
+            value={mergeSource}
+            exclude={mergeTarget}
+            placeholder="ابحث عن المدرسة المكررة"
+            onChange={(id, school) => { setMergeSource(id); setSourceSchool(school); }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--lime)' }}>الهدف — تبقى</span>
+          <SchoolSearchPicker
+            value={mergeTarget}
+            exclude={mergeSource}
+            placeholder="ابحث عن المدرسة التي ستبقى"
+            onChange={(id, school) => { setMergeTarget(id); setTargetSchool(school); }}
+          />
+        </div>
+
+        {sourceSchool && targetSchool && (
+          <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)', lineHeight: 1.9 }}>
+            {sourceSchool.students} طالبًا من «{sourceSchool.nameAr}» ← «{targetSchool.nameAr}»
+            {sourceSchool.cityNameAr !== targetSchool.cityNameAr && (
+              // Same-name schools in different cities are usually two real
+              // schools, not one entered twice.
+              <span style={{ color: '#E8C547', display: 'block' }}>
+                تنبيه: المدرستان في مدينتين مختلفتين ({sourceSchool.cityNameAr} و{targetSchool.cityNameAr}) — تأكّد أنهما فعلاً المدرسة نفسها.
+              </span>
+            )}
+            {sourceSchool.admins > 0 && (
+              <span style={{ color: '#E8C547', display: 'block' }}>
+                تنبيه: للمدرسة المصدر {sourceSchool.admins} مسؤول لوحة سيفقد وصوله عند الحذف.
+              </span>
+            )}
+          </p>
+        )}
+
         {mergeError && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>{mergeError}</p>}
         {mergeResult && <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--teal-ink)' }}>تم نقل {mergeResult.mergedStudents} طالباً إلى المدرسة الهدف.</p>}
-        <button onClick={doMerge} disabled={!mergeSource.trim() || !mergeTarget.trim()} style={{ ...btnStyle, alignSelf: 'flex-start', background: 'var(--coral)', color: 'var(--indigo)' }}>
+        <button onClick={doMerge} disabled={!mergeSource || !mergeTarget} style={{ ...btnStyle, alignSelf: 'flex-start', background: 'var(--coral)', color: 'var(--indigo)', opacity: !mergeSource || !mergeTarget ? 0.5 : 1 }}>
           دمج
         </button>
       </div>
