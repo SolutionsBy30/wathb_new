@@ -36,6 +36,51 @@ export class SchoolAdminService {
     });
   }
 
+  /**
+   * SCH-008 — every school, for the schools screen.
+   *
+   * Distinct from `schoolsWithAccess`, which lists only schools that already
+   * have a dashboard administrator. This is the registry: a school with no
+   * students and no administrators still has to be findable, because "why is
+   * this school empty?" is a question asked about exactly those.
+   */
+  async listAll(params: { search?: string; cityId?: string; regionId?: string } = {}) {
+    const search = params.search?.trim();
+    const rows = await this.prisma.school.findMany({
+      where: {
+        ...(search ? { nameAr: { contains: search, mode: 'insensitive' as const } } : {}),
+        ...(params.cityId ? { cityId: params.cityId } : {}),
+        ...(params.regionId ? { city: { regionId: params.regionId } } : {}),
+      },
+      select: {
+        id: true,
+        nameAr: true,
+        nameEn: true,
+        status: true,
+        identityDisclosure: true,
+        createdAt: true,
+        city: { select: { id: true, nameAr: true, region: { select: { id: true, nameAr: true } } } },
+        _count: { select: { admins: true, students: true } },
+      },
+      orderBy: [{ nameAr: 'asc' }],
+      take: 400,
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      nameAr: r.nameAr,
+      nameEn: r.nameEn,
+      status: r.status,
+      disclosure: r.identityDisclosure,
+      createdAt: r.createdAt,
+      cityId: r.city.id,
+      cityNameAr: r.city.nameAr,
+      regionId: r.city.region.id,
+      regionNameAr: r.city.region.nameAr,
+      admins: r._count.admins,
+      students: r._count.students,
+    }));
+  }
+
   /** Schools that have at least one administrator, plus their disclosure state. */
   async schoolsWithAccess() {
     const rows = await this.prisma.school.findMany({

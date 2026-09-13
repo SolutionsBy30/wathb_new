@@ -223,6 +223,80 @@ export class SchoolReportService {
   }
 
   /**
+   * SCH-008 — the same cohort picture for a وثب admin, who has no SchoolAdmin
+   * link and needs none: they can already open any student's full record on
+   * the students screen.
+   *
+   * Aggregates only — bands, areas, cohort forecast, attention counts. No
+   * per-student rows, so this endpoint adds no way to read a named student
+   * that the 'students' permission does not already govern. An admin holding
+   * only 'geography' gets the shape of a school, not its roster.
+   *
+   * The cohort floor is reported rather than enforced: an admin investigating
+   * "why does this school see nothing?" needs the real numbers to answer it,
+   * and `schoolSees` says exactly what the school is being shown instead.
+   */
+  async adminCohortReport(schoolId: string) {
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+      select: {
+        id: true,
+        nameAr: true,
+        identityDisclosure: true,
+        city: { select: { nameAr: true, region: { select: { nameAr: true } } } },
+      },
+    });
+    if (!school) throw new NotFoundException('المدرسة غير موجودة');
+
+    const rows = await this.studentRows(schoolId);
+    const summary = summarise(rows.map((r) => r.row));
+    const areas = await this.areaAggregate(schoolId);
+
+    const optedOut = rows.filter((r) => r.student.schoolShareOptOutAt !== null).length;
+    const consented = rows.filter((r) => r.student.schoolShareConsentAt !== null).length;
+
+    return {
+      school: {
+        id: school.id,
+        nameAr: school.nameAr,
+        cityNameAr: school.city.nameAr,
+        regionNameAr: school.city.region.nameAr,
+        disclosure: school.identityDisclosure as Disclosure,
+      },
+      summary,
+      forecast: summariseForecasts(rows.map((r) => r.forecast)),
+      areas,
+      attention: {
+        struggling: rows.filter(({ row }) => ['at_risk', 'needs_support'].includes(readinessBand(row.accuracy, row.answered))).length,
+        inactive: rows.filter(({ row }) => row.answered < MIN_ANSWERS_FOR_BAND).length,
+        volatile: rows.filter(({ forecast: f }) => f?.volatile).length,
+        neverSimulated: rows.filter(({ forecast: f }) => f === null).length,
+      },
+      // What this school is actually being shown right now, which is the
+      // question a support call is usually about.
+      schoolSees: {
+        reportable: isReportable(summary.students),
+        minStudents: MIN_COHORT_STUDENTS,
+        disclosure: school.identityDisclosure as Disclosure,
+        namesVisible:
+          school.identityDisclosure === 'full'
+            ? summary.students - optedOut
+            : school.identityDisclosure === 'consented'
+              ? rows.filter((r) => canRevealIdentity('consented', {
+                  studentId: r.student.userId,
+                  optedOutAt: r.student.schoolShareOptOutAt,
+                  consentedAt: r.student.schoolShareConsentAt,
+                })).length
+              : 0,
+        optedOut,
+        consented,
+      },
+      disclaimerAr: READINESS_DISCLAIMER_AR,
+      forecastDisclaimerAr: FORECAST_DISCLAIMER_AR,
+    };
+  }
+
+  /**
    * Where the school as a whole is weak, by area — the answer to "which
    * classes should we run".
    *
@@ -244,7 +318,24 @@ export class SchoolReportService {
       };
     }
 
+    return { areas: await this.areaAggregate(schoolId), suppressed: null, disclaimerAr: READINESS_DISCLAIMER_AR };
+  }
+
+  /**
+   * Accuracy by area for one school, weakest first.
+   *
+   * Shared by the school's own breakdown and the admin report so the two can
+   * never disagree — a support call where the admin console and the school
+   * dashboard quote different numbers is worse than either being wrong.
+   *
+   * The per-area floor stays in both: an area only a handful of students ever
+   * touched reports their accuracy, not the school's, whoever is reading.
+   */
+  private async areaAggregate(schoolId: string) {
+    const students = await this.prisma.student.findMany({ where: { schoolId }, select: { userId: true } });
     const ids = students.map((s) => s.userId);
+    if (ids.length === 0) return [];
+
     const stats = await this.prisma.studentLabelStat.findMany({
       where: { studentId: { in: ids } },
       select: {
@@ -266,9 +357,7 @@ export class SchoolReportService {
       agg.set(a.id, cur);
     }
 
-    const areas = [...agg.entries()]
-      // An area a handful of students touched is not a finding about the
-      // school, and its accuracy is effectively theirs alone.
+    return [...agg.entries()]
       .filter(([, v]) => isReportable(v.students.size, MIN_STUDENTS_PER_AREA))
       .map(([areaId, v]) => ({
         areaId,
@@ -279,8 +368,6 @@ export class SchoolReportService {
         accuracy: Math.round((v.correct / v.answered) * 1000) / 10,
       }))
       .sort((a, b) => a.accuracy - b.accuracy);
-
-    return { areas, suppressed: null, disclaimerAr: READINESS_DISCLAIMER_AR };
   }
 
   /**

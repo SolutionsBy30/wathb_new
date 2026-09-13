@@ -83,9 +83,44 @@ describe('SchoolController access control', () => {
 });
 
 describe('SchoolAdminController access control', () => {
+  const adminProto = SchoolAdminController.prototype as unknown as Record<string, () => unknown>;
+  const adminHandlers = Object.getOwnPropertyNames(adminProto).filter((n) => n !== 'constructor');
+
   it('is admin-only and gated on a real permission', () => {
     expect(Reflect.getMetadata('sessionKinds', SchoolAdminController)).toEqual(['admin']);
     expect(Reflect.getMetadata('adminPermission', SchoolAdminController)).toEqual(['geography']);
     expect(Reflect.getMetadata(GUARDS_METADATA, SchoolAdminController) ?? []).toContain(SessionGuard);
+  });
+
+  it('binds each route to the method it was written for', () => {
+    const expected: Record<string, { path: string; method: RequestMethod }> = {
+      list: { path: '/', method: RequestMethod.GET },
+      schoolsWithAccess: { path: 'access', method: RequestMethod.GET },
+      listAdmins: { path: 'admins', method: RequestMethod.GET },
+      grant: { path: 'admins', method: RequestMethod.POST },
+      setActive: { path: 'admins/:id/active', method: RequestMethod.POST },
+      report: { path: ':schoolId/report', method: RequestMethod.GET },
+      setDisclosure: { path: ':schoolId/disclosure', method: RequestMethod.POST },
+    };
+    expect(new Set(adminHandlers)).toEqual(new Set(Object.keys(expected)));
+    for (const [name, want] of Object.entries(expected)) {
+      expect({
+        name,
+        path: Reflect.getMetadata(PATH_METADATA, adminProto[name]),
+        method: Reflect.getMetadata(METHOD_METADATA, adminProto[name]),
+      }).toEqual({ name, ...want });
+    }
+  });
+
+  it('declares the literal GET paths before the ":schoolId" one that would swallow them', () => {
+    // 'access' and 'admins' are single-segment GETs and ':schoolId/report' is
+    // two, so those cannot collide. The one that can is a future single-segment
+    // ':schoolId' route, and this ordering is what a reader relies on.
+    const gets = adminHandlers
+      .map((n) => ({ n, p: Reflect.getMetadata(PATH_METADATA, adminProto[n]) as string, m: Reflect.getMetadata(METHOD_METADATA, adminProto[n]) }))
+      .filter((r) => r.m === RequestMethod.GET);
+    const firstParam = gets.findIndex((r) => r.p.startsWith(':'));
+    const lastLiteral = gets.map((r) => !r.p.startsWith(':')).lastIndexOf(true);
+    expect(lastLiteral).toBeLessThan(firstParam);
   });
 });

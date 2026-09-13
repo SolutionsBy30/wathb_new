@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { SchoolAdminService } from './school-admin.service';
+import { SchoolReportService } from './school-report.service';
 import { GrantSchoolAdminDto, SetDisclosureDto, SetSchoolAdminActiveDto } from './dto/school.dto';
 import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
 import { CurrentSession } from '../auth/current-session.decorator';
@@ -18,9 +19,21 @@ import { SessionPayload } from '../auth/auth.types';
 @RequirePermission('geography')
 @Controller('admin/schools')
 export class SchoolAdminController {
-  constructor(private schools: SchoolAdminService) {}
+  constructor(
+    private schools: SchoolAdminService,
+    private reports: SchoolReportService,
+  ) {}
 
-  // Literal path, declared before anything with a ':schoolId'.
+  // Literal paths, declared before anything with a ':schoolId'.
+  @Get()
+  list(
+    @Query('search') search?: string,
+    @Query('cityId') cityId?: string,
+    @Query('regionId') regionId?: string,
+  ) {
+    return this.schools.listAll({ search, cityId, regionId });
+  }
+
   @Get('access')
   schoolsWithAccess() {
     return this.schools.schoolsWithAccess();
@@ -39,6 +52,14 @@ export class SchoolAdminController {
   @Post('admins/:id/active')
   setActive(@Param('id') id: string, @Body() dto: SetSchoolAdminActiveDto, @CurrentSession() session: SessionPayload) {
     return this.schools.setActive(id, dto.isActive, session.sub);
+  }
+
+  // SCH-008 — aggregates only: bands, areas, forecast, attention counts, and
+  // what this school is currently being shown. Deliberately carries no
+  // per-student rows, so it opens no path around the 'students' permission.
+  @Get(':schoolId/report')
+  report(@Param('schoolId') schoolId: string) {
+    return this.reports.adminCohortReport(schoolId);
   }
 
   @Post(':schoolId/disclosure')

@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import { Button } from '../design-system/components/Button';
 import GeographyRegistry from './GeographyRegistry';
-import SchoolAccess from './SchoolAccess';
 
-const fieldStyle = { padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' };
+const card = { background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px' };
+const label = { fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' };
 
-function CohortReport({ type, id, label }) {
+function CohortReport({ type, id, label: title, onClear }) {
   const [report, setReport] = useState(null);
-  useEffect(() => { api.cohortReport(type, id).then(setReport); }, [type, id]);
+  useEffect(() => { setReport(null); api.cohortReport(type, id).then(setReport); }, [type, id]);
   if (!report) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>جاري التحميل…</p>;
 
   if (report.gated) {
     return (
-      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>{label}</h3>
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>{title}</h3>
+          <button onClick={onClear} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', ...label }}>إغلاق</button>
+        </div>
         <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)', lineHeight: 1.8 }}>
           {report.studentCount} طالب مشترك مرتبط بهذه الفئة، {report.totalAnswered} إجابة إجمالاً — تحت الحد الأدنى لعرض نسب مئوية
           (15 طالباً و500 إجابة على الأقل). لا تُعرض أي نسبة تحت هذا الحد.
@@ -24,14 +26,17 @@ function CohortReport({ type, id, label }) {
   }
 
   return (
-    <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>{label}</h3>
-      <p style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>{title}</h3>
+        <button onClick={onClear} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', ...label }}>إغلاق</button>
+      </div>
+      <p style={{ margin: 0, ...label }}>
         {report.studentCount} طالب مشترك في هذه الفئة · {report.totalAnswered} إجابة
       </p>
       {report.accuracyByArea.map((a) => (
         <div key={a.areaId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-          <span style={{ color: 'var(--sand)' }}>{a.nameAr}</span>
+          <span style={{ color: 'var(--sand)', fontFamily: 'var(--font-arabic)' }}>{a.nameAr}</span>
           <span style={{ fontFamily: 'var(--font-latin)', color: a.collecting ? 'var(--mist)' : 'var(--teal-ink)' }}>
             {a.collecting ? 'قيد الجمع' : `${Math.round(a.accuracy * 100)}%`}
           </span>
@@ -41,83 +46,26 @@ function CohortReport({ type, id, label }) {
   );
 }
 
-// ADM-062 — school comparison-overlay: accuracy-by-area profiles for
-// several schools plotted side by side. Deliberately not a ranking table.
-function ComparisonView({ type, ids, onClear }) {
-  const [reports, setReports] = useState(null);
-  useEffect(() => { api.compareCohorts(type, ids).then(setReports); }, [type, ids]);
-
-  if (!reports) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>جاري التحميل…</p>;
-
-  const allAreas = new Map();
-  for (const r of reports) {
-    if (r.gated) continue;
-    for (const a of r.accuracyByArea) if (!allAreas.has(a.areaId)) allAreas.set(a.areaId, a.nameAr);
-  }
-
-  return (
-    <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>مقارنة ({reports.length})</h3>
-        <button onClick={onClear} style={{ border: 'none', background: 'transparent', color: 'var(--mist)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}>إغلاق</button>
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'start', padding: '6px 10px', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>المجال</th>
-              {reports.map((r) => (
-                <th key={r.cohortId} style={{ padding: '6px 10px', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>{r.nameAr}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[...allAreas.entries()].map(([areaId, nameAr]) => (
-              <tr key={areaId} style={{ borderTop: '0.5px solid var(--on-indigo-line)' }}>
-                <td style={{ padding: '6px 10px', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>{nameAr}</td>
-                {reports.map((r) => {
-                  const a = r.gated ? null : r.accuracyByArea.find((x) => x.areaId === areaId);
-                  return (
-                    <td key={r.cohortId} style={{ padding: '6px 10px', textAlign: 'center' }}>
-                      {r.gated ? (
-                        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>قيد الجمع</span>
-                      ) : a?.collecting ? (
-                        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>قيد الجمع</span>
-                      ) : (
-                        <span style={{ fontFamily: 'var(--font-latin)', fontSize: '13px', color: 'var(--teal-ink)' }}>{Math.round((a?.accuracy ?? 0) * 100)}%</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-export default function Geography() {
+/**
+ * ADM-062/063/064 — the geographic registry: regions, cities, and the
+ * school-merge tool that repoints enrollments rather than orphaning them.
+ *
+ * SCH-008 — schools themselves moved to their own screen. This page had grown
+ * into two unrelated jobs sharing a scroll: maintaining the region/city tree,
+ * and looking after individual schools. Merging stays here because it is a
+ * registry repair, not a school-management task — you reach for it when the
+ * same school was entered twice.
+ *
+ * Ordered by how often each part is used: approvals (a daily decision), then
+ * the tree with its cohort reports, then registry maintenance, which is rare
+ * and destructive enough to belong at the bottom.
+ */
+export default function Geography({ onOpenSchools }) {
   const [regions, setRegions] = useState([]);
   const [citiesByRegion, setCitiesByRegion] = useState({});
-  const [schoolsByCity, setSchoolsByCity] = useState({});
   const [expandedRegion, setExpandedRegion] = useState(null);
-  const [expandedCity, setExpandedCity] = useState(null);
   const [pending, setPending] = useState([]);
   const [selectedCohort, setSelectedCohort] = useState(null);
-  const [compareIds, setCompareIds] = useState(new Set());
-  const [comparing, setComparing] = useState(false);
-  const [showRegistry, setShowRegistry] = useState(false);
-  const [showAccess, setShowAccess] = useState(false);
-
-  const toggleCompareSchool = (id) => {
-    setCompareIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
 
   const load = () => {
     api.listRegions().then(setRegions);
@@ -134,27 +82,28 @@ export default function Geography() {
     }
   };
 
-  const toggleCity = async (cityId) => {
-    if (expandedCity === cityId) return setExpandedCity(null);
-    setExpandedCity(cityId);
-    if (!schoolsByCity[cityId]) {
-      const schools = await api.listSchools(cityId);
-      setSchoolsByCity((prev) => ({ ...prev, [cityId]: schools }));
-    }
-  };
-
   const approve = async (id) => { await api.approveSchool(id); load(); };
   const reject = async (id) => { await api.rejectSchool(id); load(); };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الجغرافيا والمدارس</h1>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الجغرافيا</h1>
+        <button
+          onClick={onOpenSchools}
+          style={{ border: 'none', background: 'transparent', color: 'var(--lime-print)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px', padding: 0 }}
+        >
+          المدارس ←
+        </button>
+      </div>
 
+      {/* Decisions first: a suggested school blocks a student from finishing
+          their profile, so it should not be below three screens of registry. */}
       {pending.length > 0 && (
-        <div style={{ background: 'var(--on-indigo-subtle)', borderInlineStart: '3px solid var(--coral)', borderRadius: 'var(--radius-sm)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ ...card, borderInlineStart: '3px solid var(--coral)' }}>
           <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>مدارس بانتظار المراجعة ({pending.length})</h3>
           {pending.map((s) => (
-            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>{s.nameAr} — {s.city?.nameAr}، {s.city?.region?.nameAr}</span>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => approve(s.id)} style={{ border: 'none', cursor: 'pointer', background: 'var(--lime)', color: 'var(--lime-ink)', borderRadius: '999px', padding: '6px 14px', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}>قبول</button>
@@ -165,60 +114,26 @@ export default function Geography() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <button onClick={() => setShowRegistry((v) => !v)} style={{ border: 'none', cursor: 'pointer', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
-          {showRegistry ? 'إخفاء إدارة السجل' : 'إدارة السجل الجغرافي'}
-        </button>
-        <button onClick={() => setShowAccess((v) => !v)} style={{ border: 'none', cursor: 'pointer', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
-          {showAccess ? 'إخفاء لوحات المدارس' : 'لوحات المدارس والصلاحيات'}
-        </button>
-        {compareIds.size >= 2 && (
-          <button onClick={() => setComparing(true)} style={{ border: 'none', cursor: 'pointer', background: 'var(--lime)', color: 'var(--lime-ink)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
-            قارن المحدد ({compareIds.size})
-          </button>
-        )}
-        {compareIds.size > 0 && (
-          <button onClick={() => { setCompareIds(new Set()); setComparing(false); }} style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--mist)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}>
-            مسح التحديد
-          </button>
-        )}
-      </div>
-
-      {showRegistry && <GeographyRegistry />}
-      {showAccess && <SchoolAccess />}
-
-      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: '320px', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '8px' }}>
+          <p style={{ margin: '8px 12px', ...label }}>اختر منطقة أو مدينة لعرض تقرير الفئة.</p>
           {regions.map((r) => (
             <div key={r.id} style={{ padding: '10px 12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button onClick={() => toggleRegion(r.id)} style={{ all: 'unset', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--sand)' }}>{r.nameAr}</button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <button onClick={() => toggleRegion(r.id)} style={{ all: 'unset', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--sand)' }}>
+                  {expandedRegion === r.id ? '▾' : '◂'} {r.nameAr}
+                </button>
                 <button onClick={() => setSelectedCohort({ type: 'region', id: r.id, label: `منطقة ${r.nameAr}` })} style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--lime-print)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}>عرض التقرير</button>
               </div>
               {expandedRegion === r.id && (
                 <div style={{ marginInlineStart: '16px', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {(citiesByRegion[r.id] ?? []).map((c) => (
-                    <div key={c.id}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <button onClick={() => toggleCity(c.id)} style={{ all: 'unset', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>{c.nameAr}</button>
-                        <button onClick={() => setSelectedCohort({ type: 'city', id: c.id, label: `مدينة ${c.nameAr}` })} style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--lime-print)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}>عرض التقرير</button>
-                      </div>
-                      {expandedCity === c.id && (
-                        <div style={{ marginInlineStart: '16px', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {(schoolsByCity[c.id] ?? []).map((s) => (
-                            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
-                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }} title={s.id}>
-                                <input type="checkbox" checked={compareIds.has(s.id)} onChange={() => toggleCompareSchool(s.id)} />
-                                <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)' }}>{s.nameAr}</span>
-                              </label>
-                              <button onClick={() => setSelectedCohort({ type: 'school', id: s.id, label: s.nameAr })} style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--lime-print)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}>عرض التقرير</button>
-                            </div>
-                          ))}
-                          {(schoolsByCity[c.id] ?? []).length === 0 && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>لا مدارس مسجّلة.</span>}
-                        </div>
-                      )}
+                    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>{c.nameAr}</span>
+                      <button onClick={() => setSelectedCohort({ type: 'city', id: c.id, label: `مدينة ${c.nameAr}` })} style={{ border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--lime-print)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}>عرض التقرير</button>
                     </div>
                   ))}
+                  {(citiesByRegion[r.id] ?? []).length === 0 && <span style={label}>لا مدن مسجّلة.</span>}
                 </div>
               )}
             </div>
@@ -226,59 +141,22 @@ export default function Geography() {
         </div>
 
         <div style={{ flex: 1, minWidth: '320px' }}>
-          {comparing ? (
-            <ComparisonView type="school" ids={[...compareIds]} onClear={() => setComparing(false)} />
-          ) : selectedCohort ? (
-            <CohortReport type={selectedCohort.type} id={selectedCohort.id} label={selectedCohort.label} />
+          {selectedCohort ? (
+            <CohortReport
+              type={selectedCohort.type}
+              id={selectedCohort.id}
+              label={selectedCohort.label}
+              onClear={() => setSelectedCohort(null)}
+            />
           ) : (
-            <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>اختر منطقة أو مدينة أو مدرسة لعرض تقرير الفئة، أو حدّد عدة مدارس بمربعات الاختيار للمقارنة.</p>
+            <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)', lineHeight: 1.9 }}>
+              تقارير المدارس ومقارنتها انتقلت إلى شاشة «المدارس».
+            </p>
           )}
         </div>
       </div>
 
-      <AddSchoolForm regions={regions} onAdded={load} />
-    </div>
-  );
-}
-
-function AddSchoolForm({ regions, onAdded }) {
-  const [regionId, setRegionId] = useState('');
-  const [cities, setCities] = useState([]);
-  const [cityId, setCityId] = useState('');
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const onRegionChange = async (id) => {
-    setRegionId(id);
-    setCityId('');
-    setCities(id ? await api.listCities(id) : []);
-  };
-
-  const submit = async () => {
-    if (!cityId || !name.trim()) return;
-    setBusy(true);
-    try {
-      await api.createSchool({ cityId, nameAr: name.trim() });
-      setName('');
-      onAdded();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '420px' }}>
-      <h3 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>إضافة مدرسة</h3>
-      <select value={regionId} onChange={(e) => onRegionChange(e.target.value)} style={fieldStyle}>
-        <option value="">اختر المنطقة</option>
-        {regions.map((r) => <option key={r.id} value={r.id}>{r.nameAr}</option>)}
-      </select>
-      <select value={cityId} onChange={(e) => setCityId(e.target.value)} style={fieldStyle} disabled={!regionId}>
-        <option value="">اختر المدينة</option>
-        {cities.map((c) => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
-      </select>
-      <input style={fieldStyle} placeholder="اسم المدرسة" value={name} onChange={(e) => setName(e.target.value)} />
-      <Button variant="primary" disabled={busy || !cityId || !name.trim()} onClick={submit}>{busy ? 'جاري الإضافة…' : 'إضافة'}</Button>
+      <GeographyRegistry />
     </div>
   );
 }

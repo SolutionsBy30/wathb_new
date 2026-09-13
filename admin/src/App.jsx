@@ -16,6 +16,8 @@ import Subscriptions from './pages/Subscriptions';
 import SolutionPerformance from './pages/SolutionPerformance';
 import Simulations from './pages/Simulations';
 import Geography from './pages/Geography';
+import Schools from './pages/Schools';
+import SchoolDetail from './pages/SchoolDetail';
 import Students from './pages/Students';
 import StudentDetail from './pages/StudentDetail';
 import Supervisors from './pages/Supervisors';
@@ -44,7 +46,10 @@ const NAV_GROUPS = [
     items: [
       { id: 'students', label: 'الطلاب' },
       { id: 'supervisors', label: 'المشرفون' },
-      { id: 'geography', label: 'الجغرافيا والمدارس' },
+      { id: 'geography', label: 'الجغرافيا' },
+      // SCH-008 — same 'geography' permission gates both, so splitting the
+      // screen hands nobody a new grant; it is one section growing a screen.
+      { id: 'schools', label: 'المدارس', permission: 'geography' },
     ],
   },
   {
@@ -98,6 +103,7 @@ export default function App() {
   const [tests, setTests] = useState([]);
   const [editingQuestionId, setEditingQuestionId] = useState(undefined); // undefined = not editing, null = new
   const [viewingStudentId, setViewingStudentId] = useState(null);
+  const [viewingSchoolId, setViewingSchoolId] = useState(null);
   // ADM-088 — the caller's own permissions, which decide what the nav shows.
   const [me, setMe] = useState(null);
   const [testsError, setTestsError] = useState(null);
@@ -150,7 +156,7 @@ export default function App() {
               {g.items.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => { setTab(n.id); setEditingQuestionId(undefined); setViewingStudentId(null); }}
+                  onClick={() => { setTab(n.id); setEditingQuestionId(undefined); setViewingStudentId(null); setViewingSchoolId(null); }}
                   style={{
                     border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: 'var(--radius-md)',
                     fontFamily: 'var(--font-arabic)', fontSize: '13px',
@@ -205,7 +211,18 @@ export default function App() {
         {tab === 'students' && viewingStudentId !== null && (
           <StudentDetail studentId={viewingStudentId} onBack={() => setViewingStudentId(null)} />
         )}
-        {tab === 'geography' && <Geography />}
+        {tab === 'geography' && <Geography onOpenSchools={() => setTab('schools')} />}
+        {tab === 'schools' && viewingSchoolId === null && <Schools onOpenSchool={setViewingSchoolId} />}
+        {tab === 'schools' && viewingSchoolId !== null && (
+          <SchoolDetail
+            schoolId={viewingSchoolId}
+            onBack={() => setViewingSchoolId(null)}
+            // Opening a student jumps to the students screen, which is where
+            // their record lives — the school page does not grow a second
+            // copy of it that would drift from the real one.
+            onOpenStudent={(id) => { setTab('students'); setViewingStudentId(id); setViewingSchoolId(null); }}
+          />
+        )}
         {tab === 'notifications' && <NotificationsSection />}
         {tab === 'supervisors' && <Supervisors />}
         {tab === 'packages' && <Packages tests={tests} />}

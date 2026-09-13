@@ -201,6 +201,15 @@ export const api = {
   studentReport: (id) => request(`/report/student/${id}`),
 
   // SCH-005 — who reads a school's dashboard, and how much of it they see.
+  adminListSchools: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.search) q.set('search', params.search);
+    if (params.cityId) q.set('cityId', params.cityId);
+    if (params.regionId) q.set('regionId', params.regionId);
+    const qs = q.toString();
+    return request(`/admin/schools${qs ? `?${qs}` : ''}`);
+  },
+  schoolReport: (schoolId) => request(`/admin/schools/${schoolId}/report`),
   schoolsWithAccess: () => request('/admin/schools/access'),
   listSchoolAdmins: (schoolId) => request(`/admin/schools/admins${schoolId ? `?schoolId=${schoolId}` : ''}`),
   grantSchoolAdmin: (dto) => request('/admin/schools/admins', { method: 'POST', body: dto }),
