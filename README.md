@@ -25,6 +25,7 @@ adapter, and weekly WhatsApp reports for students and supervisors. **Phase 6
 | Student app | React + Vite, mobile-width, RTL (`/src`, repo root) |
 | Admin console | React + Vite, desktop (`/admin`) |
 | Supervisor app | React + Vite, mobile-width, RTL (`/supervisor`) |
+| School dashboard | React + Vite, desktop, RTL (`/school`) |
 
 Each frontend is an independent Vite app sharing a copy of the same design
 system (`design-system/` — IBM Plex Sans Arabic + Outfit, indigo/sand/lime

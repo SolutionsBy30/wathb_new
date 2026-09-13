@@ -1,0 +1,18 @@
+:root {
+  /* Compression, then release — the physics of a spring, never a bounce. */
+  --ease-spring: cubic-bezier(.2, .8, .2, 1);
+
+  --duration-micro:    160ms;
+  --duration-standard:  240ms;
+  --duration-report-reveal: 400ms;
+  --stagger-report-bar: 60ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-micro: 1ms;
+    --duration-standard: 1ms;
+    --duration-report-reveal: 1ms;
+    --stagger-report-bar: 0ms;
+  }
+}

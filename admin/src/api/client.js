@@ -200,6 +200,13 @@ export const api = {
   mergeSchools: (sourceId, targetId) => request('/admin/geography/schools/merge', { method: 'POST', body: { sourceId, targetId } }),
   studentReport: (id) => request(`/report/student/${id}`),
 
+  // SCH-005 — who reads a school's dashboard, and how much of it they see.
+  schoolsWithAccess: () => request('/admin/schools/access'),
+  listSchoolAdmins: (schoolId) => request(`/admin/schools/admins${schoolId ? `?schoolId=${schoolId}` : ''}`),
+  grantSchoolAdmin: (dto) => request('/admin/schools/admins', { method: 'POST', body: dto }),
+  setSchoolAdminActive: (id, isActive) => request(`/admin/schools/admins/${id}/active`, { method: 'POST', body: { isActive } }),
+  setSchoolDisclosure: (schoolId, disclosure) => request(`/admin/schools/${schoolId}/disclosure`, { method: 'POST', body: { disclosure } }),
+
   // Students & supervisors (A9)
   listStudents: (params = {}) => {
     const q = new URLSearchParams();

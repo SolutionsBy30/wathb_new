@@ -1,0 +1,37 @@
+:root {
+  --font-arabic: "IBM Plex Sans Arabic", "Tahoma", sans-serif;
+  --font-latin:  "Outfit", "Segoe UI", sans-serif;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600; /* wordmark + report titles ONLY — never 700, never elsewhere */
+
+  /* size / weight / line-height, per the brief's type scale */
+  --text-display-ar-size: 46px; /* 32–58px range; 46 is the default mid-point */
+  --text-display-ar-weight: var(--weight-semibold);
+  --text-display-ar-leading: 1.15;
+
+  --text-h1-ar-size: 24px;
+  --text-h1-ar-weight: var(--weight-medium);
+  --text-h1-ar-leading: 1.4;
+
+  --text-h2-ar-size: 18px;
+  --text-h2-ar-weight: var(--weight-medium);
+  --text-h2-ar-leading: 1.5;
+
+  --text-body-ar-size: 15px;
+  --text-body-ar-weight: var(--weight-regular);
+  --text-body-ar-leading: 1.8;
+
+  --text-label-ar-size: 12px;
+  --text-label-ar-weight: var(--weight-regular);
+  --text-label-ar-leading: 1.5;
+
+  --text-numeral-family: var(--font-latin);
+  --text-numeral-weight: var(--weight-medium);
+  --text-numeral-leading: 1.0;
+
+  --text-eyebrow-en-size: 9px;
+  --text-eyebrow-en-weight: var(--weight-medium);
+  --text-eyebrow-en-tracking: 0.16em;
+}

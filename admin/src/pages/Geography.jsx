@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
 import GeographyRegistry from './GeographyRegistry';
+import SchoolAccess from './SchoolAccess';
 
 const fieldStyle = { padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--indigo)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' };
 
@@ -108,6 +109,7 @@ export default function Geography() {
   const [compareIds, setCompareIds] = useState(new Set());
   const [comparing, setComparing] = useState(false);
   const [showRegistry, setShowRegistry] = useState(false);
+  const [showAccess, setShowAccess] = useState(false);
 
   const toggleCompareSchool = (id) => {
     setCompareIds((prev) => {
@@ -167,6 +169,9 @@ export default function Geography() {
         <button onClick={() => setShowRegistry((v) => !v)} style={{ border: 'none', cursor: 'pointer', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
           {showRegistry ? 'إخفاء إدارة السجل' : 'إدارة السجل الجغرافي'}
         </button>
+        <button onClick={() => setShowAccess((v) => !v)} style={{ border: 'none', cursor: 'pointer', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
+          {showAccess ? 'إخفاء لوحات المدارس' : 'لوحات المدارس والصلاحيات'}
+        </button>
         {compareIds.size >= 2 && (
           <button onClick={() => setComparing(true)} style={{ border: 'none', cursor: 'pointer', background: 'var(--lime)', color: 'var(--lime-ink)', borderRadius: 'var(--radius-sm)', padding: '9px 14px', fontFamily: 'var(--font-arabic)', fontSize: '13px' }}>
             قارن المحدد ({compareIds.size})
@@ -180,6 +185,7 @@ export default function Geography() {
       </div>
 
       {showRegistry && <GeographyRegistry />}
+      {showAccess && <SchoolAccess />}
 
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '320px', background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '8px' }}>

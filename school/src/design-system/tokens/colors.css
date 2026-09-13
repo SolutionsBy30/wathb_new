@@ -1,0 +1,56 @@
+:root {
+  /* ── base palette ── */
+  --indigo:          #151A45; /* نيلي الوثب — ground for everything */
+  --indigo-deep:     #0F1332; /* نيلي غامق — page behind cards, app chrome */
+  --indigo-raised:   #1E244F; /* نيلي مرتفع — elevated card on indigo */
+
+  --lime:            #C9F24D; /* شرارة الوثبة — ACHIEVEMENT ONLY */
+  --lime-ink:         #2C3A00; /* حبر الشرارة — the only text colour allowed on lime */
+  --lime-print:       #639922; /* شرارة مطبوعة — lime substitute on light grounds / print */
+
+  --sand:            #F4F1E8; /* رملي — paper; all parent-facing and print */
+  --sand-deep:       #E7E3D6; /* رملي غامق — recessed areas on sand */
+  --paper:           #FFFFFF; /* أبيض — cards on sand; school documents */
+
+  --coral:           #FF6B4A; /* تعثّر — stumble points */
+  --coral-ink:        #993C1D; /* حبر التعثّر — text on coral tints */
+
+  --teal:            #16C79A; /* نموّ — progress, improvement deltas */
+  --teal-ink:         #0F6E56; /* حبر النموّ — text on teal tints */
+
+  --graphite:        #3A3F5C; /* غرافيت — body text on light */
+  --mist:            #9A9FB8; /* ضباب — labels, metadata, muted text */
+
+  /* ── tints ── */
+  --coral-bg:              #FFE2D9;
+  --teal-bg:               #D3F5EA;
+  --on-indigo-subtle:      rgba(255, 255, 255, 0.08);
+  --on-indigo-line:        rgba(244, 241, 232, 0.22);
+  --on-sand-line:          rgba(21, 26, 69, 0.14);
+
+  /* ── semantic aliases ── */
+  --surface-app:           var(--indigo);
+  --surface-app-deep:      var(--indigo-deep);
+  --surface-card-dark:     var(--indigo-raised);
+  --surface-page:          var(--sand);
+  --surface-page-deep:     var(--sand-deep);
+  --surface-card-light:    var(--paper);
+
+  --text-on-indigo-primary:   var(--sand);
+  --text-on-indigo-secondary: var(--mist);
+  --text-on-lime:             var(--lime-ink);
+  --text-on-light-primary:    var(--indigo);
+  --text-on-light-body:       var(--graphite);
+  --text-on-light-muted:      var(--mist);
+  --text-on-coral-bg:         var(--coral-ink);
+  --text-on-teal-bg:          var(--teal-ink);
+
+  --accent-achievement:    var(--lime);
+  --accent-achievement-print: var(--lime-print);
+  --signal-stumble:        var(--coral);
+  --signal-growth:         var(--teal);
+
+  --border-hairline-dark:  var(--on-indigo-line);
+  --border-hairline-light: var(--on-sand-line);
+  --track-bar:             rgba(21, 26, 69, 0.09);
+}
