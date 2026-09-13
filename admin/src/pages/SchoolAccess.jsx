@@ -229,7 +229,7 @@ function GrantForm({ onGranted, onError }) {
     setDone(null);
     try {
       await api.grantSchoolAdmin({ schoolId, mobile: `+966${local}`, name: name.trim(), title: title.trim() || undefined });
-      setDone(`تم منح ${name.trim()} صلاحية الدخول. يدخل عبر wathb.tech/school برقمه.`);
+      setDone(`تم منح ${name.trim()} صلاحية الدخول. يدخل عبر school.wathb.tech برقمه.`);
       setName(''); setLocal(''); setTitle('');
       onGranted();
     } catch (e) {
