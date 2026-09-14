@@ -17,6 +17,8 @@ const BAND = {
   insufficient: { text: 'بيانات غير كافية', color: 'var(--mist)' },
 };
 
+const STATUS = { approved: 'معتمدة', pending: 'بانتظار المراجعة', rejected: 'مرفوضة' };
+
 const pct = (n) => (n === null || n === undefined ? '—' : `${Math.round(n * 10) / 10}٪`);
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
 
@@ -68,6 +70,11 @@ export default function SchoolDetail({ schoolId, onBack, onOpenStudent }) {
             {DISCLOSURE[school.disclosure].text}
           </span>
         )}
+        {school && (
+          <span style={{ ...label, color: school.status === 'approved' ? 'var(--teal)' : '#E8C547' }}>
+            {STATUS[school.status] ?? school.status}
+          </span>
+        )}
       </div>
 
       {error && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>{error}</span>}
@@ -89,7 +96,7 @@ export default function SchoolDetail({ schoolId, onBack, onOpenStudent }) {
         ))}
       </div>
 
-      {tab === 'report' && <ReportTab report={report} />}
+      {tab === 'report' && <ReportTab report={report} schoolId={schoolId} onOpenStudent={onOpenStudent} />}
       {tab === 'students' && <StudentsTab schoolId={schoolId} onOpenStudent={onOpenStudent} />}
       {tab === 'access' && (school
         ? <SchoolAccess schoolId={schoolId} schoolNameAr={school.nameAr} disclosure={school.disclosure} onChanged={load} />
@@ -106,7 +113,7 @@ export default function SchoolDetail({ schoolId, onBack, onOpenStudent }) {
  * about this dashboard is "the school says they see nothing", and the answer
  * is almost always the cohort floor or the disclosure level rather than a bug.
  */
-function ReportTab({ report }) {
+function ReportTab({ report, schoolId, onOpenStudent }) {
   if (!report) return <p style={label}>جارٍ التحميل…</p>;
 
   const { summary, forecast, areas, attention, schoolSees } = report;
@@ -140,6 +147,8 @@ function ReportTab({ report }) {
           </>
         )}
       </div>
+
+      <SampleStudents schoolId={schoolId} total={summary.students} onOpenStudent={onOpenStudent} />
 
       <div style={card}>
         <h3 style={h3}>التوقّع من المحاكي</h3>
@@ -205,6 +214,76 @@ function ReportTab({ report }) {
           الأرقام أعلاه هي الحقيقة الكاملة كما تراها الإدارة، وليست النسخة التي تراها المدرسة.
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Five students, beside the cohort numbers.
+ *
+ * A page of percentages says how a school is doing but not whether the school
+ * is real. Five names with their activity answers the question the aggregates
+ * cannot: whether these are genuine students or three test accounts and a
+ * typo — which is the usual finding when a school's numbers look strange.
+ *
+ * Same 'students' permission as the roster tab, and it disappears rather than
+ * erroring for an admin who holds only 'geography': the cohort report above is
+ * still fully usable without it, so a missing sample is not a broken page.
+ */
+function SampleStudents({ schoolId, total, onOpenStudent }) {
+  const [sample, setSample] = useState(null);
+  const [denied, setDenied] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSample(null);
+    setDenied(false);
+    api.listStudents({ schoolId })
+      .then((r) => { if (!cancelled) setSample(r.items.slice(0, 5)); })
+      .catch(() => { if (!cancelled) setDenied(true); });
+    return () => { cancelled = true; };
+  }, [schoolId]);
+
+  if (denied || (sample && sample.length === 0)) return null;
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
+        <h3 style={h3}>عيّنة من الطلاب</h3>
+        {total > 5 && <span style={label}>٥ من {total} — افتح تبويب «الطلاب» للقائمة كاملة</span>}
+      </div>
+      {!sample ? (
+        <p style={{ margin: 0, ...label }}>جارٍ التحميل…</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>الاسم</th>
+                <th style={th}>الأسئلة المكتملة</th>
+                <th style={th}>السلسلة</th>
+                <th style={th}>المستوى العام</th>
+                <th style={th}>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sample.map((s) => (
+                <tr key={s.userId} style={{ borderTop: '0.5px solid var(--on-indigo-line)' }}>
+                  <td style={{ ...td, cursor: 'pointer', color: 'var(--lime-print)' }} onClick={() => onOpenStudent(s.userId)}>{s.user.name}</td>
+                  <td style={{ ...td, fontFamily: 'var(--font-latin)' }}>{s._count?.answers ?? '—'}</td>
+                  <td style={{ ...td, fontFamily: 'var(--font-latin)', color: 'var(--lime)' }}>{s.currentStreak}</td>
+                  <td style={{ ...td, fontFamily: 'var(--font-latin)' }}>
+                    {s.compositeIndex ?? <span style={{ fontFamily: 'var(--font-arabic)', color: 'var(--mist)' }}>قيد الجمع</span>}
+                  </td>
+                  <td style={{ ...td, color: s.user.status === 'suspended' ? 'var(--coral)' : 'var(--teal-ink)' }}>
+                    {s.user.status === 'suspended' ? 'معلّق' : 'نشط'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

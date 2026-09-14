@@ -242,6 +242,7 @@ export class SchoolReportService {
       select: {
         id: true,
         nameAr: true,
+        status: true,
         identityDisclosure: true,
         city: { select: { nameAr: true, region: { select: { nameAr: true } } } },
       },
@@ -259,6 +260,7 @@ export class SchoolReportService {
       school: {
         id: school.id,
         nameAr: school.nameAr,
+        status: school.status,
         cityNameAr: school.city.nameAr,
         regionNameAr: school.city.region.nameAr,
         disclosure: school.identityDisclosure as Disclosure,

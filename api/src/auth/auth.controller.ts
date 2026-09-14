@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionGuard } from './session.guard';
 import { CurrentSession } from './current-session.decorator';
 import { SessionPayload } from './auth.types';
+import { rolesHeldBy } from './roles.util';
 
 // NFR-005 — every auth entry point here is a brute-force/abuse surface
 // (password guessing, OTP guessing, magic-link token guessing, spam
@@ -60,7 +61,11 @@ export class AuthController {
   async verifyOtp(@Body() dto: VerifyOtpDto) {
     const user = await this.otp.verifyOtp(dto.mobile, dto.subjectType, dto.code);
     const token = this.auth.issueSession({ sub: user.id, kind: dto.subjectType }, 24 * 3600);
-    return { token, kind: dto.subjectType, name: user.name };
+    // AUTH-030 — `roles` lets an app tell someone their number also has the
+    // other kind of account. It is information, not authority: switching still
+    // means logging into the other app, which means another OTP to this same
+    // number. A session is issued for one role only.
+    return { token, kind: dto.subjectType, name: user.name, roles: rolesHeldBy(user) };
   }
 
   // Public self-signup — creates the account, then immediately requests an

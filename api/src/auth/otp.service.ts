@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/channel.interface';
 import { AuditLogService } from '../admin-ops/audit-log.service';
 import { isWhatsAppConfigured } from '../notifications/whatsapp-provider.util';
+import { holdsRole } from './roles.util';
 
 const OTP_TTL_MINUTES = 5;
 const MAX_ATTEMPTS = 5;
@@ -43,8 +44,14 @@ export class OtpService {
   }
 
   async requestOtp(mobile: string, subjectType: SubjectType) {
-    const user = await this.prisma.user.findUnique({ where: { mobileE164: mobile } });
-    if (!user || user.role !== subjectType) {
+    // AUTH-030 — the profile rows decide, not the `role` column: one number
+    // may hold both a student and a supervisor account, and `role` records
+    // only whichever came first.
+    const user = await this.prisma.user.findUnique({
+      where: { mobileE164: mobile },
+      include: { student: true, supervisor: true },
+    });
+    if (!user || !holdsRole(user, subjectType)) {
       throw new ForbiddenException('no account found for this mobile number');
     }
     // ADM-085 — fail before ever generating/sending a code, not after.
@@ -110,10 +117,19 @@ export class OtpService {
     }
 
     await this.prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { mobileE164: mobile } });
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { mobileE164: mobile },
+      include: { student: true, supervisor: true },
+    });
     // Defense in depth — the same account could be suspended between
     // requestOtp and verifyOtp.
     if (user.status === 'suspended') throw new UnauthorizedException('account suspended');
+    // AUTH-030 — and re-check the role here, not only at request time. The
+    // caller hands us subjectType and issues a session of that kind from it,
+    // so this is the last point at which "may this person hold this role?" can
+    // be asked before a token exists. A role revoked mid-flow must not be
+    // spendable through a code minted a minute earlier.
+    if (!holdsRole(user, subjectType)) throw new UnauthorizedException('account not found for this role');
     return user;
   }
 }

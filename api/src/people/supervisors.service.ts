@@ -7,6 +7,7 @@ import { AccountsService } from './accounts.service';
 import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/channel.interface';
 import { isReminderDue } from './invite-reminder.util';
 import { AuditLogService } from '../admin-ops/audit-log.service';
+import { canAddRole } from '../auth/roles.util';
 
 @Injectable()
 export class SupervisorsService {
@@ -110,7 +111,10 @@ export class SupervisorsService {
       throw new ForbiddenException('supervisor linking is not available on the free package');
     }
 
-    let supervisorUser = await this.prisma.user.findUnique({ where: { mobileE164: mobile } });
+    let supervisorUser = await this.prisma.user.findUnique({
+      where: { mobileE164: mobile },
+      include: { student: true, supervisor: true },
+    });
     // STU-027 — an unregistered number gets a real account created right
     // away rather than a separate "pending invite" record: the magic link
     // below already logs them straight into it and lands on the accept/
@@ -123,9 +127,26 @@ export class SupervisorsService {
     if (!supervisorUser) {
       supervisorUser = await this.prisma.user.create({
         data: { mobileE164: mobile, name, role: 'supervisor', supervisor: { create: { type } } },
+        include: { student: true, supervisor: true },
       });
-    } else if (supervisorUser.role !== 'supervisor') {
-      throw new BadRequestException('this mobile number belongs to a non-supervisor account');
+    } else if (!supervisorUser.supervisor) {
+      // AUTH-030 — the common case this used to refuse: a student invites a
+      // parent who is also studying here, or an instructor who is preparing
+      // for the same exam. Give that account a supervisor profile rather than
+      // telling them their own number is unusable.
+      const verdict = canAddRole(supervisorUser, 'supervisor');
+      if (!verdict.ok) throw new BadRequestException(verdict.reasonAr);
+      supervisorUser = await this.prisma.user.update({
+        where: { id: supervisorUser.id },
+        data: { supervisor: { create: { type } } },
+        include: { student: true, supervisor: true },
+      });
+    }
+
+    // A student cannot supervise themselves — the link would let them accept
+    // their own invitation and read their own report through a second door.
+    if (supervisorUser.id === studentId) {
+      throw new BadRequestException('لا يمكن إضافة رقمك أنت كمشرف على حسابك.');
     }
 
     // SUP-009 — invitedAt is reset on every invite, including a re-invite of

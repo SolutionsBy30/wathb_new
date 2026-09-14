@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DefaultEnrolmentService } from '../payments/default-enrolment.service';
+import { canAddRole, SelfServiceRole } from '../auth/roles.util';
 
 // Shared by admin-created accounts (people.controller.ts) and public signup
 // (auth.controller.ts) — lives outside AuthModule/PeopleModule so neither has
@@ -18,6 +19,25 @@ export class AccountsService {
   // whatsappOptInAt is left null for admin-created accounts (no self-service
   // consent step happened) — only public signup captures it.
   async createStudent(mobile: string, name: string, whatsappOptInAt?: Date) {
+    const existing = await this.findCombinable(mobile, 'student');
+    if (existing) {
+      // AUTH-030 — already a supervisor on this number: add the student
+      // profile rather than refusing. `role` is left alone; it records what
+      // they signed up as first, and rolesHeldBy() reads the profile rows.
+      const user = existing.student
+        ? existing
+        : await this.prisma.user.update({
+            where: { id: existing.id },
+            data: { student: { create: {} }, ...(whatsappOptInAt ? { whatsappOptInAt } : {}) },
+            include: { student: true, supervisor: true },
+          });
+      // Enrolment is idempotent on its own side, but skip it for a student
+      // profile that already existed so a repeat signup cannot disturb a
+      // subscription already in flight.
+      if (!existing.student) await this.defaultEnrolment.enrol(user.id);
+      return user;
+    }
+
     await this.assertMobileFree(mobile);
     const user = await this.prisma.user.create({
       data: { mobileE164: mobile, name, role: 'student', whatsappOptInAt, student: { create: {} } },
@@ -33,11 +53,42 @@ export class AccountsService {
 
 
   async createSupervisor(mobile: string, name: string, type: 'parent' | 'instructor', whatsappOptInAt?: Date) {
+    const existing = await this.findCombinable(mobile, 'supervisor');
+    if (existing) {
+      // Already a supervisor: return as-is. The `type` is deliberately not
+      // overwritten — a parent who signs up again does not become an
+      // instructor because a form defaulted to it.
+      if (existing.supervisor) return existing;
+      return this.prisma.user.update({
+        where: { id: existing.id },
+        data: { supervisor: { create: { type } }, ...(whatsappOptInAt ? { whatsappOptInAt } : {}) },
+        include: { student: true, supervisor: true },
+      });
+    }
+
     await this.assertMobileFree(mobile);
     return this.prisma.user.create({
       data: { mobileE164: mobile, name, role: 'supervisor', whatsappOptInAt, supervisor: { create: { type } } },
       include: { supervisor: true },
     });
+  }
+
+  /**
+   * AUTH-030 — the account on this number, if it may take on `role`.
+   *
+   * Null means there is no account at all and the caller should create one.
+   * A staff account throws here instead: admin and school logins are granted
+   * by us and must never be reachable by proving control of a phone number.
+   */
+  private async findCombinable(mobile: string, role: SelfServiceRole) {
+    const existing = await this.prisma.user.findUnique({
+      where: { mobileE164: mobile },
+      include: { student: true, supervisor: true },
+    });
+    if (!existing) return null;
+    const verdict = canAddRole(existing, role);
+    if (!verdict.ok) throw new BadRequestException(verdict.reasonAr);
+    return existing;
   }
 
   /**
