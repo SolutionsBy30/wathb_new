@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChannelUnavailableError, FreeformSendParams, NotificationChannel, SendResult, TemplateSendParams } from './channel.interface';
+import { isNetworkError, isTransportFailure } from './transport-failure.util';
 import { DEFAULT_MAX_INTERVAL_MS, DEFAULT_MIN_INTERVAL_MS, nextIntervalMs } from './compliance.util';
 
 /**
@@ -100,14 +101,26 @@ export class WasenderChannel implements NotificationChannel {
   }
 
   private async post(path: string, body: Record<string, unknown>): Promise<SendResult> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    // NOT-024 — a refused connection, DNS failure or timeout used to escape
+    // this method as a plain TypeError, which RoutingChannel re-throws instead
+    // of treating as a dead transport. An unreachable provider host therefore
+    // never reached the backup sender at all.
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      const message = (e as Error).message;
+      this.logger.error(`Wasender unreachable: ${message}`);
+      if (isNetworkError(e)) throw new ChannelUnavailableError(message);
+      throw e;
+    }
 
     const raw = await res.text();
     let json: any;
@@ -123,19 +136,14 @@ export class WasenderChannel implements NotificationChannel {
       this.logger.error(`Wasender send failed: ${res.status} ${raw.slice(0, 300)}`);
       const message = json?.message ?? json?.error ?? `Wasender API error ${res.status}`;
 
-      // NOT-021 — "Your Whatsapp Session is not connected please connect your
-      // session first" is the phone link having dropped, which is a property
-      // of the transport rather than of this message: retrying it, or trying
-      // the next student, cannot succeed until someone re-links the phone.
-      // Matched on the distinctive part of the wording, loosely enough to
-      // survive punctuation changes. 401/403 mean the API key itself is
-      // rejected, which is equally fatal to the whole run.
-      const text = String(message).toLowerCase();
-      if (
-        (text.includes('session') && (text.includes('not connected') || text.includes('disconnect'))) ||
-        res.status === 401 ||
-        res.status === 403
-      ) {
+      // NOT-021/NOT-024 — a dropped phone link is a property of the transport,
+      // not of this message: retrying it, or trying the next student, cannot
+      // succeed until someone re-links the phone. The classification moved to
+      // transport-failure.util so the wordings are enumerated and tested — the
+      // previous check required "session" *and* a disconnect word in the same
+      // string, so "Device logged out" and every network error fell through as
+      // an ordinary failure and the backup sender was never tried.
+      if (isTransportFailure(String(message), res.status)) {
         throw new ChannelUnavailableError(message);
       }
       throw new Error(message);

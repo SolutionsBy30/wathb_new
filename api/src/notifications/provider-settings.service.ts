@@ -95,6 +95,25 @@ export class ProviderSettingsService {
     }));
   }
 
+  /**
+   * NOT-024 — is there any sender that could actually carry a message?
+   *
+   * The senders live in this table and are edited in the console, so the
+   * environment is no longer the source of truth. Asking env instead — which
+   * auth/otp.service.ts did — means a backup configured only here is invisible,
+   * and a primary whose credentials were moved into the database makes every
+   * login OTP fall back to the fixed public code.
+   *
+   * Deliberately ignores `status`: a sender marked 'disconnected' by an earlier
+   * failure is still worth attempting, and RoutingChannel clears that flag the
+   * moment one send succeeds. This answers "is anything wired up?", not "is
+   * anything healthy?".
+   */
+  async hasWorkingSender(): Promise<boolean> {
+    const rows = await this.list();
+    return rows.some((r) => r.isActive && r.provider !== 'console' && this.isConfigured(r));
+  }
+
   isConfigured(row: {
     provider: string;
     apiKey: string | null;
