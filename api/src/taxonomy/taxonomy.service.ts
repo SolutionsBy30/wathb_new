@@ -1,19 +1,69 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UpsertAreaDto, UpsertLabelDto, UpsertSectionDto, UpsertTestDto } from './dto/taxonomy.dto';
+import { UpsertAreaDto, UpsertLabelDto, UpsertSectionDto, UpsertTestDto, UpsertTestGroupDto } from './dto/taxonomy.dto';
 
 @Injectable()
 export class TaxonomyService {
   constructor(private prisma: PrismaService) {}
 
   listTests() {
-    return this.prisma.test.findMany({ where: { isActive: true }, orderBy: { nameEn: 'asc' } });
+    return this.prisma.test.findMany({
+      where: { isActive: true },
+      orderBy: { nameEn: 'asc' },
+      // ADM-094 — the group travels with the test so every picker can segment
+      // its list without a second request. Null for an ungrouped test, which
+      // clients render as "غير مصنّف" rather than hiding.
+      include: { group: { select: { id: true, nameAr: true, nameEn: true, sort: true } } },
+    });
   }
 
   // Admin management needs deactivated tests too — the public picker above
   // hides them, which would otherwise make deactivation a one-way door.
   listAllTests() {
-    return this.prisma.test.findMany({ orderBy: { nameEn: 'asc' } });
+    return this.prisma.test.findMany({
+      orderBy: { nameEn: 'asc' },
+      include: { group: { select: { id: true, nameAr: true, nameEn: true, sort: true } } },
+    });
+  }
+
+  /**
+   * ADM-094 — the catalogue's segments.
+   *
+   * Ordered by `sort` then name so an admin can put the segment most of their
+   * students want first, rather than living with alphabetical order.
+   */
+  listGroups(includeInactive = false) {
+    return this.prisma.testGroup.findMany({
+      where: includeInactive ? undefined : { isActive: true },
+      orderBy: [{ sort: 'asc' }, { nameAr: 'asc' }],
+      include: { _count: { select: { tests: true } } },
+    });
+  }
+
+  createGroup(dto: UpsertTestGroupDto) {
+    return this.prisma.testGroup.create({ data: dto });
+  }
+
+  updateGroup(id: string, dto: Partial<UpsertTestGroupDto>) {
+    return this.prisma.testGroup.update({ where: { id }, data: dto });
+  }
+
+  /**
+   * ADM-014/ADM-094 — same discipline as deleting a section: refuse while it
+   * still holds tests rather than cascading.
+   *
+   * The foreign key is SET NULL, so a delete here would silently ungroup a
+   * catalogue's worth of tests and look like nothing happened. Deactivating is
+   * the reversible way to retire a segment, and the message says so.
+   */
+  async deleteGroup(id: string) {
+    const count = await this.prisma.test.count({ where: { groupId: id } });
+    if (count > 0) {
+      throw new BadRequestException(
+        `لا يمكن حذف المجموعة وبها ${count} اختبار. انقل الاختبارات إلى مجموعة أخرى أولًا، أو عطّل المجموعة بدل حذفها.`,
+      );
+    }
+    return this.prisma.testGroup.delete({ where: { id } });
   }
 
   async tree(testId: string) {

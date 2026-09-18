@@ -352,10 +352,41 @@ model StudentSupervisor {
   @@map("student_supervisors")
 }
 
+/// ADM-094 — a segment of the catalogue: "اختبارات القياس للثانوية",
+/// "الشهادات المهنية", "اختبارات اللغة الإنجليزية".
+///
+/// A record rather than an enum, for the same reason every other level of the
+/// taxonomy is (spec §3): the catalogue grows by an admin adding a row, never
+/// by a deploy. Deliberately one flat level — a tree of groups would invite
+/// "اللغات ← الإنجليزية ← الأكاديمية" and none of the screens that pick a test
+/// can usefully render that.
+model TestGroup {
+  id            String   @id @default(uuid())
+  nameAr        String
+  nameEn        String
+  /// One line for the pickers — who this segment is for.
+  descriptionAr String?
+  sort          Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  tests Test[]
+
+  @@map("test_groups")
+}
+
 model Test {
   id           String          @id @default(uuid())
   nameAr       String
   nameEn       String
+  /// ADM-094 — which segment of the catalogue this test belongs to.
+  ///
+  /// Optional, and stays optional: every test that exists today predates
+  /// grouping, and inventing a group for them at migration time would be
+  /// guessing. An ungrouped test still appears everywhere it did before,
+  /// under "غير مصنّف".
+  groupId      String?
+  group        TestGroup?      @relation(fields: [groupId], references: [id], onDelete: SetNull)
   // ADM-012 — chosen once at creation; governs the language/direction of
   // every section/area/label name and every question stem/option/
   // explanation authored beneath this test. nameAr/nameEn above are just
@@ -371,6 +402,7 @@ model Test {
 
   simulationBlueprints SimulationBlueprint[]
 
+  @@index([groupId])
   @@map("tests")
 }
 

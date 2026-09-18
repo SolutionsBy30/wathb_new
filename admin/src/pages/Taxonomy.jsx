@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
 import { downloadCsv } from '../lib/csv';
+import TestGroups from './TestGroups';
 
 const card = { background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', padding: '16px' };
 const label13 = { fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' };
@@ -391,6 +392,23 @@ export default function Taxonomy({ tests, onTestsChanged }) {
   const [tree, setTree] = useState(null);
   const [newTestOpen, setNewTestOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const [showGroups, setShowGroups] = useState(false);
+
+  useEffect(() => { api.listTestGroups().then(setGroups).catch(() => setGroups([])); }, []);
+
+  // ADM-094 — chips grouped by segment. Ungrouped tests get their own trailing
+  // bucket rather than being hidden: grouping is optional, and a test that
+  // nobody has filed yet must still be reachable.
+  const segments = (() => {
+    const active = groups.filter((g) => g.isActive || tests.some((t) => t.groupId === g.id));
+    const byGroup = active
+      .map((g) => ({ id: g.id, nameAr: g.nameAr, items: tests.filter((t) => t.groupId === g.id) }))
+      .filter((s) => s.items.length > 0);
+    const rest = tests.filter((t) => !t.groupId || !active.some((g) => g.id === t.groupId));
+    if (rest.length) byGroup.push({ id: null, nameAr: 'غير مصنّف', items: rest });
+    return byGroup;
+  })();
 
   // ADM-093 — the whole tree, every test, not just the one on screen: the
   // point of the sheet is to see and compare all of it at once, and to look
@@ -419,40 +437,77 @@ export default function Taxonomy({ tests, onTestsChanged }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الاختبارات والتصنيف</h1>
-        <Button variant="secondary" disabled={exporting} onClick={exportAll}>
-          {exporting ? 'جاري التصدير…' : 'تصدير الشجرة (CSV)'}
-        </Button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <Button variant="secondary" onClick={() => setShowGroups((v) => !v)}>
+            {showGroups ? 'إخفاء المجموعات' : 'مجموعات الاختبارات'}
+          </Button>
+          <Button variant="secondary" disabled={exporting} onClick={exportAll}>
+            {exporting ? 'جاري التصدير…' : 'تصدير الشجرة (CSV)'}
+          </Button>
+        </div>
+      </div>
+
+      {showGroups && (
+        <TestGroups
+          tests={tests}
+          onChanged={async () => { setGroups(await api.listTestGroups()); await onTestsChanged(); }}
+        />
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {segments.map((seg) => (
+          <div key={seg.id ?? 'none'} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: seg.id ? 'var(--mist)' : '#E8C547', minWidth: '90px' }}>
+              {seg.nameAr}
+            </span>
+            {seg.items.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTestId(t.id)}
+                style={{
+                  border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: '999px',
+                  fontFamily: 'var(--font-arabic)', fontSize: '13px',
+                  background: testId === t.id ? 'var(--lime)' : 'var(--on-indigo-subtle)',
+                  color: testId === t.id ? 'var(--lime-ink)' : 'var(--sand)',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                }}
+              >
+                {t.nameAr}
+                <span style={{ fontFamily: 'var(--font-latin)', fontSize: '10px', opacity: 0.7 }}>{LANGUAGE_LABEL[t.language] ?? t.language}</span>
+                {t.isActive === false && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--coral)' }}>معطّل</span>}
+              </button>
+            ))}
+          </div>
+        ))}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-        {tests.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTestId(t.id)}
-            style={{
-              border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: '999px',
-              fontFamily: 'var(--font-arabic)', fontSize: '13px',
-              background: testId === t.id ? 'var(--lime)' : 'var(--on-indigo-subtle)',
-              color: testId === t.id ? 'var(--lime-ink)' : 'var(--sand)',
-              display: 'flex', alignItems: 'center', gap: '6px',
-            }}
-          >
-            {t.nameAr}
-            <span style={{ fontFamily: 'var(--font-latin)', fontSize: '10px', opacity: 0.7 }}>{LANGUAGE_LABEL[t.language] ?? t.language}</span>
-            {t.isActive === false && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--coral)' }}>معطّل</span>}
-          </button>
-        ))}
         {testId && (() => {
           const current = tests.find((t) => t.id === testId);
           if (!current) return null;
           return (
-            <button
-              onClick={async () => { await api.updateTest(testId, { isActive: !current.isActive }); await onTestsChanged(); }}
-              style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: current.isActive ? 'var(--coral)' : 'var(--teal-ink)' }}
-              title="اختبار معطّل لا يظهر للطلاب في اختيار الهدف؛ الطلاب المرتبطون به حالياً لا يتأثرون."
-            >
-              {current.isActive ? 'تعطيل الاختبار' : 'تفعيل الاختبار'}
-            </button>
+            <>
+              {/* ADM-094 — filing a test is done here, on the test you are
+                  looking at, rather than as a column in the groups table:
+                  the question is always "which group does *this* test belong
+                  to", never "which tests belong to this group". */}
+              <select
+                value={current.groupId ?? ''}
+                onChange={async (e) => { await api.updateTest(testId, { groupId: e.target.value || null }); await onTestsChanged(); }}
+                style={{ padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '12px' }}
+                title="المجموعة التي يظهر تحتها هذا الاختبار"
+              >
+                <option value="">غير مصنّف</option>
+                {groups.map((g) => <option key={g.id} value={g.id}>{g.nameAr}</option>)}
+              </select>
+              <button
+                onClick={async () => { await api.updateTest(testId, { isActive: !current.isActive }); await onTestsChanged(); }}
+                style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', fontFamily: 'var(--font-arabic)', fontSize: '12px', color: current.isActive ? 'var(--coral)' : 'var(--teal-ink)' }}
+                title="اختبار معطّل لا يظهر للطلاب في اختيار الهدف؛ الطلاب المرتبطون به حالياً لا يتأثرون."
+              >
+                {current.isActive ? 'تعطيل الاختبار' : 'تفعيل الاختبار'}
+              </button>
+            </>
           );
         })()}
         {!newTestOpen && (

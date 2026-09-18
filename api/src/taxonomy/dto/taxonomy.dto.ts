@@ -8,6 +8,18 @@ export class UpsertTestDto {
   // beneath the test are authored assuming a fixed content language.
   @IsOptional() @IsIn(['ar', 'en']) language?: 'ar' | 'en';
   @IsOptional() @IsBoolean() isActive?: boolean;
+  // ADM-094 — null is a real value here: it moves a test back to ungrouped,
+  // so it must be settable, not just omittable.
+  @IsOptional() groupId?: string | null;
+}
+
+/** ADM-094 — a segment of the catalogue. */
+export class UpsertTestGroupDto {
+  @IsString() nameAr!: string;
+  @IsString() nameEn!: string;
+  @IsOptional() @IsString() descriptionAr?: string;
+  @IsOptional() @IsInt() sort?: number;
+  @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 export class UpsertSectionDto {

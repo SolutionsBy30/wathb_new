@@ -55,6 +55,12 @@ export const api = {
   tree: (testId) => request(`/tests/${testId}/tree`),
   createTest: (dto) => request('/admin/tests', { method: 'POST', body: dto }),
   updateTest: (id, dto) => request(`/admin/tests/${id}`, { method: 'PATCH', body: dto }),
+
+  // ADM-094 — catalogue segments.
+  listTestGroups: () => request('/admin/test-groups'),
+  createTestGroup: (dto) => request('/admin/test-groups', { method: 'POST', body: dto }),
+  updateTestGroup: (id, dto) => request(`/admin/test-groups/${id}`, { method: 'PATCH', body: dto }),
+  deleteTestGroup: (id) => request(`/admin/test-groups/${id}`, { method: 'DELETE' }),
   createSection: (testId, dto) => request(`/admin/tests/${testId}/sections`, { method: 'POST', body: dto }),
   updateSection: (id, dto) => request(`/admin/sections/${id}`, { method: 'PATCH', body: dto }),
   deleteSection: (id) => request(`/admin/sections/${id}`, { method: 'DELETE' }),

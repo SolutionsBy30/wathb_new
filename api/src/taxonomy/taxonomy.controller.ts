@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { TaxonomyService } from './taxonomy.service';
 import { RequirePermission, RequireSession, SessionGuard } from '../auth/session.guard';
-import { UpsertAreaDto, UpsertLabelDto, UpsertSectionDto, UpsertTestDto } from './dto/taxonomy.dto';
+import { UpsertAreaDto, UpsertLabelDto, UpsertSectionDto, UpsertTestDto, UpsertTestGroupDto } from './dto/taxonomy.dto';
 
 @Controller()
 export class TaxonomyController {
@@ -12,6 +12,16 @@ export class TaxonomyController {
   @Get('tests')
   listTests() {
     return this.taxonomy.listTests();
+  }
+
+  /**
+   * ADM-094 — the catalogue's segments. Public, like `tests` above and for the
+   * same reason: every picker that offers a test wants to group it, and a
+   * segment name is the app's vocabulary rather than a secret.
+   */
+  @Get('test-groups')
+  listGroups() {
+    return this.taxonomy.listGroups();
   }
 
   @Get('tests/:id/tree')
@@ -54,6 +64,47 @@ export class TaxonomyController {
   @Get('admin/taxonomy/export')
   exportTaxonomy() {
     return this.taxonomy.exportRows();
+  }
+
+  /**
+   * ADM-094 — group management, including deactivated groups, which the
+   * public list above hides. Readable by any admin for the same reason
+   * 'admin/tests' is: content screens filter by it.
+   *
+   * Decorators bind to the next method declaration — do not insert a route
+   * between this block and listAllGroups.
+   */
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @Get('admin/test-groups')
+  listAllGroups() {
+    return this.taxonomy.listGroups(true);
+  }
+
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('taxonomy')
+  @Post('admin/test-groups')
+  createGroup(@Body() dto: UpsertTestGroupDto) {
+    return this.taxonomy.createGroup(dto);
+  }
+
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('taxonomy')
+  @Patch('admin/test-groups/:id')
+  updateGroup(@Param('id') id: string, @Body() dto: Partial<UpsertTestGroupDto>) {
+    return this.taxonomy.updateGroup(id, dto);
+  }
+
+  // Refused while the group still holds tests — see the service for why
+  // cascading would silently ungroup a whole catalogue.
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('taxonomy')
+  @Delete('admin/test-groups/:id')
+  deleteGroup(@Param('id') id: string) {
+    return this.taxonomy.deleteGroup(id);
   }
 
   // SessionGuard is not registered as an APP_GUARD (only ThrottlerGuard is),
