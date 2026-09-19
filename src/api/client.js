@@ -78,6 +78,8 @@ export const api = {
   exchangeMagicLink: (token) => request(`/auth/magic/${token}`, { method: 'POST', auth: false }),
 
   listTests: () => request('/tests', { auth: false }),
+  // ADM-094 — catalogue segments, for grouping the test picker.
+  listTestGroups: () => request('/test-groups', { auth: false }),
 
   // STU-035 — geography reference data for the school picker. Public, so no
   // token is needed to read it.

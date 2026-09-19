@@ -3,6 +3,7 @@ import { Button } from '../../design-system/components/Button';
 import markOnIndigo from '../../design-system/assets/mark-on-indigo.svg';
 import leapTrail from '../../design-system/assets/leap-trail-rtl-on-indigo.svg';
 import { api } from '../../api/client';
+import { coversTest, packageFeatures } from './package-features';
 
 const SUPERVISOR_APP_URL = import.meta.env.VITE_SUPERVISOR_APP_URL || 'http://localhost:5174/supervisor/';
 // The admin console is deliberately not linked from the public landing page —
@@ -32,12 +33,37 @@ function durationLabel(months) {
 export default function Landing({ onGoLogin, onGoSignup }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [packages, setPackages] = useState([]);
+  const [tests, setTests] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [groupId, setGroupId] = useState('all');
+  const [testId, setTestId] = useState(null);
 
   useEffect(() => {
     api.listPackages().then(setPackages).catch(() => {});
+    api.listTests().then(setTests).catch(() => setTests([]));
+    api.listTestGroups().then(setGroups).catch(() => setGroups([]));
   }, []);
 
-  const highlightIndex = Math.floor(packages.length / 2);
+  // ADM-094 — tabs only appear once there is something to segment. A single
+  // tab labelled "الكل" is a control that does nothing, and a pricing page is
+  // the wrong place to teach someone a taxonomy they did not ask about.
+  const segments = groups
+    .map((g) => ({ ...g, items: tests.filter((t) => t.groupId === g.id) }))
+    .filter((g) => g.items.length > 0);
+  const ungrouped = tests.filter((t) => !t.groupId || !segments.some((g) => g.id === t.groupId));
+  const showTabs = segments.length > 1 || (segments.length === 1 && ungrouped.length > 0);
+
+  const visibleTests = groupId === 'all'
+    ? tests
+    : groupId === 'other'
+      ? ungrouped
+      : (segments.find((g) => g.id === groupId)?.items ?? []);
+
+  // Selecting a test narrows the packages to the ones that actually cover it,
+  // which is the question someone arriving for a specific exam is asking.
+  const shown = testId ? packages.filter((p) => coversTest(p, testId)) : packages;
+  const highlightIndex = Math.floor(shown.length / 2);
+  const selectedTest = tests.find((t) => t.id === testId);
 
   return (
     <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', background: 'var(--sand-deep)', fontFamily: 'var(--font-arabic)', minHeight: '100vh' }}>
@@ -109,14 +135,85 @@ export default function Landing({ onGoLogin, onGoSignup }) {
           <h2 style={{ margin: '0 0 8px', fontFamily: 'var(--font-arabic)', fontSize: '26px', fontWeight: 600, color: 'var(--sand)', textAlign: 'center' }}>
             اشتراك بسيط، بلا التزامات معقّدة
           </h2>
-          <p style={{ margin: '0 0 48px', fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--mist)', textAlign: 'center' }}>
-            إلغاء في أي وقت. كل الباقات تشمل قدرات وتحصيلي.
+          <p style={{ margin: '0 0 32px', fontFamily: 'var(--font-arabic)', fontSize: '14px', color: 'var(--mist)', textAlign: 'center' }}>
+            إلغاء في أي وقت. اختر الاختبار الذي تستعد له لترى الباقات التي تشمله.
           </p>
+
+          {/* ADM-094 — segment tabs, then the tests inside the segment. Two
+              steps rather than one long list of every test we offer, which is
+              the shape this page is heading for as the catalogue grows. */}
+          {tests.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '36px', alignItems: 'center' }}>
+              {showTabs && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  {[{ id: 'all', nameAr: 'الكل' }, ...segments, ...(ungrouped.length ? [{ id: 'other', nameAr: 'اختبارات أخرى' }] : [])].map((g) => (
+                    <button
+                      key={g.id}
+                      onClick={() => { setGroupId(g.id); setTestId(null); }}
+                      style={{
+                        border: 'none', cursor: 'pointer', padding: '9px 18px', borderRadius: '999px',
+                        fontFamily: 'var(--font-arabic)', fontSize: '13px',
+                        background: groupId === g.id ? 'var(--sand)' : 'var(--on-indigo-subtle)',
+                        color: groupId === g.id ? 'var(--indigo)' : 'var(--sand)',
+                      }}
+                    >
+                      {g.nameAr}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {visibleTests.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTestId(testId === t.id ? null : t.id)}
+                    style={{
+                      border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: '999px',
+                      fontFamily: 'var(--font-arabic)', fontSize: '13px',
+                      background: testId === t.id ? 'var(--lime)' : 'transparent',
+                      boxShadow: testId === t.id ? 'none' : 'inset 0 0 0 0.5px var(--on-indigo-line)',
+                      color: testId === t.id ? 'var(--lime-ink)' : 'var(--mist)',
+                    }}
+                  >
+                    {t.nameAr}
+                  </button>
+                ))}
+              </div>
+
+              {selectedTest && (
+                <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>
+                  الباقات التي تشمل {selectedTest.nameAr}
+                  {' · '}
+                  <button
+                    onClick={() => setTestId(null)}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--lime-print)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '12px', padding: 0 }}
+                  >
+                    عرض كل الباقات
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+
           {packages.length === 0 ? (
             <p style={{ textAlign: 'center', color: 'var(--mist)', fontSize: '13px' }}>الباقات غير متاحة حالياً.</p>
+          ) : shown.length === 0 ? (
+            // A real answer rather than an empty grid: this test exists but no
+            // package covers it yet, and saying so beats silence.
+            <p style={{ textAlign: 'center', color: 'var(--mist)', fontSize: '13px', lineHeight: 1.9 }}>
+              لا توجد باقة تشمل {selectedTest?.nameAr ?? 'هذا الاختبار'} حالياً.
+              <br />
+              <button
+                onClick={() => setTestId(null)}
+                style={{ border: 'none', background: 'transparent', color: 'var(--lime-print)', cursor: 'pointer', fontFamily: 'var(--font-arabic)', fontSize: '13px', padding: 0 }}
+              >
+                عرض كل الباقات
+              </button>
+            </p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(packages.length, 3)}, 1fr)`, gap: '20px' }}>
-              {packages.map((p, i) => {
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(shown.length, 3)}, minmax(0, 1fr))`, gap: '20px' }}>
+              {shown.map((p, i) => {
                 const highlighted = i === highlightIndex;
                 return (
                   <div
@@ -146,6 +243,27 @@ export default function Landing({ onGoLogin, onGoSignup }) {
                       </div>
                     )}
                     <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: highlighted ? 'var(--lime-ink)' : 'var(--mist)' }}>{durationLabel(p.durationMonths)}</span>
+
+                    {/* PAY-012 — read off the package's own fields, so a tier
+                        that loses the weekly report stops advertising it the
+                        moment it is saved. */}
+                    <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                      {packageFeatures(p, tests).map((f) => (
+                        <li
+                          key={f.text}
+                          style={{
+                            display: 'flex', alignItems: 'flex-start', gap: '8px',
+                            fontFamily: 'var(--font-arabic)', fontSize: '12px', lineHeight: 1.6,
+                            color: highlighted ? 'var(--lime-ink)' : f.included ? 'var(--sand)' : 'var(--mist)',
+                            opacity: f.included ? 1 : 0.75,
+                          }}
+                        >
+                          <span aria-hidden style={{ flexShrink: 0, fontFamily: 'var(--font-latin)' }}>{f.included ? '✓' : '—'}</span>
+                          <span>{f.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+
                     <button
                       onClick={onGoSignup}
                       style={{
