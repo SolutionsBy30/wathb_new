@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertPackageDto } from './dto/packages.dto';
 import { packagePriceView } from './pricing.util';
+import { groupsForPackage } from './package-groups.util';
 
 @Injectable()
 export class PackagesService {
@@ -18,9 +19,24 @@ export class PackagesService {
     return { ...pkg, ...packagePriceView(pkg) };
   }
 
+  /**
+   * PAY-015 — the catalogue segments a package belongs to, derived from the
+   * tests it covers. Loaded once per list rather than per package.
+   */
+  private async grouping() {
+    const [tests, groups] = await Promise.all([
+      this.prisma.test.findMany({ select: { id: true, groupId: true } }),
+      this.prisma.testGroup.findMany({ select: { id: true, nameAr: true, sort: true } }),
+    ]);
+    return (testIds: string[]) => groupsForPackage(testIds, tests, groups);
+  }
+
   async listPublic() {
-    const rows = await this.prisma.package.findMany({ where: { isActive: true, visibility: 'public' }, orderBy: [{ sort: 'asc' }, { priceHalalas: 'asc' }] });
-    return rows.map((p) => this.withPriceView(p));
+    const [rows, groupOf] = await Promise.all([
+      this.prisma.package.findMany({ where: { isActive: true, visibility: 'public' }, orderBy: [{ sort: 'asc' }, { priceHalalas: 'asc' }] }),
+      this.grouping(),
+    ]);
+    return rows.map((p) => ({ ...this.withPriceView(p), ...groupOf(p.testIds) }));
   }
 
   /**
@@ -36,15 +52,19 @@ export class PackagesService {
    * whether it can be reshaped freely or is a historical record.
    */
   async listAll() {
-    const rows = await this.prisma.package.findMany({
-      orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }],
-      include: {
-        _count: { select: { subscriptions: true } },
-        subscriptions: { where: { status: 'active' }, select: { id: true } },
-      },
-    });
+    const [rows, groupOf] = await Promise.all([
+      this.prisma.package.findMany({
+        orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }],
+        include: {
+          _count: { select: { subscriptions: true } },
+          subscriptions: { where: { status: 'active' }, select: { id: true } },
+        },
+      }),
+      this.grouping(),
+    ]);
     return rows.map(({ subscriptions, _count, ...p }) => ({
       ...this.withPriceView(p),
+      ...groupOf(p.testIds),
       activeSubscriptions: subscriptions.length,
       totalSubscriptions: _count.subscriptions,
     }));

@@ -365,49 +365,13 @@ function NewPackageForm({ tests, onCreated }) {
   );
 }
 
-export default function Packages({ tests }) {
-  const [packages, setPackages] = useState([]);
-  // PAY-014 — which package is open for editing, if any.
-  const [editingId, setEditingId] = useState(null);
-  const [groups, setGroups] = useState([]);
-
-  const load = () => api.listPackages().then(setPackages);
-  useEffect(() => { load(); }, []);
-  useEffect(() => { api.listTestGroups().then(setGroups).catch(() => setGroups([])); }, []);
-
-  const toggleActive = async (pkg) => {
-    await api.updatePackage(pkg.id, { isActive: !pkg.isActive });
-    await load();
-  };
-
-  const toggleFlag = async (pkg, key, value) => {
-    await api.updatePackage(pkg.id, { [key]: value });
-    await load();
-  };
-
+/**
+ * PAY-015 — one packages table, rendered once per catalogue segment so the
+ * grouped view cannot drift from the flat one in columns or behaviour.
+ */
+function PackageTable({ rows, tests, editingId, setEditingId, toggleActive, toggleFlag, load }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الباقات والتسعير</h1>
-
-      <FreeAccountPanel packages={packages} tests={tests} onSaved={load} />
-
-      <NewPackageForm tests={tests} onCreated={load} />
-
-      {editingId && (() => {
-        const pkg = packages.find((p) => p.id === editingId);
-        return pkg ? (
-          <PackageEditor
-            key={pkg.id}
-            pkg={pkg}
-            tests={tests}
-            groups={groups}
-            onSaved={async () => { await load(); setEditingId(null); }}
-            onCancel={() => setEditingId(null)}
-          />
-        ) : null;
-      })()}
-
-      <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
+    <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ textAlign: 'start', fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
@@ -421,7 +385,7 @@ export default function Packages({ tests }) {
             </tr>
           </thead>
           <tbody>
-            {packages.map((p) => (
+            {rows.map((p) => (
               <tr key={p.id} style={{ borderTop: '0.5px solid var(--on-indigo-line)' }}>
                 <td style={{ ...td, cursor: 'pointer' }} onClick={() => setEditingId(editingId === p.id ? null : p.id)}>
                   <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--lime-print)', textDecoration: 'underline' }}>{p.nameAr}</span>
@@ -490,8 +454,94 @@ export default function Packages({ tests }) {
             ))}
           </tbody>
         </table>
-        {packages.length === 0 && <p style={{ margin: 0, padding: '20px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>لا توجد باقات بعد.</p>}
-      </div>
+    </div>
+  );
+}
+
+export default function Packages({ tests }) {
+  const [packages, setPackages] = useState([]);
+  // PAY-014 — which package is open for editing, if any.
+  const [editingId, setEditingId] = useState(null);
+  const [groups, setGroups] = useState([]);
+
+  const load = () => api.listPackages().then(setPackages);
+  useEffect(() => { load(); }, []);
+  useEffect(() => { api.listTestGroups().then(setGroups).catch(() => setGroups([])); }, []);
+
+  const toggleActive = async (pkg) => {
+    await api.updatePackage(pkg.id, { isActive: !pkg.isActive });
+    await load();
+  };
+
+  const toggleFlag = async (pkg, key, value) => {
+    await api.updatePackage(pkg.id, { [key]: value });
+    await load();
+  };
+
+  // PAY-015 — grouped by the same catalogue segments as the tests. The group
+  // comes from the API, derived from each package's coverage, so it cannot
+  // disagree with the tests the package actually includes.
+  const sections = (() => {
+    const byGroup = new Map();
+    const spanning = [];
+    const ungrouped = [];
+    for (const p of packages) {
+      if (p.spansGroups) { spanning.push(p); continue; }
+      const g = (p.groups ?? [])[0];
+      if (!g) { ungrouped.push(p); continue; }
+      if (!byGroup.has(g.id)) byGroup.set(g.id, { key: g.id, label: g.nameAr, items: [] });
+      byGroup.get(g.id).items.push(p);
+    }
+    const out = [...byGroup.values()];
+    // A package spanning segments is a real product — "everything we offer" —
+    // so it gets its own section rather than being filed under whichever
+    // segment happened to sort first.
+    if (spanning.length) out.push({ key: '__span', label: 'باقات شاملة لأكثر من مجموعة', items: spanning });
+    if (ungrouped.length) out.push({ key: '__none', label: 'اختباراتها غير مصنّفة', items: ungrouped, warn: true });
+    return out;
+  })();
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <h1 style={{ margin: 0, fontFamily: 'var(--font-arabic)', fontSize: '20px', fontWeight: 500, color: 'var(--sand)' }}>الباقات والتسعير</h1>
+
+      <FreeAccountPanel packages={packages} tests={tests} onSaved={load} />
+
+      <NewPackageForm tests={tests} onCreated={load} />
+
+      {editingId && (() => {
+        const pkg = packages.find((p) => p.id === editingId);
+        return pkg ? (
+          <PackageEditor
+            key={pkg.id}
+            pkg={pkg}
+            tests={tests}
+            groups={groups}
+            onSaved={async () => { await load(); setEditingId(null); }}
+            onCancel={() => setEditingId(null)}
+          />
+        ) : null;
+      })()}
+
+      {sections.map((sec) => (
+        <div key={sec.key} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: sec.warn ? '#E8C547' : 'var(--sand)' }}>
+            {sec.label} <span style={{ fontFamily: 'var(--font-latin)', fontSize: '11px', color: 'var(--mist)' }}>({sec.items.length})</span>
+          </span>
+          <PackageTable
+            rows={sec.items}
+            tests={tests}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            toggleActive={toggleActive}
+            toggleFlag={toggleFlag}
+            load={load}
+          />
+        </div>
+      ))}
+      {packages.length === 0 && (
+        <p style={{ margin: 0, padding: '20px', fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--mist)' }}>لا توجد باقات بعد.</p>
+      )}
     </div>
   );
 }

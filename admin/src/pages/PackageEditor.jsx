@@ -215,6 +215,10 @@ export default function PackageEditor({ pkg, tests, groups, onSaved, onCancel })
         </label>
       </div>
 
+      {/* PAY-016 — priced against the saved price, not the unsaved draft: a
+          promo applies to what the package actually costs today. */}
+      <PromoCodes pkg={pkg} priceHalalas={pkg.priceHalalas} />
+
       {error && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>{error}</span>}
 
       <div style={{ display: 'flex', gap: '8px' }}>
@@ -223,6 +227,231 @@ export default function PackageEditor({ pkg, tests, groups, onSaved, onCancel })
         </button>
         <button onClick={onCancel} style={{ ...btn, background: 'transparent', color: 'var(--mist)' }}>إلغاء</button>
       </div>
+    </div>
+  );
+}
+
+const REJECTION_AR = {
+  inactive: 'غير مفعّل',
+  not_started: 'لم يبدأ بعد',
+  expired: 'منتهي',
+  exhausted: 'استُنفد',
+};
+
+/**
+ * PAY-016 — the promo codes that apply to this package, edited here.
+ *
+ * They lived on a separate screen keyed by code, so answering "what discounts
+ * are running on الباقة الشاملة?" meant opening every code and reading its
+ * package list. The question is always asked about a package.
+ *
+ * An empty packageIds means the code applies to EVERY package. Those are shown
+ * but not detachable from here: removing this package from a global code would
+ * mean writing every other package's id into it, which is a surprising thing
+ * for a button on one package's screen to do. Narrowing a global code stays on
+ * the codes screen, where its whole scope is visible.
+ */
+function PromoCodes({ pkg, priceHalalas }) {
+  const [codes, setCodes] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState(null);
+  const [attachId, setAttachId] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const load = () => api.listDiscountCodes().then(setCodes).catch((e) => setError(e.message));
+  useEffect(() => { load(); }, []);
+
+  if (!codes) return <span style={label}>جارٍ تحميل رموز الخصم…</span>;
+
+  const global = codes.filter((c) => (c.packageIds ?? []).length === 0);
+  const scoped = codes.filter((c) => (c.packageIds ?? []).includes(pkg.id));
+  const attachable = codes.filter((c) => (c.packageIds ?? []).length > 0 && !(c.packageIds ?? []).includes(pkg.id));
+
+  // Mirrors applyPromoCode in pricing.util: percent rounds, and the discount
+  // is clamped to the price so an over-large code makes the package free
+  // rather than negative.
+  const effect = (c) => {
+    const raw = c.kind === 'percent' ? Math.round((priceHalalas * c.value) / 100) : c.value;
+    const discount = Math.max(0, Math.min(raw, priceHalalas));
+    return { discount, total: priceHalalas - discount };
+  };
+
+  // Everything applyPromoCode rejects on, minus scope, which is what the
+  // sections already express.
+  const blockedReason = (c) => {
+    if (!c.isActive) return 'inactive';
+    if (c.startsAt && new Date() < new Date(c.startsAt)) return 'not_started';
+    if (c.expiresAt && new Date() > new Date(c.expiresAt)) return 'expired';
+    if (c.maxRedemptions != null && c.timesRedeemed >= c.maxRedemptions) return 'exhausted';
+    return null;
+  };
+
+  const setScope = async (code, packageIds) => {
+    setBusyId(code.id);
+    setError(null);
+    try {
+      await api.updateDiscountCode(code.id, { packageIds });
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const Row = ({ c, detachable }) => {
+    const { discount, total } = effect(c);
+    const blocked = blockedReason(c);
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '7px 0', borderTop: '0.5px solid var(--on-indigo-line)' }}>
+        <span style={{ fontFamily: 'var(--font-latin)', fontSize: '13px', color: blocked ? 'var(--mist)' : 'var(--sand)' }} dir="ltr">{c.code}</span>
+        <span style={label}>
+          {c.kind === 'percent' ? `${c.value}%` : `${sar(c.value)} ريال`}
+        </span>
+        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: blocked ? 'var(--mist)' : 'var(--teal)' }}>
+          {sar(priceHalalas)} ← {sar(total)} ريال (−{sar(discount)})
+        </span>
+        {c.maxRedemptions != null && (
+          <span style={label}>{c.timesRedeemed}/{c.maxRedemptions} استُخدم</span>
+        )}
+        {blocked && (
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: '#E8C547' }}>{REJECTION_AR[blocked]} — لا يعمل الآن</span>
+        )}
+        {detachable ? (
+          <button
+            disabled={busyId === c.id}
+            onClick={() => setScope(c, (c.packageIds ?? []).filter((id) => id !== pkg.id))}
+            style={{ ...btn, marginInlineStart: 'auto', background: 'transparent', color: 'var(--coral)', padding: '5px 12px' }}
+          >
+            {busyId === c.id ? '…' : 'إزالة من الباقة'}
+          </button>
+        ) : (
+          <span style={{ ...label, marginInlineStart: 'auto' }}>يشمل كل الباقات</span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '0.5px solid var(--on-indigo-line)', paddingTop: '14px' }}>
+      <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>رموز الخصم على هذه الباقة</span>
+
+      {scoped.length === 0 && global.length === 0 && (
+        <span style={label}>لا رمز خصم ينطبق على هذه الباقة.</span>
+      )}
+      {scoped.map((c) => <Row key={c.id} c={c} detachable />)}
+      {global.map((c) => <Row key={c.id} c={c} detachable={false} />)}
+
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginTop: '6px' }}>
+        <select value={attachId} onChange={(e) => setAttachId(e.target.value)} style={{ ...fieldStyle, minWidth: '180px' }}>
+          <option value="">أضف رمزاً موجوداً…</option>
+          {attachable.map((c) => (
+            <option key={c.id} value={c.id}>{c.code} — {c.kind === 'percent' ? `${c.value}%` : `${sar(c.value)} ريال`}</option>
+          ))}
+        </select>
+        <button
+          disabled={!attachId || busyId !== null}
+          onClick={() => {
+            const c = codes.find((x) => x.id === attachId);
+            if (c) setScope(c, [...(c.packageIds ?? []), pkg.id]).then(() => setAttachId(''));
+          }}
+          style={{ ...btn, background: 'var(--lime)', color: 'var(--lime-ink)', opacity: attachId ? 1 : 0.5 }}
+        >
+          إضافة
+        </button>
+        <button onClick={() => setCreating((v) => !v)} style={{ ...btn, background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--sand)' }}>
+          {creating ? 'إلغاء' : '+ رمز جديد لهذه الباقة'}
+        </button>
+      </div>
+
+      {creating && (
+        <NewPromoCode
+          pkg={pkg}
+          priceHalalas={priceHalalas}
+          onCreated={async () => { setCreating(false); await load(); }}
+          onError={setError}
+        />
+      )}
+
+      {error && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>{error}</span>}
+    </div>
+  );
+}
+
+function NewPromoCode({ pkg, priceHalalas, onCreated, onError }) {
+  const [code, setCode] = useState('');
+  const [kind, setKind] = useState('percent');
+  const [value, setValue] = useState('');
+  const [maxRedemptions, setMaxRedemptions] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const n = Number(value);
+  // Same bounds the رموز الخصم screen enforces, so the two entry points cannot
+  // accept different things: a 150% code would make the package free and the
+  // clamp would hide the typo.
+  const valid = code.trim() && value !== '' && !Number.isNaN(n) && n >= 1
+    && (kind !== 'percent' || n <= 100);
+  const preview = valid
+    ? (() => {
+        const raw = kind === 'percent' ? Math.round((priceHalalas * n) / 100) : Math.round(n * 100);
+        const discount = Math.max(0, Math.min(raw, priceHalalas));
+        return `${sar(priceHalalas)} ← ${sar(priceHalalas - discount)} ريال`;
+      })()
+    : null;
+
+  return (
+    <div style={{ background: 'var(--indigo)', borderRadius: 'var(--radius-sm)', padding: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={label}>الرمز</span>
+        <input style={{ ...fieldStyle, width: '140px', fontFamily: 'var(--font-latin)', background: 'var(--on-indigo-subtle)' }} dir="ltr" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SUMMER25" />
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={label}>النوع</span>
+        <select style={{ ...fieldStyle, background: 'var(--on-indigo-subtle)' }} value={kind} onChange={(e) => setKind(e.target.value)}>
+          <option value="percent">نسبة %</option>
+          <option value="fixed">مبلغ ثابت (ريال)</option>
+        </select>
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={label}>{kind === 'percent' ? 'النسبة' : 'المبلغ'}</span>
+        <input style={{ ...fieldStyle, width: '90px', fontFamily: 'var(--font-latin)', background: 'var(--on-indigo-subtle)' }} type="number" min={1} value={value} onChange={(e) => setValue(e.target.value)} />
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={label}>حد الاستخدام (اختياري)</span>
+        <input style={{ ...fieldStyle, width: '110px', fontFamily: 'var(--font-latin)', background: 'var(--on-indigo-subtle)' }} type="number" min={1} placeholder="بلا حد" value={maxRedemptions} onChange={(e) => setMaxRedemptions(e.target.value)} />
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={label}>ينتهي في (اختياري)</span>
+        <input style={{ ...fieldStyle, width: '150px', fontFamily: 'var(--font-latin)', background: 'var(--on-indigo-subtle)' }} type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+      </label>
+      {preview && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--teal)', paddingBottom: '10px' }}>{preview}</span>}
+      <button
+        disabled={busy || !valid}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await api.createDiscountCode({
+              code: code.trim(),
+              kind,
+              // Fixed amounts are stored in halalas like every other money
+              // field; percent is a plain number.
+              value: kind === 'percent' ? n : Math.round(n * 100),
+              packageIds: [pkg.id],
+              maxRedemptions: maxRedemptions === '' ? null : Number(maxRedemptions),
+              expiresAt: expiresAt === '' ? null : new Date(expiresAt).toISOString(),
+            });
+            await onCreated();
+          } catch (e) {
+            onError(e.message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+        style={{ ...btn, background: 'var(--lime)', color: 'var(--lime-ink)', opacity: busy || !valid ? 0.5 : 1 }}
+      >
+        {busy ? 'جارٍ…' : 'إنشاء'}
+      </button>
     </div>
   );
 }
