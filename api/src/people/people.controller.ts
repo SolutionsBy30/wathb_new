@@ -95,6 +95,30 @@ export class PeopleController {
     return this.students.adminSetStudentTest(id, testId, dto, session.sub);
   }
 
+  // STU-036 — the learner records that they sat the real exam. Their own
+  // action: nobody else knows they walked into the hall.
+  @RequireSession('student')
+  @Patch('students/me/tests/:testId/archive')
+  archiveMyTest(
+    @Param('testId') testId: string,
+    @Body() dto: { archived: boolean; actualScore?: number | null },
+    @CurrentSession() session: SessionPayload,
+  ) {
+    return this.students.archiveTest(session.sub, testId, dto);
+  }
+
+  @RequireSession('admin')
+  @RequirePermission('students')
+  @Patch('admin/students/:id/tests/:testId/archive')
+  adminArchiveStudentTest(
+    @Param('id') id: string,
+    @Param('testId') testId: string,
+    @Body() dto: { archived: boolean; actualScore?: number | null },
+    @CurrentSession() session: SessionPayload,
+  ) {
+    return this.students.adminArchiveTest(id, testId, dto, session.sub);
+  }
+
   // STU-002 — the student's own covered tests, toggles and per-test goals.
   @RequireSession('student')
   @Get('students/me/tests')

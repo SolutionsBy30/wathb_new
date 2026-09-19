@@ -241,6 +241,9 @@ export const api = {
   // STU-034 — which tests a student is preparing for, managed by the admin.
   studentTests: (studentId) => request(`/admin/students/${studentId}/tests`),
   setStudentTest: (studentId, testId, dto) => request(`/admin/students/${studentId}/tests/${testId}`, { method: 'PATCH', body: dto }),
+  // STU-036 — the learner sat the real exam; archive keeps the history and
+  // takes the exam out of every blended number.
+  archiveStudentTest: (studentId, testId, dto) => request(`/admin/students/${studentId}/tests/${testId}/archive`, { method: 'PATCH', body: dto }),
   listSupervisors: () => request('/admin/supervisors'),
   // ADM-098 — a one-off login link for a supervisor's own portal.
   mintSupervisorLoginLink: (supervisorId) => request(`/admin/supervisors/${supervisorId}/magic-link`, { method: 'POST' }),

@@ -90,16 +90,28 @@ export class ReportsService {
 
   /** Lightweight composite-index + week-over-week delta lookup — used where the full report would be overkill (supervisor cards, admin list). */
   async getCompositeSummary(studentId: string): Promise<{ compositeIndex: number | null; delta: number | null }> {
-    const stats = await this.prisma.studentLabelStat.findMany({
-      where: { studentId },
-      include: { label: { include: { area: { include: { section: true } } } } },
-    });
-    const forComposite: LabelStatForComposite[] = stats.map((s) => ({
-      nAnswered: s.nAnswered,
-      nCorrect: s.nCorrect,
-      areaId: s.label.areaId,
-      sectionWeight: s.label.area.section.weight,
-    }));
+    // STU-036 — same exclusion as the bulk path below. If these two disagreed,
+    // the supervisor's card and the admin list would quote different composite
+    // indexes for the same student.
+    const [stats, archived] = await Promise.all([
+      this.prisma.studentLabelStat.findMany({
+        where: { studentId },
+        include: { label: { include: { area: { include: { section: true } } } } },
+      }),
+      this.prisma.studentTest.findMany({
+        where: { studentId, archivedAt: { not: null } },
+        select: { testId: true },
+      }),
+    ]);
+    const archivedIds = new Set(archived.map((a) => a.testId));
+    const forComposite: LabelStatForComposite[] = stats
+      .filter((s) => !archivedIds.has(s.label.area.section.testId))
+      .map((s) => ({
+        nAnswered: s.nAnswered,
+        nCorrect: s.nCorrect,
+        areaId: s.label.areaId,
+        sectionWeight: s.label.area.section.weight,
+      }));
     const compositeIndex = computeCompositeIndex(forComposite, MIN_SAMPLE_FOR_REPORTING);
     const trend = await this.weightedWeeklyTrend(studentId, 2);
     return { compositeIndex, delta: compositeDelta(trend) };
@@ -108,12 +120,29 @@ export class ReportsService {
   /** Same as getCompositeSummary but for many students in one pass (admin list) — one query instead of N. */
   async getCompositeIndexBulk(studentIds: string[]): Promise<Map<string, number | null>> {
     if (studentIds.length === 0) return new Map();
-    const stats = await this.prisma.studentLabelStat.findMany({
-      where: { studentId: { in: studentIds } },
-      include: { label: { include: { area: { include: { section: true } } } } },
-    });
+    const [stats, archivedRows] = await Promise.all([
+      this.prisma.studentLabelStat.findMany({
+        where: { studentId: { in: studentIds } },
+        include: { label: { include: { area: { include: { section: true } } } } },
+      }),
+      // STU-036 — exams these learners have already sat. Their history stays
+      // readable, but it stops being averaged into a number that is supposed
+      // to describe what they are working on now.
+      this.prisma.studentTest.findMany({
+        where: { studentId: { in: studentIds }, archivedAt: { not: null } },
+        select: { studentId: true, testId: true },
+      }),
+    ]);
+    const archivedByStudent = new Map<string, Set<string>>();
+    for (const r of archivedRows) {
+      const set = archivedByStudent.get(r.studentId) ?? new Set<string>();
+      set.add(r.testId);
+      archivedByStudent.set(r.studentId, set);
+    }
+
     const byStudent = new Map<string, LabelStatForComposite[]>();
     for (const s of stats) {
+      if (archivedByStudent.get(s.studentId)?.has(s.label.area.section.testId)) continue;
       const arr = byStudent.get(s.studentId) ?? [];
       arr.push({ nAnswered: s.nAnswered, nCorrect: s.nCorrect, areaId: s.label.areaId, sectionWeight: s.label.area.section.weight });
       byStudent.set(s.studentId, arr);

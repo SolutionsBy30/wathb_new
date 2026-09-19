@@ -217,6 +217,22 @@ model StudentTest {
   targetScore Int?
   testDate    DateTime?
 
+  /// STU-036 — the learner sat the real exam, so this preparation is finished.
+  ///
+  /// Archiving keeps every answer and leap — the learner can still read their
+  /// own history — but takes the exam out of the daily loop and out of every
+  /// aggregate: the composite index, the school dashboard, and cohort
+  /// reporting. A finished exam must not drag down the blended picture of what
+  /// someone is working on now, and a school preparing a cohort for قدرات has
+  /// no business seeing a graduate's numbers once they have sat it.
+  ///
+  /// Reversible: resitting قدرات is common, and un-archiving returns the exam
+  /// to the active set with its history intact.
+  archivedAt  DateTime?
+  /// What they actually scored, when they choose to tell us. Optional, and the
+  /// only figure that can ever check the simulator's forecast against reality.
+  actualScore Int?
+
   @@id([studentId, testId])
   @@map("student_tests")
 }

@@ -304,6 +304,10 @@ export class StudentsService {
           targetScore: r.targetScore,
           testDate: r.testDate,
           isFocused: r.testId === student.targetTestId,
+          // STU-036 — a sat exam. Kept in the list so its history stays
+          // reachable, marked so nothing renders it as live preparation.
+          archivedAt: r.archivedAt,
+          actualScore: r.actualScore,
         })),
     };
   }
@@ -353,6 +357,85 @@ export class StudentsService {
       await this.prisma.student.update({ where: { userId: studentId }, data: { targetTestId: nextFocus } });
     }
     return this.myTests(studentId);
+  }
+
+  /**
+   * STU-036 — the learner sat the real exam, so this preparation is finished.
+   *
+   * Archiving is not deleting and not switching off. The history stays
+   * readable to them; what stops is the daily loop and every blended number —
+   * composite index, school dashboard, cohort reporting — because a finished
+   * exam should not describe what someone is working on now.
+   *
+   * Reversible on purpose: resitting قدرات is ordinary, and un-archiving
+   * returns the exam to the active set with its history intact.
+   *
+   * `actualScore` is optional and the only figure that can ever check the
+   * simulator's forecast against what really happened, so it is worth asking
+   * for and never worth requiring.
+   */
+  async archiveTest(studentId: string, testId: string, dto: { archived: boolean; actualScore?: number | null }) {
+    const row = await this.prisma.studentTest.findUnique({
+      where: { studentId_testId: { studentId, testId } },
+    });
+    if (!row) throw new NotFoundException('this test is not on the student list');
+
+    const updated = await this.prisma.studentTest.update({
+      where: { studentId_testId: { studentId, testId } },
+      data: {
+        archivedAt: dto.archived ? (row.archivedAt ?? new Date()) : null,
+        // Switched off when archived: a finished exam must not keep generating
+        // leaps. Un-archiving switches it back on, which is what "I am sitting
+        // it again" means.
+        isActive: !dto.archived,
+        ...(dto.actualScore !== undefined ? { actualScore: dto.actualScore } : {}),
+      },
+    });
+
+    // The focus pointer must never rest on a finished exam — planDayForStudent
+    // reads it and would keep generating bundles for one already sat.
+    const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId } });
+    if (dto.archived && student.targetTestId === testId) {
+      const fallback = await this.prisma.studentTest.findFirst({
+        where: { studentId, isActive: true, archivedAt: null, NOT: { testId } },
+      });
+      await this.prisma.student.update({
+        where: { userId: studentId },
+        data: { targetTestId: fallback?.testId ?? null },
+      });
+    }
+    return updated;
+  }
+
+  /** STU-036 — the admin does the same thing, with a record of who. */
+  async adminArchiveTest(
+    studentId: string,
+    testId: string,
+    dto: { archived: boolean; actualScore?: number | null },
+    adminUserId: string,
+  ) {
+    const [student, test] = await Promise.all([
+      this.prisma.student.findUnique({ where: { userId: studentId }, include: { user: { select: { name: true } } } }),
+      this.prisma.test.findUnique({ where: { id: testId }, select: { nameAr: true } }),
+    ]);
+    if (!student) throw new NotFoundException('student not found');
+    if (!test) throw new NotFoundException('test not found');
+
+    const result = await this.archiveTest(studentId, testId, dto);
+
+    const admin = await this.prisma.user.findUnique({ where: { id: adminUserId }, select: { name: true, email: true } });
+    await this.auditLog.record({
+      actorId: adminUserId,
+      actorLabel: admin?.email ?? admin?.name ?? adminUserId,
+      action: dto.archived ? 'student.test_archived' : 'student.test_unarchived',
+      entityType: 'Student',
+      entityId: studentId,
+      after: { testId, ...dto },
+      note: dto.archived
+        ? `أرشف اختبار «${test.nameAr}» لحساب ${student.user.name} — أدّى الاختبار الفعلي`
+        : `أعاد اختبار «${test.nameAr}» إلى قائمة ${student.user.name}`,
+    });
+    return result;
   }
 
   /**

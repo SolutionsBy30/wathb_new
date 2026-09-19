@@ -100,15 +100,44 @@ function StudentTests({ studentId }) {
     }
   };
 
+  // STU-036 — archiving is reversible and keeps the history, but it removes
+  // the student from their school's cohort and from every blended number, so
+  // the confirmation says exactly that rather than asking "are you sure?".
+  const archive = async (t, archived) => {
+    if (archived) {
+      const ok = window.confirm(
+        `تأكيد أن الطالب أدّى اختبار «${t.nameAr}» فعلياً؟\n\n`
+        + 'يبقى سجله كاملاً ويمكن للطالب مراجعته، لكنه يخرج من الوثبة اليومية ومن أرقام لوحة المدرسة ومن المؤشر المركّب.\n\n'
+        + 'يمكن التراجع إن أعاد الطالب الاختبار.',
+      );
+      if (!ok) return;
+    }
+    setBusyId(t.testId);
+    setError(null);
+    try {
+      await api.archiveStudentTest(studentId, t.testId, { archived });
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (!state) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>جاري التحميل…</p>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {state.tests.map((t) => (
         <div key={t.testId} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '8px 0', borderTop: '0.5px solid var(--on-indigo-line)' }}>
-          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: t.isActive ? 'var(--sand)' : 'var(--mist)', minWidth: '120px' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: t.archivedAt ? 'var(--mist)' : t.isActive ? 'var(--sand)' : 'var(--mist)', minWidth: '120px' }}>
             {t.nameAr}
           </span>
+          {t.archivedAt && (
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--teal-ink)', background: 'var(--teal-bg)', borderRadius: '999px', padding: '2px 8px' }}>
+              أدّى الاختبار{t.actualScore != null ? ` · ${t.actualScore}` : ''}
+            </span>
+          )}
           {t.isFocused && (
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--lime-ink)', background: 'var(--lime)', borderRadius: '999px', padding: '2px 8px' }}>
               المُركّز عليه
@@ -124,7 +153,25 @@ function StudentTests({ studentId }) {
             <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>الهدف: {t.targetScore}</span>
           )}
           <span style={{ marginInlineStart: 'auto', display: 'flex', gap: '6px' }}>
-            {t.isActive && !t.isFocused && (
+            {t.archivedAt ? (
+              <button
+                disabled={busyId === t.testId}
+                onClick={() => archive(t, false)}
+                style={{ border: 'none', cursor: 'pointer', padding: '5px 12px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+              >
+                {busyId === t.testId ? '…' : 'إعادة للتحضير'}
+              </button>
+            ) : (
+              <button
+                disabled={busyId === t.testId}
+                onClick={() => archive(t, true)}
+                title="الطالب أدّى الاختبار الفعلي"
+                style={{ border: 'none', cursor: 'pointer', padding: '5px 12px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--teal)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+              >
+                أدّى الاختبار
+              </button>
+            )}
+            {!t.archivedAt && t.isActive && !t.isFocused && (
               <button
                 disabled={busyId === t.testId}
                 onClick={() => set(t.testId, { focus: true })}
@@ -133,13 +180,13 @@ function StudentTests({ studentId }) {
                 اجعله المُركّز
               </button>
             )}
-            <button
+            {!t.archivedAt && <button
               disabled={busyId === t.testId}
               onClick={() => set(t.testId, { isActive: !t.isActive })}
               style={{ border: 'none', cursor: 'pointer', padding: '5px 12px', borderRadius: '999px', background: t.isActive ? 'transparent' : 'var(--lime)', boxShadow: t.isActive ? 'inset 0 0 0 0.5px var(--on-indigo-line)' : 'none', color: t.isActive ? 'var(--coral)' : 'var(--lime-ink)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
             >
               {busyId === t.testId ? '…' : t.isActive ? 'إزالة' : 'إضافة'}
-            </button>
+            </button>}
           </span>
         </div>
       ))}

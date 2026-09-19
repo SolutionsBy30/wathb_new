@@ -13,6 +13,7 @@ import {
   StudentRow,
   summarise,
 } from './school-insights.util';
+import { archivedTestIds, hasFinishedEverything } from '../reports/archive-scope.util';
 import {
   AttemptScore,
   describeForecastAr,
@@ -97,7 +98,17 @@ export class SchoolReportService {
         lastCompletedOn: true,
         currentStreak: true,
         user: { select: { name: true } },
-        labelStats: { select: { nAnswered: true, nCorrect: true } },
+        // STU-036 — the test behind each stat, so exams the student has
+        // already sat can be excluded. Without it a school's accuracy blends
+        // a graduate's licensing exam into its قدرات cohort mean.
+        labelStats: {
+          select: {
+            nAnswered: true,
+            nCorrect: true,
+            label: { select: { area: { select: { section: { select: { testId: true } } } } } },
+          },
+        },
+        studentTests: { select: { testId: true, isActive: true, archivedAt: true } },
       },
     });
 
@@ -132,13 +143,20 @@ export class SchoolReportService {
       attemptsByStudent.set(a.studentId, list);
     }
 
-    return students.map((s) => {
-      const answered = s.labelStats.reduce((n, l) => n + l.nAnswered, 0);
-      const correct = s.labelStats.reduce((n, l) => n + l.nCorrect, 0);
+    const mapped = students.map((s) => {
+      // STU-036 — a sat exam keeps its history and loses its vote here.
+      const archived = archivedTestIds(s.studentTests);
+      const live = s.labelStats.filter((l) => !archived.has(l.label.area.section.testId));
+      const answered = live.reduce((n, l) => n + l.nAnswered, 0);
+      const correct = live.reduce((n, l) => n + l.nCorrect, 0);
       const f = forecast(attemptsByStudent.get(s.userId) ?? []);
       return {
         student: s,
         forecast: f,
+        // Everything they were preparing for has been sat: they leave the
+        // cohort entirely rather than appearing as a row with nothing behind
+        // it. After the exam, readiness is no longer a question about them.
+        finished: hasFinishedEverything(s.studentTests),
         row: {
           studentId: s.userId,
           accuracy: answered > 0 ? Math.round((correct / answered) * 1000) / 10 : null,
@@ -149,12 +167,17 @@ export class SchoolReportService {
         } satisfies StudentRow,
       };
     });
+
+    // Filtered here rather than at each caller, so no consumer can forget and
+    // quietly report a cohort that includes people who have already sat.
+    const live = mapped.filter((m) => !m.finished);
+    return { rows: live, finishedCount: mapped.length - live.length };
   }
 
   /** The dashboard's headline: how the cohort stands, and who needs attention. */
   async overview(userId: string, schoolId: string) {
     const school = await this.assertAccess(userId, schoolId);
-    const rows = await this.studentRows(schoolId);
+    const { rows, finishedCount } = await this.studentRows(schoolId);
     const disclosure = school.identityDisclosure as Disclosure;
 
     const summary = summarise(rows.map((r) => r.row));
@@ -216,6 +239,13 @@ export class SchoolReportService {
       summary,
       forecast: cohortForecast,
       suppressed: null,
+      // STU-036 — named, not hidden. A roster that shrinks with no explanation
+      // reads as lost data; "12 students have sat their exam" reads as
+      // progress, which is what it is.
+      finishedCount,
+      finishedNoteAr: finishedCount > 0
+        ? `${finishedCount} من طلاب المدرسة أدّوا اختبارهم الفعلي، ولم يعودوا ضمن الأرقام أدناه.`
+        : null,
       students,
       disclaimerAr: READINESS_DISCLAIMER_AR,
       forecastDisclaimerAr: FORECAST_DISCLAIMER_AR,
@@ -249,7 +279,7 @@ export class SchoolReportService {
     });
     if (!school) throw new NotFoundException('المدرسة غير موجودة');
 
-    const rows = await this.studentRows(schoolId);
+    const { rows } = await this.studentRows(schoolId);
     const summary = summarise(rows.map((r) => r.row));
     const areas = await this.areaAggregate(schoolId);
 
@@ -338,19 +368,34 @@ export class SchoolReportService {
     const ids = students.map((s) => s.userId);
     if (ids.length === 0) return [];
 
-    const stats = await this.prisma.studentLabelStat.findMany({
-      where: { studentId: { in: ids } },
-      select: {
-        studentId: true,
-        nAnswered: true,
-        nCorrect: true,
-        label: { select: { area: { select: { id: true, nameAr: true, section: { select: { nameAr: true } } } } } },
-      },
-    });
+    const [stats, archivedRows] = await Promise.all([
+      this.prisma.studentLabelStat.findMany({
+        where: { studentId: { in: ids } },
+        select: {
+          studentId: true,
+          nAnswered: true,
+          nCorrect: true,
+          label: { select: { area: { select: { id: true, nameAr: true, section: { select: { nameAr: true, testId: true } } } } } },
+        },
+      }),
+      // STU-036 — same exclusion as the per-student rows, or a school's area
+      // breakdown would still carry exams its students have finished.
+      this.prisma.studentTest.findMany({
+        where: { studentId: { in: ids }, archivedAt: { not: null } },
+        select: { studentId: true, testId: true },
+      }),
+    ]);
+    const archivedByStudent = new Map<string, Set<string>>();
+    for (const r of archivedRows) {
+      const set = archivedByStudent.get(r.studentId) ?? new Set<string>();
+      set.add(r.testId);
+      archivedByStudent.set(r.studentId, set);
+    }
 
     const agg = new Map<string, { nameAr: string; sectionNameAr: string; answered: number; correct: number; students: Set<string> }>();
     for (const s of stats) {
       if (s.nAnswered === 0) continue;
+      if (archivedByStudent.get(s.studentId)?.has(s.label.area.section.testId)) continue;
       const a = s.label.area;
       const cur = agg.get(a.id) ?? { nameAr: a.nameAr, sectionNameAr: a.section.nameAr, answered: 0, correct: 0, students: new Set<string>() };
       cur.answered += s.nAnswered;
@@ -383,7 +428,7 @@ export class SchoolReportService {
    */
   async attentionList(userId: string, schoolId: string) {
     const school = await this.assertAccess(userId, schoolId);
-    const rows = await this.studentRows(schoolId);
+    const { rows } = await this.studentRows(schoolId);
     const disclosure = school.identityDisclosure as Disclosure;
 
     if (!isReportable(rows.length)) {

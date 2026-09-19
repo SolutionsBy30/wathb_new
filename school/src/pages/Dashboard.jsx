@@ -171,6 +171,9 @@ export default function Dashboard({ api, school, onLogout, schools, onSwitchScho
   useEffect(() => { setOverview(null); setAreas(null); setAttention(null); }, [school.schoolId]);
 
   const suppressed = overview?.suppressed ?? areas?.suppressed ?? attention?.suppressed;
+  // STU-036 — students who have sat their exam leave the cohort. Named, not
+  // hidden: a roster that shrinks with no explanation reads as lost data.
+  const finishedNote = overview?.finishedNoteAr;
 
   return (
     <div dir="rtl" style={{ minHeight: '100vh', background: 'var(--indigo)' }}>
@@ -194,6 +197,12 @@ export default function Dashboard({ api, school, onLogout, schools, onSwitchScho
           خروج
         </button>
       </header>
+
+      {finishedNote && (
+        <div style={{ margin: '14px 24px 0', padding: '12px 16px', background: 'var(--on-indigo-subtle)', borderInlineStart: '3px solid var(--teal)', borderRadius: 'var(--radius-sm)' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--sand)', lineHeight: 1.8 }}>{finishedNote}</span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '6px', padding: '14px 24px 0', flexWrap: 'wrap' }}>
         {[['overview', 'نظرة عامة'], ['attention', 'من يحتاج دعمًا'], ['areas', 'المجالات']].map(([id, text]) => (
