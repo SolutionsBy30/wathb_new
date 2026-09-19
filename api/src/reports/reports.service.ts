@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SessionPayload } from '../auth/auth.types';
 import { computeCompositeIndex, LabelStatForComposite } from './composite-index.util';
 import { compositeDelta } from './weekly-report.util';
+import { EntitlementsService } from '../payments/entitlements.service';
 
 // Statistical honesty requirement, spec §5.2: never render a percentage for
 // an area/label with fewer than this many answers.
@@ -39,7 +40,10 @@ function accuracyOrCollecting(nAnswered: number, nCorrect: number) {
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private entitlements: EntitlementsService,
+  ) {}
 
   /** role-scoped per spec §9.3: student sees self, supervisor sees only linked+accepted students, admin sees any. */
   async assertAccess(session: SessionPayload, studentId: string) {
@@ -130,18 +134,17 @@ export class ReportsService {
    * own report — a supervisor/admin viewer always sees the full report.
    */
   async isReportRestricted(studentId: string): Promise<boolean> {
-    const activeSub = await this.prisma.subscription.findFirst({
-      where: { studentId, status: 'active' },
-      include: { package: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    // PAY-013 — across every active subscription, most permissive wins. A
+    // student holding a paid full-report package alongside the free default
+    // must not be masked down to the free tier's partial report.
+    const entitlements = await this.entitlements.forStudent(studentId);
     // No active plan at all restricts at least as hard as the free tier —
     // previously this fell through to `false`, so a student whose
     // subscription expired (or who never had one) saw the FULL report while
     // a free-tier student saw the partial one. Backwards on both fairness
     // and incentive: lapsing must never unlock more than staying free does.
-    if (!activeSub) return true;
-    return activeSub.package.reportVisibility === 'partial';
+    if (entitlements.none) return true;
+    return entitlements.reportVisibility === 'partial';
   }
 
   // Overloads so callers that don't pass `restricted` (or pass the literal

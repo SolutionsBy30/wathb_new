@@ -10,6 +10,7 @@ import { NotificationMessagesService } from './notification-messages.service';
 import { ProviderSettingsService } from './provider-settings.service';
 import { AuditLogService } from '../admin-ops/audit-log.service';
 import { EmailChannel } from './email-channel';
+import { EntitlementsService } from '../payments/entitlements.service';
 import {
   DEFAULT_SUPPRESS_AFTER_RUNS,
   effectiveDailyCap,
@@ -60,6 +61,7 @@ export class NotificationsService {
     private messages: NotificationMessagesService,
     private providers: ProviderSettingsService,
     private auditLog: AuditLogService,
+    private entitlements: EntitlementsService,
   ) {}
 
   /**
@@ -169,11 +171,9 @@ export class NotificationsService {
     // Wathb itself is still generated on-demand when they open the app
     // (WathbService.today()), so skipping the whole plan/notify pass here
     // costs them nothing but the proactive nudge.
-    const activeSub = await this.prisma.subscription.findFirst({
-      where: { studentId, status: 'active' },
-      include: { package: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    // PAY-013 — across every active subscription: if any package enables the
+    // daily send, the student gets it.
+    const entitlements = await this.entitlements.forStudent(studentId);
 
     // NOT-020 — no active subscription means no daily send.
     //
@@ -186,8 +186,8 @@ export class NotificationsService {
     // Every new account is enrolled into the default package
     // (DefaultEnrolmentService), so having no active subscription at all means
     // it lapsed, not that it is new.
-    if (!activeSub) return { skipped: 'no_active_subscription' as const };
-    if (!activeSub.package.dailyNotificationEnabled) return { skipped: 'free_tier' as const };
+    if (entitlements.none) return { skipped: 'no_active_subscription' as const };
+    if (!entitlements.dailyNotificationEnabled) return { skipped: 'free_tier' as const };
 
     const scheduledFor = dayKey(forDate);
     if (student.skipDays.includes(scheduledFor.getUTCDay())) return { skipped: 'skip_day' as const };

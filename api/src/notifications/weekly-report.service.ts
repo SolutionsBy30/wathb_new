@@ -7,6 +7,7 @@ import { NOTIFICATION_CHANNEL, NotificationChannel } from './channel.interface';
 import { accuracyBand, compositeDelta, pickTopStrengthWeakness, speedBand, WeeklyLabelStat } from '../reports/weekly-report.util';
 import { riyadhNow, STUDENT_WEEKLY_REPORT_DAY, STUDENT_WEEKLY_REPORT_HOUR } from './riyadh-clock.util';
 import { NotificationMessagesService, WEEKLY_REPORT_KIND } from './notification-messages.service';
+import { EntitlementsService } from '../payments/entitlements.service';
 
 function startOfWeek(d: Date): Date {
   const out = new Date(d);
@@ -33,6 +34,7 @@ export class WeeklyReportService {
     @Inject(NOTIFICATION_CHANNEL) private channel: NotificationChannel,
     private config: ConfigService,
     private messages: NotificationMessagesService,
+    private entitlements: EntitlementsService,
   ) {}
 
   private async flattenReportableLabels(studentId: string): Promise<{ labels: WeeklyLabelStat[]; trend: { weekStart: string; accuracy: number | null }[] }> {
@@ -75,12 +77,9 @@ export class WeeklyReportService {
     // FRE-005/FRE-007 — driven by the package flag, not a hardcoded
     // free-tier check; today's seeded free package leaves this on (the
     // weekly report is the tier's primary retention/conversion lever).
-    const activeSub = await this.prisma.subscription.findFirst({
-      where: { studentId, status: 'active' },
-      include: { package: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (activeSub && !activeSub.package.weeklyReportEnabled) return { skipped: 'package_disabled' as const };
+    // PAY-013 — enabled if any active package enables it.
+    const entitlements = await this.entitlements.forStudent(studentId);
+    if (!entitlements.none && !entitlements.weeklyReportEnabled) return { skipped: 'package_disabled' as const };
 
     const { labels, trend } = await this.flattenReportableLabels(studentId);
     const { strength, weakness } = pickTopStrengthWeakness(labels, MIN_SAMPLE_FOR_REPORTING);

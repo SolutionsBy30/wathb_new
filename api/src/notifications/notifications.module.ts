@@ -12,9 +12,10 @@ import { AuthModule } from '../auth/auth.module';
 import { WathbModule } from '../wathb/wathb.module';
 import { ReportsModule } from '../reports/reports.module';
 import { AuditLogModule } from '../admin-ops/audit-log.module';
+import { EntitlementsModule } from '../payments/entitlements.module';
 
 @Module({
-  imports: [AuthModule, WathbModule, NotificationChannelModule, ReportsModule, AuditLogModule],
+  imports: [AuthModule, WathbModule, NotificationChannelModule, ReportsModule, AuditLogModule, EntitlementsModule],
   providers: [NotificationsService, WeeklyReportService, CampaignService, AdminAlertService, NotificationMessagesService, ReachabilityService],
   controllers: [NotificationsController, WebhooksController],
   exports: [NotificationsService, WeeklyReportService, CampaignService, AdminAlertService, NotificationMessagesService, ReachabilityService],

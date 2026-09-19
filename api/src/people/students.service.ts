@@ -6,6 +6,7 @@ import { GoalSetupDto } from './dto/people.dto';
 import { ReportsService } from '../reports/reports.service';
 import { MagicLinkService } from '../auth/magic-link.service';
 import { AuditLogService } from '../admin-ops/audit-log.service';
+import { EntitlementsService } from '../payments/entitlements.service';
 
 export type AdminStudentSort = 'name' | 'subscriptionEnd' | 'performance' | 'createdAt';
 
@@ -18,6 +19,7 @@ export class StudentsService {
     private magicLinks: MagicLinkService,
     private config: ConfigService,
     private auditLog: AuditLogService,
+    private entitlements: EntitlementsService,
   ) {}
 
   /**
@@ -254,11 +256,11 @@ export class StudentsService {
    */
   async myTests(studentId: string) {
     const student = await this.prisma.student.findUniqueOrThrow({ where: { userId: studentId } });
-    const activeSub = await this.prisma.subscription.findFirst({
-      where: { studentId, status: 'active' },
-      include: { package: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    // PAY-013 — every active subscription, not the newest one. A student
+    // preparing for قدرات who adds an English test holds two at once, and
+    // reading a single row made the newer purchase silently un-cover the
+    // older one's tests.
+    const entitlements = await this.entitlements.forStudent(studentId);
     // STU-031 — the whole live catalogue is listed, not just the package's
     // tests. Scoping the list to covered tests meant a student without a
     // subscription saw exactly one row and had nothing to switch on, so
@@ -267,7 +269,7 @@ export class StudentsService {
     // taken against (WathbService.today) — enabling is a preparation choice,
     // paying is what unlocks it.
     const catalogue = await this.prisma.test.findMany({ where: { isActive: true }, orderBy: { nameAr: 'asc' } });
-    const coveredIds = new Set(activeSub?.package.testIds ?? []);
+    const coveredIds = new Set(entitlements.coveredTestIds);
     const existing = await this.prisma.studentTest.findMany({ where: { studentId } });
     const known = new Set(existing.map((e) => e.testId));
     const missing = catalogue.filter((t) => !known.has(t.id));
@@ -345,6 +347,60 @@ export class StudentsService {
     if (nextFocus !== student.targetTestId) {
       await this.prisma.student.update({ where: { userId: studentId }, data: { targetTestId: nextFocus } });
     }
+    return this.myTests(studentId);
+  }
+
+  /**
+   * STU-034 — the admin adds or removes a test from a student.
+   *
+   * Delegates to updateMyTest rather than writing the row itself, so the
+   * admin path and the student's own path cannot diverge: the "at least one
+   * test must stay enabled" rule and the focus fallback live in one place.
+   * Two screens quietly enforcing different invariants on the same table is
+   * how a student ends up focused on a disabled test.
+   *
+   * Removal is `isActive: false`, not a row delete. The student's own screen
+   * materialises a row for every live test on next load, so a deleted row
+   * comes straight back — and deleting would also discard their target score
+   * and exam date, which is not what "remove this test" means.
+   */
+  async adminSetStudentTest(
+    studentId: string,
+    testId: string,
+    dto: { isActive?: boolean; targetScore?: number | null; testDate?: string | null; focus?: boolean },
+    adminUserId: string,
+  ) {
+    const [student, test] = await Promise.all([
+      this.prisma.student.findUnique({ where: { userId: studentId }, include: { user: { select: { name: true } } } }),
+      this.prisma.test.findUnique({ where: { id: testId }, select: { nameAr: true } }),
+    ]);
+    if (!student) throw new NotFoundException('student not found');
+    if (!test) throw new NotFoundException('test not found');
+
+    const result = await this.updateMyTest(studentId, testId, dto);
+
+    const admin = await this.prisma.user.findUnique({ where: { id: adminUserId }, select: { name: true, email: true } });
+    const verb = dto.isActive === false ? 'أزال' : dto.focus ? 'ركّز' : 'أضاف';
+    await this.auditLog.record({
+      actorId: adminUserId,
+      actorLabel: admin?.email ?? admin?.name ?? adminUserId,
+      action: dto.isActive === false ? 'student.test_removed' : 'student.test_added',
+      entityType: 'Student',
+      entityId: studentId,
+      after: { testId, ...dto },
+      note: `${verb} اختبار «${test.nameAr}» لحساب ${student.user.name}`,
+    });
+    return result;
+  }
+
+  /**
+   * STU-034 — the tests this student has, for the admin console.
+   *
+   * Reuses myTests, which materialises a row per live test and reports
+   * coverage, so the admin sees exactly what the student sees rather than a
+   * second rendering of the same table that can drift from it.
+   */
+  adminStudentTests(studentId: string) {
     return this.myTests(studentId);
   }
 

@@ -74,6 +74,27 @@ export class PeopleController {
     return this.students.adminDetail(id);
   }
 
+  // STU-034 — the admin manages which tests a student is preparing for.
+  // Same 'students' permission as the rest of the student record.
+  @RequireSession('admin')
+  @RequirePermission('students')
+  @Get('admin/students/:id/tests')
+  adminStudentTests(@Param('id') id: string) {
+    return this.students.adminStudentTests(id);
+  }
+
+  @RequireSession('admin')
+  @RequirePermission('students')
+  @Patch('admin/students/:id/tests/:testId')
+  adminSetStudentTest(
+    @Param('id') id: string,
+    @Param('testId') testId: string,
+    @Body() dto: { isActive?: boolean; targetScore?: number | null; testDate?: string | null; focus?: boolean },
+    @CurrentSession() session: SessionPayload,
+  ) {
+    return this.students.adminSetStudentTest(id, testId, dto, session.sub);
+  }
+
   // STU-002 — the student's own covered tests, toggles and per-test goals.
   @RequireSession('student')
   @Get('students/me/tests')

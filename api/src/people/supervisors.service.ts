@@ -8,6 +8,7 @@ import { NOTIFICATION_CHANNEL, NotificationChannel } from '../notifications/chan
 import { isReminderDue } from './invite-reminder.util';
 import { AuditLogService } from '../admin-ops/audit-log.service';
 import { canAddRole } from '../auth/roles.util';
+import { EntitlementsService } from '../payments/entitlements.service';
 
 @Injectable()
 export class SupervisorsService {
@@ -19,6 +20,7 @@ export class SupervisorsService {
     @Inject(NOTIFICATION_CHANNEL) private channel: NotificationChannel,
     private config: ConfigService,
     private auditLog: AuditLogService,
+    private entitlements: EntitlementsService,
   ) {}
 
   /**
@@ -102,12 +104,11 @@ export class SupervisorsService {
     // free-tier student cannot add a supervisor at all. The frontend still
     // renders the invite affordance in a locked state with an upgrade
     // prompt rather than hiding it, per spec.
-    const activeSub = await this.prisma.subscription.findFirst({
-      where: { studentId, status: 'active' },
-      include: { package: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (activeSub && !activeSub.package.supervisorLinkingAllowed) {
+    // PAY-013 — any active package that allows linking is enough; a student
+    // holding a paid package alongside the free default must not be blocked
+    // by whichever row happened to sort first.
+    const entitlements = await this.entitlements.forStudent(studentId);
+    if (!entitlements.none && !entitlements.supervisorLinkingAllowed) {
       throw new ForbiddenException('supervisor linking is not available on the free package');
     }
 

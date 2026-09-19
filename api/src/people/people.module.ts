@@ -7,9 +7,10 @@ import { AccountsModule } from './accounts.module';
 import { ReportsModule } from '../reports/reports.module';
 import { NotificationChannelModule } from '../notifications/notification-channel.module';
 import { AuditLogModule } from '../admin-ops/audit-log.module';
+import { EntitlementsModule } from '../payments/entitlements.module';
 
 @Module({
-  imports: [AuthModule, AccountsModule, ReportsModule, NotificationChannelModule, AuditLogModule],
+  imports: [AuthModule, AccountsModule, ReportsModule, NotificationChannelModule, AuditLogModule, EntitlementsModule],
   providers: [StudentsService, SupervisorsService],
   controllers: [PeopleController],
   // SUP-009 — the scheduler drives the pending-invite reminder ladder.
