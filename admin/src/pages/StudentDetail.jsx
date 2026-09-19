@@ -70,6 +70,84 @@ function describeSendResult(r) {
 // session-by-session raw answers, and device/link access log, for support
 // and abuse investigation. The shared student report (ADM-051) covers
 // aggregated performance; this screen is the raw operational trail behind it.
+/**
+ * STU-034 — which tests this student is preparing for, and the admin's
+ * controls for adding or removing one.
+ *
+ * "Remove" switches the test off rather than deleting the row: the student's
+ * own screen re-materialises a row for every live test, so a delete comes
+ * straight back, and it would discard their target score and exam date too.
+ * The API refuses to switch off the last remaining test — a student focused
+ * on nothing has no daily leap to generate.
+ */
+function StudentTests({ studentId }) {
+  const [state, setState] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState(null);
+
+  const load = () => api.studentTests(studentId).then(setState).catch((e) => setError(e.message));
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [studentId]);
+
+  const set = async (testId, dto) => {
+    setBusyId(testId);
+    setError(null);
+    try {
+      setState(await api.setStudentTest(studentId, testId, dto));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (!state) return <p style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--mist)' }}>جاري التحميل…</p>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {state.tests.map((t) => (
+        <div key={t.testId} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '8px 0', borderTop: '0.5px solid var(--on-indigo-line)' }}>
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: t.isActive ? 'var(--sand)' : 'var(--mist)', minWidth: '120px' }}>
+            {t.nameAr}
+          </span>
+          {t.isFocused && (
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--lime-ink)', background: 'var(--lime)', borderRadius: '999px', padding: '2px 8px' }}>
+              المُركّز عليه
+            </span>
+          )}
+          {/* Coverage is what a paid package grants; enabling is the student's
+              own preparation choice. Showing both stops "enabled but nothing
+              happens" from looking like a bug. */}
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: t.isCovered ? 'var(--teal)' : '#E8C547' }}>
+            {t.isCovered ? 'مشمول بالاشتراك' : 'غير مشمول بأي اشتراك'}
+          </span>
+          {t.targetScore != null && (
+            <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>الهدف: {t.targetScore}</span>
+          )}
+          <span style={{ marginInlineStart: 'auto', display: 'flex', gap: '6px' }}>
+            {t.isActive && !t.isFocused && (
+              <button
+                disabled={busyId === t.testId}
+                onClick={() => set(t.testId, { focus: true })}
+                style={{ border: 'none', cursor: 'pointer', padding: '5px 12px', borderRadius: '999px', background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+              >
+                اجعله المُركّز
+              </button>
+            )}
+            <button
+              disabled={busyId === t.testId}
+              onClick={() => set(t.testId, { isActive: !t.isActive })}
+              style={{ border: 'none', cursor: 'pointer', padding: '5px 12px', borderRadius: '999px', background: t.isActive ? 'transparent' : 'var(--lime)', boxShadow: t.isActive ? 'inset 0 0 0 0.5px var(--on-indigo-line)' : 'none', color: t.isActive ? 'var(--coral)' : 'var(--lime-ink)', fontFamily: 'var(--font-arabic)', fontSize: '11px' }}
+            >
+              {busyId === t.testId ? '…' : t.isActive ? 'إزالة' : 'إضافة'}
+            </button>
+          </span>
+        </div>
+      ))}
+      {error && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)' }}>{error}</span>}
+    </div>
+  );
+}
+
 export default function StudentDetail({ studentId, onBack }) {
   const [data, setData] = useState(null);
   const [report, setReport] = useState(null);
@@ -77,6 +155,10 @@ export default function StudentDetail({ studentId, onBack }) {
   const [leaps, setLeaps] = useState(null);
   // ADM-097 — which leap is expanded, if any.
   const [openLeapId, setOpenLeapId] = useState(null);
+  // STU-034 — the activity log split by test. A student preparing for two
+  // tests has one interleaved history, which answers neither "how are they
+  // doing on قدرات" nor "have they started the English test at all".
+  const [leapTest, setLeapTest] = useState('');
   // ADM-099 — the school (and with it the city) is editable here; a student
   // who moves school otherwise sits in the wrong cohort comparison forever.
   const [schoolSaved, setSchoolSaved] = useState(false);
@@ -258,10 +340,41 @@ export default function StudentDetail({ studentId, onBack }) {
         </p>
       </Section>
 
+      <Section title="الاختبارات">
+        <StudentTests studentId={studentId} />
+      </Section>
+
       <Section title="سجل الوثبات">
         {leaps ? (
           <>
-            <LeapHistoryTable rows={leaps} onSelect={setOpenLeapId} selectedId={openLeapId} />
+            {(() => {
+              const names = [...new Set(leaps.map((r) => r.testNameAr).filter(Boolean))];
+              const shown = leapTest ? leaps.filter((r) => r.testNameAr === leapTest) : leaps;
+              return (
+                <>
+                  {names.length > 1 && (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                      {[{ k: '', label: `الكل (${leaps.length})` }, ...names.map((n) => ({ k: n, label: `${n} (${leaps.filter((r) => r.testNameAr === n).length})` }))].map((opt) => (
+                        <button
+                          key={opt.k || 'all'}
+                          onClick={() => { setLeapTest(opt.k); setOpenLeapId(null); }}
+                          style={{
+                            border: 'none', cursor: 'pointer', padding: '6px 14px', borderRadius: '999px',
+                            fontFamily: 'var(--font-arabic)', fontSize: '12px',
+                            background: leapTest === opt.k ? 'var(--lime)' : 'transparent',
+                            boxShadow: leapTest === opt.k ? 'none' : 'inset 0 0 0 0.5px var(--on-indigo-line)',
+                            color: leapTest === opt.k ? 'var(--lime-ink)' : 'var(--mist)',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <LeapHistoryTable rows={shown} onSelect={setOpenLeapId} selectedId={openLeapId} />
+                </>
+              );
+            })()}
             {openLeapId && <LeapDetail studentId={studentId} wathbId={openLeapId} />}
           </>
         ) : (

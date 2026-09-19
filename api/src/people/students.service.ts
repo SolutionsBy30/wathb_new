@@ -80,6 +80,10 @@ export class StudentsService {
             targetTest: true,
             school: { include: { city: true } },
             subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
+            // STU-034 — the tests this student is actually preparing for, so
+            // the console can group the roster by test. A student may hold
+            // several and appears under each.
+            studentTests: { where: { isActive: true }, include: { test: { select: { id: true, nameAr: true, groupId: true } } } },
             _count: { select: { answers: true } },
           },
         }),
@@ -99,6 +103,7 @@ export class StudentsService {
         targetTest: true,
         school: { include: { city: true } },
         subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
+        studentTests: { where: { isActive: true }, include: { test: { select: { id: true, nameAr: true, groupId: true } } } },
         _count: { select: { answers: true } },
       },
     });

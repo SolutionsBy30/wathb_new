@@ -238,6 +238,9 @@ export const api = {
   },
   studentDetail: (id) => request(`/admin/students/${id}/detail`),
   setStudentSchool: (studentId, schoolId) => request(`/admin/students/${studentId}/school`, { method: 'PATCH', body: { schoolId } }),
+  // STU-034 — which tests a student is preparing for, managed by the admin.
+  studentTests: (studentId) => request(`/admin/students/${studentId}/tests`),
+  setStudentTest: (studentId, testId, dto) => request(`/admin/students/${studentId}/tests/${testId}`, { method: 'PATCH', body: dto }),
   listSupervisors: () => request('/admin/supervisors'),
   // ADM-098 — a one-off login link for a supervisor's own portal.
   mintSupervisorLoginLink: (supervisorId) => request(`/admin/supervisors/${supervisorId}/magic-link`, { method: 'POST' }),
