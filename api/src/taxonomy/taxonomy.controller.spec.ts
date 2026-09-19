@@ -66,6 +66,11 @@ describe('TaxonomyController access control', () => {
       createGroup: { path: 'admin/test-groups', method: RequestMethod.POST },
       updateGroup: { path: 'admin/test-groups/:id', method: RequestMethod.PATCH },
       deleteGroup: { path: 'admin/test-groups/:id', method: RequestMethod.DELETE },
+      // ADM-095 — deleteTest is destructive and testUsage reports what a test
+      // holds; a stolen decorator on either is worth catching here.
+      updateTest: { path: 'admin/tests/:id', method: RequestMethod.PATCH },
+      testUsage: { path: 'admin/tests/:id/usage', method: RequestMethod.GET },
+      deleteTest: { path: 'admin/tests/:id', method: RequestMethod.DELETE },
     };
     for (const [name, want] of Object.entries(expected)) {
       expect({
@@ -73,6 +78,18 @@ describe('TaxonomyController access control', () => {
         path: Reflect.getMetadata(PATH_METADATA, proto[name]),
         method: Reflect.getMetadata(METHOD_METADATA, proto[name]),
       }).toEqual({ name, ...want });
+    }
+  });
+
+  it('gates the destructive test routes on the taxonomy permission', () => {
+    // Called out separately from the blanket rule above: deleting a test
+    // cascades its whole taxonomy, so this is the single most damaging route
+    // on the controller and should not rely on a loop to be covered.
+    for (const name of ['deleteTest', 'updateTest', 'testUsage']) {
+      expect({ name, perm: Reflect.getMetadata('adminPermission', proto[name]) }).toEqual({
+        name,
+        perm: ['taxonomy'],
+      });
     }
   });
 

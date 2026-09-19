@@ -387,6 +387,119 @@ function SectionCard({ section, index, sections, persistSectionsOrder, onReload 
   );
 }
 
+/**
+ * ADM-095 — rename a test, and delete one nothing is attached to.
+ *
+ * The usage counts are fetched and shown *before* delete is offered, so the
+ * answer to "can I remove this?" does not require pressing a destructive
+ * button to find out. Deleting a test cascades its entire taxonomy, so the
+ * button is disabled rather than merely warning, and deactivation is offered
+ * in the same breath because it is what is actually wanted nearly every time.
+ */
+function TestSettings({ test, onChanged }) {
+  const [nameAr, setNameAr] = useState(test.nameAr);
+  const [nameEn, setNameEn] = useState(test.nameEn);
+  const [usage, setUsage] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setNameAr(test.nameAr);
+    setNameEn(test.nameEn);
+    setUsage(null);
+    setError(null);
+    api.testUsage(test.id).then(setUsage).catch(() => setUsage(null));
+  }, [test.id, test.nameAr, test.nameEn]);
+
+  const renamed = nameAr.trim() !== test.nameAr || nameEn.trim() !== test.nameEn;
+  const canRename = renamed && nameAr.trim() && nameEn.trim();
+
+  const attached = usage && [
+    usage.questions && `${usage.questions} سؤال`,
+    usage.studentTests && `${usage.studentTests} طالب فعّلوه`,
+    usage.targetingStudents && `${usage.targetingStudents} طالب يستهدفه`,
+    usage.wathbs && `${usage.wathbs} وثبة`,
+    usage.blueprints && `${usage.blueprints} نموذج محاكاة`,
+    usage.packages.length && `${usage.packages.length} باقة`,
+  ].filter(Boolean);
+  const deletable = attached && attached.length === 0;
+
+  const remove = async () => {
+    if (!window.confirm(`حذف «${test.nameAr}» نهائياً؟ لا يمكن التراجع.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteTest(test.id);
+      await onChanged(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)', minWidth: '70px' }}>اسم الاختبار</span>
+        <input style={{ ...input, width: '180px' }} value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="الاسم بالعربية" />
+        <input style={{ ...input, width: '160px', fontFamily: 'var(--font-latin)' }} dir="ltr" value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="Name (EN)" />
+        <button
+          disabled={!canRename || busy}
+          onClick={async () => {
+            setBusy(true);
+            setError(null);
+            try {
+              await api.updateTest(test.id, { nameAr: nameAr.trim(), nameEn: nameEn.trim() });
+              await onChanged(test.id);
+            } catch (e) {
+              setError(e.message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+          style={{ border: 'none', cursor: 'pointer', padding: '7px 14px', borderRadius: '999px', background: 'var(--lime)', color: 'var(--lime-ink)', fontFamily: 'var(--font-arabic)', fontSize: '12px', opacity: canRename && !busy ? 1 : 0.5 }}
+        >
+          حفظ الاسم
+        </button>
+        {/* ADM-012 — language is fixed at creation, so it is shown, not offered. */}
+        <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+          لغة المحتوى: {LANGUAGE_LABEL[test.language] ?? test.language} (تُحدَّد عند الإنشاء)
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', borderTop: '0.5px solid var(--on-indigo-line)', paddingTop: '12px' }}>
+        {!usage ? (
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>جارٍ فحص ارتباطات الاختبار…</span>
+        ) : deletable ? (
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>لا شيء مرتبط بهذا الاختبار — يمكن حذفه.</span>
+        ) : (
+          <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)', lineHeight: 1.8 }}>
+            مرتبط به: {attached.join(' · ')} — الحذف غير متاح. عطّل الاختبار بدلاً من ذلك؛ لن يظهر لطلاب جدد ومن يستخدمه الآن لا يتأثر.
+          </span>
+        )}
+        <button
+          disabled={!deletable || busy}
+          onClick={remove}
+          title={deletable ? 'حذف نهائي' : 'لا يمكن الحذف بينما توجد ارتباطات'}
+          style={{
+            marginInlineStart: 'auto', border: 'none', padding: '7px 14px', borderRadius: '999px',
+            background: 'transparent', boxShadow: 'inset 0 0 0 0.5px var(--on-indigo-line)',
+            fontFamily: 'var(--font-arabic)', fontSize: '12px',
+            color: deletable ? 'var(--coral)' : 'var(--mist)',
+            cursor: deletable && !busy ? 'pointer' : 'not-allowed',
+            opacity: deletable ? 1 : 0.5,
+          }}
+        >
+          {busy ? 'جارٍ…' : 'حذف الاختبار'}
+        </button>
+      </div>
+
+      {error && <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '12px', color: 'var(--coral)', whiteSpace: 'pre-line', lineHeight: 1.8 }}>{error}</span>}
+    </div>
+  );
+}
+
 export default function Taxonomy({ tests, onTestsChanged }) {
   const [testId, setTestId] = useState(null);
   const [tree, setTree] = useState(null);
@@ -529,6 +642,21 @@ export default function Taxonomy({ tests, onTestsChanged }) {
       </div>
 
       {!tree && <p style={label13}>اختر اختباراً لعرض التصنيف.</p>}
+
+      {testId && (() => {
+        const current = tests.find((t) => t.id === testId);
+        return current ? (
+          <TestSettings
+            test={current}
+            onChanged={async (keepId) => {
+              await onTestsChanged();
+              // A deleted test must not stay selected, or the tree below keeps
+              // rendering a test that no longer exists.
+              if (keepId === null) { setTestId(null); setTree(null); }
+            }}
+          />
+        ) : null;
+      })()}
 
       {tree && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

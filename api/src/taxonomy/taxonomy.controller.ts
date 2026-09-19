@@ -126,6 +126,26 @@ export class TaxonomyController {
     return this.taxonomy.updateTest(id, dto);
   }
 
+  // ADM-095 — what is attached to this test, so the console can show it before
+  // offering delete rather than only after a refusal.
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('taxonomy')
+  @Get('admin/tests/:id/usage')
+  testUsage(@Param('id') id: string) {
+    return this.taxonomy.testUsage(id);
+  }
+
+  // Refused unless nothing is attached — see the service for why the cascades
+  // make an unguarded delete destructive.
+  @UseGuards(SessionGuard)
+  @RequireSession('admin')
+  @RequirePermission('taxonomy')
+  @Delete('admin/tests/:id')
+  deleteTest(@Param('id') id: string) {
+    return this.taxonomy.deleteTest(id);
+  }
+
   @UseGuards(SessionGuard)
   @RequireSession('admin')
   @RequirePermission('taxonomy')

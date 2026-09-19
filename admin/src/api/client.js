@@ -55,6 +55,9 @@ export const api = {
   tree: (testId) => request(`/tests/${testId}/tree`),
   createTest: (dto) => request('/admin/tests', { method: 'POST', body: dto }),
   updateTest: (id, dto) => request(`/admin/tests/${id}`, { method: 'PATCH', body: dto }),
+  // ADM-095 — what a test holds, and deleting one that holds nothing.
+  testUsage: (id) => request(`/admin/tests/${id}/usage`),
+  deleteTest: (id) => request(`/admin/tests/${id}`, { method: 'DELETE' }),
 
   // ADM-094 — catalogue segments.
   listTestGroups: () => request('/admin/test-groups'),

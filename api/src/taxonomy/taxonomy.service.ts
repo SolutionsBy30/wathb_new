@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { deletionBlockers, refusalMessageAr, TestUsage } from './test-deletion.util';
 import { UpsertAreaDto, UpsertLabelDto, UpsertSectionDto, UpsertTestDto, UpsertTestGroupDto } from './dto/taxonomy.dto';
 
 @Injectable()
@@ -194,6 +195,63 @@ export class TaxonomyService {
     // existing content against a new direction/language expectation.
     const { language, ...editable } = dto;
     return this.prisma.test.update({ where: { id }, data: editable });
+  }
+
+  /**
+   * ADM-095 — everything attached to a test, for the delete guard and for the
+   * console to show *before* anyone clicks delete.
+   */
+  async testUsage(id: string): Promise<TestUsage> {
+    const [questions, targetingStudents, studentTests, wathbs, blueprints, packages] = await Promise.all([
+      // Questions hang off labels, three levels below the test.
+      this.prisma.question.count({ where: { label: { area: { section: { testId: id } } } } }),
+      this.prisma.student.count({ where: { targetTestId: id } }),
+      this.prisma.studentTest.count({ where: { testId: id } }),
+      this.prisma.wathb.count({ where: { testId: id } }),
+      this.prisma.simulationBlueprint.count({ where: { testId: id } }),
+      // testIds is a String[] with no foreign key, so this is the only thing
+      // standing between a delete and a dangling id inside a package.
+      this.prisma.package.findMany({
+        where: { testIds: { has: id } },
+        select: { nameAr: true, _count: { select: { subscriptions: true } } },
+      }),
+    ]);
+
+    return {
+      questions,
+      targetingStudents,
+      studentTests,
+      wathbs,
+      blueprints,
+      packages: packages.map((p) => ({ nameAr: p.nameAr, subscriptions: p._count.subscriptions })),
+    };
+  }
+
+  /**
+   * ADM-095 — delete a test, but only one nothing is attached to.
+   *
+   * The cascades make this genuinely dangerous: Section.test, Area.section and
+   * Label.area all cascade, so an unguarded delete takes the entire taxonomy
+   * with it, and StudentTest.test cascades too, quietly discarding enrolments.
+   * Question.label restricts, so a populated tree aborts mid-cascade with a
+   * raw foreign-key error rather than anything an admin could act on.
+   *
+   * Hence: gather everything, refuse with the whole list, and point at
+   * deactivation — which is what is actually wanted in nearly every case.
+   */
+  async deleteTest(id: string) {
+    const test = await this.prisma.test.findUnique({ where: { id }, select: { id: true, nameAr: true } });
+    if (!test) throw new NotFoundException('الاختبار غير موجود');
+
+    const usage = await this.testUsage(id);
+    const blockers = deletionBlockers(usage);
+    if (blockers.length > 0) {
+      throw new BadRequestException(refusalMessageAr(test.nameAr, blockers));
+    }
+
+    // Only empty sections/areas/labels remain, which the cascade removes.
+    await this.prisma.test.delete({ where: { id } });
+    return { deleted: true, nameAr: test.nameAr };
   }
 
   async createSection(testId: string, dto: UpsertSectionDto) {
