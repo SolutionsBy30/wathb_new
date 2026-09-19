@@ -23,9 +23,31 @@ export class PackagesService {
     return rows.map((p) => this.withPriceView(p));
   }
 
+  /**
+   * PAY-014 — the admin list carries how many subscriptions each package has.
+   *
+   * Editing a package is not a private act: removing a test revokes it for
+   * everyone currently subscribed, and a price change reshapes the pricing
+   * page. The console needs the number to warn with before the edit, not a
+   * support ticket after it.
+   *
+   * Active and total are both reported: active is who is affected right now,
+   * total is whether this package has ever been sold — which is what decides
+   * whether it can be reshaped freely or is a historical record.
+   */
   async listAll() {
-    const rows = await this.prisma.package.findMany({ orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }] });
-    return rows.map((p) => this.withPriceView(p));
+    const rows = await this.prisma.package.findMany({
+      orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }],
+      include: {
+        _count: { select: { subscriptions: true } },
+        subscriptions: { where: { status: 'active' }, select: { id: true } },
+      },
+    });
+    return rows.map(({ subscriptions, _count, ...p }) => ({
+      ...this.withPriceView(p),
+      activeSubscriptions: subscriptions.length,
+      totalSubscriptions: _count.subscriptions,
+    }));
   }
 
   create(dto: UpsertPackageDto) {

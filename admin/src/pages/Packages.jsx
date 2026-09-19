@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { Button } from '../design-system/components/Button';
+import PackageEditor from './PackageEditor';
 
 const fieldStyle = { padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: 'none', background: 'var(--on-indigo-subtle)', color: 'var(--sand)', fontFamily: 'var(--font-arabic)', fontSize: '13px' };
 
@@ -366,9 +367,13 @@ function NewPackageForm({ tests, onCreated }) {
 
 export default function Packages({ tests }) {
   const [packages, setPackages] = useState([]);
+  // PAY-014 — which package is open for editing, if any.
+  const [editingId, setEditingId] = useState(null);
+  const [groups, setGroups] = useState([]);
 
   const load = () => api.listPackages().then(setPackages);
   useEffect(() => { load(); }, []);
+  useEffect(() => { api.listTestGroups().then(setGroups).catch(() => setGroups([])); }, []);
 
   const toggleActive = async (pkg) => {
     await api.updatePackage(pkg.id, { isActive: !pkg.isActive });
@@ -388,6 +393,20 @@ export default function Packages({ tests }) {
 
       <NewPackageForm tests={tests} onCreated={load} />
 
+      {editingId && (() => {
+        const pkg = packages.find((p) => p.id === editingId);
+        return pkg ? (
+          <PackageEditor
+            key={pkg.id}
+            pkg={pkg}
+            tests={tests}
+            groups={groups}
+            onSaved={async () => { await load(); setEditingId(null); }}
+            onCancel={() => setEditingId(null)}
+          />
+        ) : null;
+      })()}
+
       <div style={{ background: 'var(--on-indigo-subtle)', borderRadius: 'var(--radius-md)', overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -396,6 +415,7 @@ export default function Packages({ tests }) {
               <th style={th}>المدة</th>
               <th style={th}>السعر (شامل الضريبة)</th>
               <th style={th}>الاختبارات</th>
+              <th style={th}>المشتركون</th>
               <th style={th}>الحدود</th>
               <th style={th}>الحالة</th>
             </tr>
@@ -403,8 +423,8 @@ export default function Packages({ tests }) {
           <tbody>
             {packages.map((p) => (
               <tr key={p.id} style={{ borderTop: '0.5px solid var(--on-indigo-line)' }}>
-                <td style={td}>
-                  <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--sand)' }}>{p.nameAr}</span>
+                <td style={{ ...td, cursor: 'pointer' }} onClick={() => setEditingId(editingId === p.id ? null : p.id)}>
+                  <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '13px', color: 'var(--lime-print)', textDecoration: 'underline' }}>{p.nameAr}</span>
                   {p.isDefault && (
                     <span style={{ marginInlineStart: '6px', fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--lime-ink)', background: 'var(--lime)', borderRadius: '999px', padding: '2px 8px' }}>المجانية</span>
                   )}
@@ -418,7 +438,17 @@ export default function Packages({ tests }) {
                     </span>
                   )}
                 </td>
-                <td style={td}><span style={{ fontFamily: 'var(--font-latin)', fontSize: '11px', color: 'var(--mist)' }}>{p.testIds.length}</span></td>
+                <td style={td}>
+                  <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '11px', color: 'var(--mist)' }}>
+                    {p.testIds.map((id) => tests.find((t) => t.id === id)?.nameAr).filter(Boolean).join('، ') || '—'}
+                  </span>
+                </td>
+                <td style={td}>
+                  <span style={{ fontFamily: 'var(--font-latin)', fontSize: '12px', color: p.activeSubscriptions > 0 ? 'var(--sand)' : 'var(--mist)' }}>
+                    {p.activeSubscriptions ?? 0}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-arabic)', fontSize: '10px', color: 'var(--mist)' }}> نشط</span>
+                </td>
                 <td style={td}>
                   <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', maxWidth: '220px' }}>
                     <FlagBadge active={p.dailyNotificationEnabled} onClick={() => toggleFlag(p, 'dailyNotificationEnabled', !p.dailyNotificationEnabled)} label="إشعار يومي" />
