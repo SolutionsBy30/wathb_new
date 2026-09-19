@@ -4,6 +4,7 @@ import { SessionPayload } from '../auth/auth.types';
 import { computeCompositeIndex, LabelStatForComposite } from './composite-index.util';
 import { compositeDelta } from './weekly-report.util';
 import { EntitlementsService } from '../payments/entitlements.service';
+import { archivedTestIds } from './archive-scope.util';
 
 // Statistical honesty requirement, spec §5.2: never render a percentage for
 // an area/label with fewer than this many answers.
@@ -38,6 +39,22 @@ function accuracyOrCollecting(nAnswered: number, nCorrect: number) {
   return { accuracy: nCorrect / nAnswered, nAnswered, collecting: false, needed: MIN_SAMPLE_FOR_REPORTING };
 }
 
+/** STU-037 — which exams a report covers. */
+export interface ReportScope {
+  /** One exam. Omit for "everything still being prepared for". */
+  testId?: string;
+}
+
+interface ResolvedScope {
+  /** Null means no filter at all — the learner has archived nothing. */
+  testIds: string[] | null;
+  answerWhere: Record<string, unknown>;
+  labelStatWhere: Record<string, unknown>;
+  /** What the client can offer to switch between. */
+  available: { testId: string; nameAr: string; archivedAt: Date | null }[];
+  appliedTestId: string | null;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -68,8 +85,29 @@ export class ReportsService {
    * trend chart and any short trend/delta lookup (weekly report, supervisor
    * dashboard, admin list).
    */
-  private async weightedWeeklyTrend(studentId: string, weeks: number) {
-    const rows = await this.prisma.$queryRaw<{ week: Date; weightSum: number; weightedCorrect: number }[]>`
+  private async weightedWeeklyTrend(studentId: string, weeks: number, testIds: string[] | null = null) {
+    // STU-037 — the trend must follow the same scope as everything else, or
+    // the chart contradicts the accuracy printed beside it. Prisma cannot
+    // parameterise an IN list here, so an empty scope is answered without a
+    // query rather than by building SQL from an array.
+    if (testIds !== null && testIds.length === 0) return [];
+    const rows = testIds !== null
+      ? await this.prisma.$queryRaw<{ week: Date; weightSum: number; weightedCorrect: number }[]>`
+      SELECT date_trunc('week', a."answeredAt") as week,
+             SUM(sec.weight)::float as "weightSum",
+             SUM(CASE WHEN a."isCorrect" THEN sec.weight ELSE 0 END)::float as "weightedCorrect"
+      FROM answers a
+      JOIN questions q ON q.id = a."questionId"
+      JOIN labels l ON l.id = q."labelId"
+      JOIN areas ar ON ar.id = l."areaId"
+      JOIN sections sec ON sec.id = ar."sectionId"
+      WHERE a."studentId" = ${studentId}
+        AND sec."testId" = ANY(${testIds})
+      GROUP BY week
+      ORDER BY week DESC
+      LIMIT ${weeks}
+    `
+      : await this.prisma.$queryRaw<{ week: Date; weightSum: number; weightedCorrect: number }[]>`
       SELECT date_trunc('week', a."answeredAt") as week,
              SUM(sec.weight)::float as "weightSum",
              SUM(CASE WHEN a."isCorrect" THEN sec.weight ELSE 0 END)::float as "weightedCorrect"
@@ -86,6 +124,47 @@ export class ReportsService {
     return rows
       .map((r) => ({ weekStart: r.week.toISOString().slice(0, 10), accuracy: r.weightSum > 0 ? r.weightedCorrect / r.weightSum : null }))
       .reverse();
+  }
+
+  /**
+   * STU-037 — turn "one exam" or "everything current" into query filters.
+   *
+   * Returns null filters when the learner has archived nothing and asked for
+   * no particular exam, so the common single-exam case runs exactly the
+   * queries it always did rather than paying for a redundant IN clause.
+   */
+  private async resolveScope(studentId: string, testId?: string): Promise<ResolvedScope> {
+    const rows = await this.prisma.studentTest.findMany({
+      where: { studentId },
+      select: { testId: true, isActive: true, archivedAt: true, test: { select: { nameAr: true } } },
+    });
+    const available = rows
+      .filter((r) => r.isActive || r.archivedAt)
+      .map((r) => ({ testId: r.testId, nameAr: r.test.nameAr, archivedAt: r.archivedAt }));
+
+    let testIds: string[] | null = null;
+    if (testId) {
+      // An explicit exam is honoured even when archived: "how did I do on the
+      // one I already sat" is a fair question, and the history is kept for it.
+      testIds = [testId];
+    } else {
+      const archived = archivedTestIds(rows);
+      if (archived.size > 0) {
+        const live = rows.filter((r) => !archived.has(r.testId)).map((r) => r.testId);
+        testIds = live;
+      }
+    }
+
+    if (testIds === null) {
+      return { testIds: null, answerWhere: {}, labelStatWhere: {}, available, appliedTestId: null };
+    }
+    return {
+      testIds,
+      answerWhere: { question: { label: { area: { section: { testId: { in: testIds } } } } } },
+      labelStatWhere: { label: { area: { section: { testId: { in: testIds } } } } },
+      available,
+      appliedTestId: testId ?? null,
+    };
   }
 
   /** Lightweight composite-index + week-over-week delta lookup — used where the full report would be overkill (supervisor cards, admin list). */
@@ -181,11 +260,12 @@ export class ReportsService {
   // other internal callers need that; the controller path takes a runtime
   // boolean and gets the wider union, which is fine since it just forwards
   // the JSON straight to the HTTP response.
-  async getStudentReport(studentId: string, restricted?: false): Promise<{
+  async getStudentReport(studentId: string, restricted?: false, opts?: ReportScope): Promise<{
     student: { id: string; name: string };
     totals: { lifetimeAnswered: number; lifetimeCorrect: number; lifetimeWrong: number; weekAnswered: number; dailyTarget: number; uniqueQuestionsAnswered: number };
     streak: { current: number; lastCompletedOn: Date | null };
     restricted: boolean;
+    scope: { testId: string | null; coversTestIds: string[] | null; available: { testId: string; nameAr: string; archivedAt: Date | null }[] };
     accuracyByArea: any[];
     compositeIndex: number | null;
     compositeIndexDelta: number | null;
@@ -193,8 +273,8 @@ export class ReportsService {
     heatmap: { day: string; count: number }[];
     recentMistakes: any[];
   }>;
-  async getStudentReport(studentId: string, restricted: boolean): Promise<Record<string, unknown>>;
-  async getStudentReport(studentId: string, restricted = false) {
+  async getStudentReport(studentId: string, restricted: boolean, opts?: ReportScope): Promise<Record<string, unknown>>;
+  async getStudentReport(studentId: string, restricted = false, opts: ReportScope = {}) {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentId },
       include: { user: true },
@@ -204,6 +284,19 @@ export class ReportsService {
     const startOfWeek = new Date();
     startOfWeek.setUTCDate(startOfWeek.getUTCDate() - startOfWeek.getUTCDay());
     startOfWeek.setUTCHours(0, 0, 0, 0);
+
+    // STU-037 — which exams this report is about.
+    //
+    // Unscoped, it answers "how am I doing" by averaging every exam the
+    // learner has ever touched. For someone who sat قدرات at seventeen and
+    // started a licensing exam at twenty-four that describes neither, and the
+    // trend falls the moment they begin something new and harder — reading as
+    // regression at exactly the wrong moment.
+    //
+    // So: one exam when asked for, otherwise every exam still being prepared
+    // for. A sat exam keeps its history and stops being averaged in (STU-036);
+    // it can still be read on its own by naming it.
+    const scope = await this.resolveScope(studentId, opts.testId);
 
     // FRE-010 — the daily/weekly target follows the student's own tier.
     const targetSubs = await this.prisma.subscription.findMany({
@@ -215,29 +308,30 @@ export class ReportsService {
       : DEFAULT_DAILY_TARGET;
 
     const [lifetimeAnswered, lifetimeCorrect, weekAnswered, uniqueQuestions, labelStats, recentMistakes, trend, heatmap] = await Promise.all([
-      this.prisma.answer.count({ where: { studentId } }),
-      this.prisma.answer.count({ where: { studentId, isCorrect: true } }),
-      this.prisma.answer.count({ where: { studentId, answeredAt: { gte: startOfWeek } } }),
+      this.prisma.answer.count({ where: { studentId, ...scope.answerWhere } }),
+      this.prisma.answer.count({ where: { studentId, isCorrect: true, ...scope.answerWhere } }),
+      this.prisma.answer.count({ where: { studentId, answeredAt: { gte: startOfWeek }, ...scope.answerWhere } }),
       // SEL-004 — a spaced-review repeat reuses a questionId, so a distinct
       // count already keeps the "yearly unique-question" promise honest
       // without needing to special-case isReview here.
-      this.prisma.answer.findMany({ where: { studentId }, distinct: ['questionId'], select: { questionId: true } }),
+      this.prisma.answer.findMany({ where: { studentId, ...scope.answerWhere }, distinct: ['questionId'], select: { questionId: true } }),
       this.prisma.studentLabelStat.findMany({
-        where: { studentId },
+        where: { studentId, ...scope.labelStatWhere },
         include: { label: { include: { area: { include: { section: true } } } } },
       }),
       this.prisma.answer.findMany({
-        where: { studentId, isCorrect: false },
+        where: { studentId, isCorrect: false, ...scope.answerWhere },
         orderBy: { answeredAt: 'desc' },
         take: 3,
         include: { questionVersion: true },
       }),
-      this.weightedWeeklyTrend(studentId, HEATMAP_WEEKS),
+      this.weightedWeeklyTrend(studentId, HEATMAP_WEEKS, scope.testIds),
       this.prisma.wathb.findMany({
         where: {
           studentId,
           status: 'completed',
           completedAt: { gte: new Date(Date.now() - HEATMAP_WEEKS * 7 * 86400000) },
+          ...(scope.testIds ? { testId: { in: scope.testIds } } : {}),
         },
         select: { completedAt: true },
       }),
@@ -299,6 +393,15 @@ export class ReportsService {
       },
       streak: { current: student.currentStreak, lastCompletedOn: student.lastCompletedOn },
       restricted,
+      // STU-037 — what this report is about, so a client can say so and offer
+      // the other exams. Reporting the scope beside the numbers is what stops
+      // "62%" from being read as a figure about the whole person.
+      scope: {
+        testId: scope.appliedTestId,
+        // Null means every exam still being prepared for.
+        coversTestIds: scope.testIds,
+        available: scope.available,
+      },
     };
     // FRE-004/NFR-006a — diagnostic sections are simply absent from the
     // response body, not just hidden client-side, for a restricted viewer.

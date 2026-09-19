@@ -1,15 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { describeBlocks, evaluateEligibility, EligibilityResult, StudentGateFacts } from './eligibility.util';
+import { mergeAllowances, MergedEntitlement, NO_ENTITLEMENT } from './simulation-entitlement.util';
 
-export interface EntitlementState {
-  /** The active subscription the attempt would draw from, if any. */
-  subscriptionId: string | null;
-  packageNameAr: string | null;
-  included: number;
-  used: number;
-  remaining: number;
-}
+/**
+ * SIM-024 — merged across every active subscription.
+ *
+ * `subscriptionId` is the one a new attempt would be charged to: the package
+ * with room left that lapses soonest, so nothing expires unspent while another
+ * allowance is drawn down.
+ */
+export type EntitlementState = MergedEntitlement;
 
 export interface SimulationAccess {
   blueprintId: string;
@@ -50,22 +51,39 @@ export class EligibilityService {
    * entitlementId, with no second number to keep in step.
    */
   async entitlement(studentId: string): Promise<EntitlementState> {
-    const sub = await this.prisma.subscription.findFirst({
+    // SIM-024 — every active subscription, not the newest. A learner holding a
+    // قدرات package and a licensing package has both allowances; reading one
+    // row hid the other and made attempts charged to it invisible to the
+    // counter. PAY-013 merged entitlements elsewhere and missed this path.
+    const subs = await this.prisma.subscription.findMany({
       where: { studentId, status: 'active' },
-      include: { package: { select: { nameAr: true, simulationsIncluded: true } } },
-      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        endsAt: true,
+        package: { select: { nameAr: true, simulationsIncluded: true } },
+      },
     });
-    if (!sub) return { subscriptionId: null, packageNameAr: null, included: 0, used: 0, remaining: 0 };
+    if (subs.length === 0) return NO_ENTITLEMENT;
 
-    const used = await this.prisma.simulationAttempt.count({ where: { entitlementId: sub.id } });
-    const included = sub.package.simulationsIncluded;
-    return {
-      subscriptionId: sub.id,
-      packageNameAr: sub.package.nameAr,
-      included,
-      used,
-      remaining: Math.max(0, included - used),
-    };
+    // Counted per subscription, the same way §5.5 has always counted: derived
+    // from the attempts themselves, so voiding one (§7.4) is still just
+    // clearing entitlementId with no second number to keep in step.
+    const counts = await this.prisma.simulationAttempt.groupBy({
+      by: ['entitlementId'],
+      where: { entitlementId: { in: subs.map((s) => s.id) } },
+      _count: { _all: true },
+    });
+    const usedBySub = new Map(counts.map((c) => [c.entitlementId, c._count._all]));
+
+    return mergeAllowances(
+      subs.map((s) => ({
+        subscriptionId: s.id,
+        packageNameAr: s.package.nameAr,
+        included: s.package.simulationsIncluded,
+        used: usedBySub.get(s.id) ?? 0,
+        endsAt: s.endsAt,
+      })),
+    );
   }
 
   async facts(studentId: string, blueprintId: string, testId: string): Promise<StudentGateFacts> {

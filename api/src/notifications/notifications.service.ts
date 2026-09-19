@@ -11,6 +11,7 @@ import { ProviderSettingsService } from './provider-settings.service';
 import { AuditLogService } from '../admin-ops/audit-log.service';
 import { EmailChannel } from './email-channel';
 import { EntitlementsService } from '../payments/entitlements.service';
+import { chooseDailyTest } from './daily-focus.util';
 import {
   DEFAULT_SUPPRESS_AFTER_RUNS,
   effectiveDailyCap,
@@ -152,9 +153,16 @@ export class NotificationsService {
   async planDayForStudent(studentId: string, forDate: Date) {
     const student = await this.prisma.student.findUnique({
       where: { userId: studentId },
-      include: { user: { select: { status: true, whatsappOptedOutAt: true, whatsappSuppressedAt: true } } },
+      include: {
+        user: { select: { status: true, whatsappOptedOutAt: true, whatsappSuppressedAt: true } },
+        // NOT-025 — every exam they are actually preparing for, not the single
+        // focus pointer. Archived exams are excluded: a sat exam must not keep
+        // generating bundles.
+        studentTests: { where: { isActive: true, archivedAt: null }, select: { testId: true, testDate: true } },
+      },
     });
-    if (!student?.targetTestId) return { skipped: 'no_goal' as const };
+    if (!student) return { skipped: 'no_goal' as const };
+    if (student.studentTests.length === 0 && !student.targetTestId) return { skipped: 'no_goal' as const };
 
     // NOT-020 — a suspended or opted-out account is not planned for at all.
     // The send already refused both, but only after planning had generated a
@@ -192,6 +200,23 @@ export class NotificationsService {
     const scheduledFor = dayKey(forDate);
     if (student.skipDays.includes(scheduledFor.getUTCDay())) return { skipped: 'skip_day' as const };
 
+    // NOT-025 — today's exam, chosen from the ones they are preparing for and
+    // hold coverage for. One a day, rotating: the WhatsApp bridge already
+    // drops under normal load (COM-001..006), so fairness between exams comes
+    // from rotating the choice rather than from sending more messages.
+    //
+    // Coverage is checked here as well as at practice time, because nudging
+    // someone toward an exam their package does not include walks them into a
+    // paywall from a message we sent.
+    const covered = student.studentTests.filter((t) => entitlements.coveredTestIds.includes(t.testId));
+    const focusTestId = chooseDailyTest(covered, scheduledFor)
+      // Falls back to the stored pointer only when nothing else resolves, so
+      // an account mid-migration still gets its leap.
+      ?? (student.targetTestId && entitlements.coveredTestIds.includes(student.targetTestId)
+        ? student.targetTestId
+        : null);
+    if (!focusTestId) return { skipped: 'no_covered_test' as const };
+
     // NOT-022 — the student paused their nudge from the link in the message.
     // Compared against the day being planned rather than "now", so planning
     // tomorrow at 21:00 tonight respects a pause that ends tomorrow.
@@ -206,8 +231,8 @@ export class NotificationsService {
     });
     if (!existingWathb) {
       const wathb = !student.placementDoneAt
-        ? await this.generation.generatePlacement(studentId, student.targetTestId, student.track ?? null, scheduledFor)
-        : await this.generation.generateDaily(studentId, student.targetTestId, student.track ?? null, DEFAULT_BUNDLE_SIZE, scheduledFor);
+        ? await this.generation.generatePlacement(studentId, focusTestId, student.track ?? null, scheduledFor)
+        : await this.generation.generateDaily(studentId, focusTestId, student.track ?? null, DEFAULT_BUNDLE_SIZE, scheduledFor);
       if (!wathb) {
         // "degrade gracefully... and fire an admin alert, not throw" — spec §6.4.
         this.logger.error(`bank exhaustion: could not plan a Wathb for student ${studentId} on ${scheduledFor.toDateString()}`);
@@ -224,7 +249,7 @@ export class NotificationsService {
   }
 
   async planDayForAllActiveStudents(forDate: Date) {
-    const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
+    const students = await this.prisma.student.findMany({ where: { OR: [{ targetTestId: { not: null } }, { studentTests: { some: { isActive: true, archivedAt: null } } }] } });
     const results = [];
     for (const s of students) results.push({ studentId: s.userId, ...(await this.planDayForStudent(s.userId, forDate)) });
     return results;
@@ -576,7 +601,7 @@ export class NotificationsService {
    * path does, so a day that was never planned can still be recovered.
    */
   async sendNowForAllStudents(forDate: Date, opts: { force?: boolean } = {}) {
-    const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
+    const students = await this.prisma.student.findMany({ where: { OR: [{ targetTestId: { not: null } }, { studentTests: { some: { isActive: true, archivedAt: null } } }] } });
     const results = [];
     let aborted = false;
     for (const s of students) {
@@ -628,7 +653,7 @@ export class NotificationsService {
       return { aborted: 'daily_cap_reached' as const, processed: 0, cap: budget.cap, sentToday: budget.sentToday, results: [] };
     }
 
-    const students = await this.prisma.student.findMany({ where: { targetTestId: { not: null } } });
+    const students = await this.prisma.student.findMany({ where: { OR: [{ targetTestId: { not: null } }, { studentTests: { some: { isActive: true, archivedAt: null } } }] } });
     const results: any[] = [];
     let remaining = budget.remaining;
     for (const s of students) {

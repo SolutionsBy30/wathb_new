@@ -201,7 +201,7 @@ export class WeeklyReportService {
     })();
 
     const students = studentSlotNow
-      ? await this.prisma.student.findMany({ where: { targetTestId: { not: null } } })
+      ? await this.prisma.student.findMany({ where: { OR: [{ targetTestId: { not: null } }, { studentTests: { some: { isActive: true, archivedAt: null } } }] } })
       : [];
     const supervisors = await this.prisma.supervisor.findMany();
     const studentResults = [];

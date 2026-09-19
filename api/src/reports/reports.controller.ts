@@ -12,13 +12,21 @@ export class ReportsController {
   // Shared by student/supervisor/admin, role-scoped — mirrors spec §9.3 GET /api/report/student/:id.
   @RequireSession('student', 'supervisor', 'admin')
   @Get('student/:id')
-  async studentReport(@Param('id') id: string, @CurrentSession() session: SessionPayload) {
+  async studentReport(
+    @Param('id') id: string,
+    @CurrentSession() session: SessionPayload,
+    // STU-037 — one exam, or omitted for every exam still being prepared for.
+    // The same scope for every audience: a supervisor reading a student's
+    // report must see the figure the student sees, not a differently-blended
+    // one.
+    @Query('testId') testId?: string,
+  ) {
     await this.reports.assertAccess(session, id);
     // FRE-004 — the partial-report restriction only ever applies to the
     // student viewing their own data; a supervisor or admin always sees the
     // full report regardless of the student's package.
     const restricted = session.kind === 'student' && (await this.reports.isReportRestricted(id));
-    return this.reports.getStudentReport(id, restricted);
+    return this.reports.getStudentReport(id, restricted, { testId: testId || undefined });
   }
 
   // §4.8 — ADMIN ONLY, 403 for student/supervisor (enforced by @RequireSession, not just UI hiding).
