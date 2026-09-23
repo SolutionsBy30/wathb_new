@@ -64,6 +64,13 @@ export const api = {
   createTestGroup: (dto) => request('/admin/test-groups', { method: 'POST', body: dto }),
   updateTestGroup: (id, dto) => request(`/admin/test-groups/${id}`, { method: 'PATCH', body: dto }),
   deleteTestGroup: (id) => request(`/admin/test-groups/${id}`, { method: 'DELETE' }),
+
+  // CMS-001 — the landing page's copy and feature cards.
+  landingContent: () => request('/admin/site-content'),
+  setLandingText: (key, valueAr) => request(`/admin/site-content/${encodeURIComponent(key)}`, { method: 'PATCH', body: { valueAr } }),
+  createLandingFeature: (dto) => request('/admin/landing-features', { method: 'POST', body: dto }),
+  updateLandingFeature: (id, dto) => request(`/admin/landing-features/${id}`, { method: 'PATCH', body: dto }),
+  deleteLandingFeature: (id) => request(`/admin/landing-features/${id}`, { method: 'DELETE' }),
   createSection: (testId, dto) => request(`/admin/tests/${testId}/sections`, { method: 'POST', body: dto }),
   updateSection: (id, dto) => request(`/admin/sections/${id}`, { method: 'PATCH', body: dto }),
   deleteSection: (id) => request(`/admin/sections/${id}`, { method: 'DELETE' }),

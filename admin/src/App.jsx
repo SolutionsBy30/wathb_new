@@ -24,6 +24,7 @@ import Supervisors from './pages/Supervisors';
 import AuditLog from './pages/AuditLog';
 import AdminUsers from './pages/AdminUsers';
 import DiscountCodes from './pages/DiscountCodes';
+import LandingContent from './pages/LandingContent';
 
 // ADM-003 — grouped navigation: Overview; Content; Users; Business; System.
 const NAV_GROUPS = [
@@ -39,6 +40,10 @@ const NAV_GROUPS = [
       { id: 'import', label: 'استيراد جماعي' },
       { id: 'solutionPerf', label: 'أداء الأسئلة' },
       { id: 'simulations', label: 'المحاكي' },
+      // CMS-001 — its own 'landing' permission: editing the public homepage is
+      // a different kind of trust from editing the question bank, and the
+      // people who want it are usually not the people who write questions.
+      { id: 'landing', label: 'الصفحة الرئيسية' },
     ],
   },
   {
@@ -207,6 +212,7 @@ export default function App() {
         {tab === 'import' && <BulkImport tests={tests} />}
         {tab === 'solutionPerf' && <SolutionPerformance tests={tests} />}
         {tab === 'simulations' && <Simulations tests={tests} />}
+        {tab === 'landing' && <LandingContent />}
         {tab === 'students' && viewingStudentId === null && <Students onOpenStudent={setViewingStudentId} />}
         {tab === 'students' && viewingStudentId !== null && (
           <StudentDetail studentId={viewingStudentId} onBack={() => setViewingStudentId(null)} />

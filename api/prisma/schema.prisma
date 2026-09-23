@@ -840,6 +840,35 @@ enum ReportVisibility {
 // server-side at the API layer, never a code-level "is this the free
 // package" special case. A paid package simply carries the unrestricted
 // defaults below.
+/// CMS-001 — editable copy for the public landing page.
+///
+/// A key/value table rather than columns on a singleton row: the set of
+/// strings a marketing page needs changes constantly, and adding one should
+/// cost a seeded row rather than a migration that rewrites a wide table.
+/// site-content.util declares which keys exist and what each falls back to.
+model SiteContent {
+  key       String   @id
+  valueAr   String
+  updatedAt DateTime @updatedAt
+
+  @@map("site_content")
+}
+
+/// CMS-001 — the landing page's feature cards.
+///
+/// Rows rather than a JSON blob in SiteContent, because they are reordered and
+/// switched on and off individually, and a blob makes both a hand-edit.
+model LandingFeature {
+  id        String   @id @default(uuid())
+  titleAr   String
+  bodyAr    String
+  sort      Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("landing_features")
+}
+
 model Package {
   id                       String            @id @default(uuid())
   nameAr                   String

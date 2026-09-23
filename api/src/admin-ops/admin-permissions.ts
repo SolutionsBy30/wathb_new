@@ -24,6 +24,8 @@ export const ADMIN_PERMISSIONS = [
   // الأعمال
   'subscriptions',
   'packages',
+  // المحتوى العام
+  'landing',
   // النظام
   'notifications',
   'auditLog',
@@ -46,6 +48,7 @@ export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
   geography: 'الجغرافيا والمدارس',
   subscriptions: 'الاشتراكات',
   packages: 'الباقات والتسعير',
+  landing: 'الصفحة الرئيسية',
   notifications: 'الإشعارات',
   auditLog: 'سجل التدقيق',
 };
@@ -54,7 +57,7 @@ export const ADMIN_PERMISSION_GROUPS: { group: string; keys: AdminPermission[] }
   { group: 'المحتوى', keys: ['taxonomy', 'bank', 'reviewQueue', 'problemReports', 'dailyTips', 'import', 'solutionPerf', 'simulations'] },
   { group: 'المستخدمون', keys: ['students', 'supervisors', 'geography'] },
   { group: 'الأعمال', keys: ['subscriptions', 'packages'] },
-  { group: 'النظام', keys: ['notifications', 'auditLog'] },
+  { group: 'النظام', keys: ['landing', 'notifications', 'auditLog'] },
 ];
 
 export function isAdminPermission(value: string): value is AdminPermission {
